@@ -149,3 +149,24 @@ export const readingsTable = (readings) => {
 	}).join("");
 	return "<table class=\"readings\"><thead><tr><th>mk</th><th>mode</th><th>x</th><th>level</th><th>Δx</th><th>Δlevel</th><th></th></tr></thead><tbody>" + rows + "</tbody></table>";
 };
+
+/**
+ * Scope-style measurement table from trace.measurements: [{name, value, unit}]
+ */
+export const measurementsTable = (measurements) => {
+	if (!measurements || !measurements.length) {
+		return "";
+	}
+	const cells = measurements.map((m) => {
+		let text = "—";
+		if (m.value !== null && m.value !== undefined) {
+			if (m.name === "duty") {
+				text = (m.value * 100).toFixed(1) + " %";
+			} else {
+				text = eng(m.value, 4) + escapeHtml(m.unit);
+			}
+		}
+		return "<span><span class=\"muted\">" + escapeHtml(m.name) + "</span> " + text + "</span>";
+	}).join("");
+	return "<div class=\"measurements\">" + cells + "</div>";
+};

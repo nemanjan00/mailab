@@ -450,20 +450,102 @@ class Eye(Throttled):
         return None
 
 
+def measure(y, rate):
+    """Scope-style measurements of a real waveform."""
+    y = np.asarray(y, dtype=np.float64)
+    if len(y) < 2:
+        return {}
+    vmax, vmin = float(np.max(y)), float(np.min(y))
+    mid = (vmax + vmin) / 2
+    hyst = (vmax - vmin) * 0.05
+    out = {"vpp": vmax - vmin, "vmax": vmax, "vmin": vmin, "mean": float(np.mean(y)),
+           "vrms": float(np.sqrt(np.mean(y ** 2))), "freq": None, "period": None, "duty": None}
+    # rising crossings of the mid level, with hysteresis against noise
+    state = y[0] > mid
+    rises = []
+    for i, v in enumerate(y):
+        if state and v < mid - hyst:
+            state = False
+        elif not state and v > mid + hyst:
+            state = True
+            rises.append(i)
+    if len(rises) >= 2 and vmax - vmin > 0:
+        period = (rises[-1] - rises[0]) / (len(rises) - 1) / rate
+        span = y[rises[0]:rises[-1]]
+        out.update(freq=1.0 / period, period=period, duty=float(np.mean(span > mid)))
+    return out
+
+
+MEASURE_UNITS = {"vpp": "V", "vmax": "V", "vmin": "V", "mean": "V", "vrms": "V", "freq": "Hz", "period": "s", "duty": ""}
+
+
 class Scope(Throttled):
-    doc = "time-domain view -> trace <device>_<id> (real/imag or real)"
-    params = {"samples": (1000, ""), "fps": (10, "")}
+    doc = ("oscilloscope -> trace <device>_<id>: trigger (rising/falling, level, auto/normal, pretrigger), "
+           "traces live/max/min/avg, measurements (vpp vmax vmin mean vrms freq period duty) -> channels <device>_<id>_<m>")
+    params = {"samples": (1000, "samples per capture"), "part": ("real", "real|imag|mag for complex input"),
+              "trigger": ("rising", "rising|falling|none"), "level": (0.0, "trigger level"),
+              "mode": ("auto", "auto (free-run without trigger) | normal (hold last trigger)"),
+              "pretrigger": (0.1, "fraction of the capture before the trigger"),
+              "traces": (["live"], "any of live, max, min, avg"), "average": (8, "captures in the avg trace"),
+              "measure": (["vpp", "freq"], "measurements to publish as channels"), "fps": (10, "")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.buf = np.zeros(0, np.float32)
+        self.hold = None
+        self.last = None
+
+    def part(self, x):
+        if not np.iscomplexobj(x):
+            return np.asarray(x, dtype=np.float32)
+        return {"real": x.real, "imag": x.imag, "mag": np.abs(x)}[self.p["part"]].astype(np.float32)
+
+    def triggered(self, n):
+        """index where the capture starts, or None"""
+        pre = int(n * float(self.p["pretrigger"]))
+        y = self.buf
+        if self.p["trigger"] == "none":
+            return len(y) - n if len(y) >= n else None
+        level = float(self.p["level"])
+        a, b = y[pre:len(y) - (n - pre) - 1], y[pre + 1:len(y) - (n - pre)]
+        if self.p["trigger"] == "falling":
+            hits = np.nonzero((a > level) & (b <= level))[0]
+        else:
+            hits = np.nonzero((a < level) & (b >= level))[0]
+        if not len(hits):
+            return None
+        # latest trigger keeps the display current
+        return int(hits[-1]) + 1
 
     def work(self, x, rate):
-        if not self.due():
+        n = int(self.p["samples"])
+        self.buf = np.concatenate([self.buf, self.part(x)])[-n * 8:]
+        if not self.due() or len(self.buf) < n:
             return None
-        y = x[-int(self.p["samples"]):]
-        t = (np.arange(len(y)) / rate).tolist()
-        if np.iscomplexobj(y):
-            series = [{"label": "I", "y": np.round(y.real, 4).tolist()}, {"label": "Q", "y": np.round(y.imag, 4).tolist()}]
-        else:
-            series = [{"label": "x", "y": np.round(y, 4).tolist()}]
-        lab.trace(self.id, t, series, "s", "")
+        start = self.triggered(n)
+        if start is None:
+            if self.p["mode"] == "normal":
+                return None
+            start = len(self.buf) - n
+        capture = self.buf[start:start + n]
+        alpha = 1.0 / max(1, int(self.p["average"]))
+        if self.hold is None or len(self.hold["max"]) != n:
+            self.hold = {"max": capture.copy(), "min": capture.copy(), "avg": capture.astype(np.float64)}
+        self.hold["max"] = np.maximum(self.hold["max"], capture)
+        self.hold["min"] = np.minimum(self.hold["min"], capture)
+        self.hold["avg"] = self.hold["avg"] + alpha * (capture - self.hold["avg"])
+        curves = {"live": capture, "max": self.hold["max"], "min": self.hold["min"], "avg": self.hold["avg"]}
+        labels = {"live": "live", "max": "max hold", "min": "min hold", "avg": "avg %d" % int(self.p["average"])}
+        pre = int(n * float(self.p["pretrigger"])) if self.p["trigger"] != "none" else 0
+        t = ((np.arange(n) - pre) / rate).tolist()
+        series = [{"label": labels[k], "y": np.round(curves[k], 5).tolist()} for k in self.p["traces"]]
+        values = measure(capture, rate)
+        measurements = [{"name": k, "value": values.get(k), "unit": MEASURE_UNITS.get(k, "")} for k in MEASURE_UNITS]
+        lab.emit({"type": "trace", "name": self.id, "x": t, "series": series, "xUnit": "s", "yUnit": "V",
+                  "mode": "line", "measurements": measurements})
+        for k in self.p["measure"]:
+            if values.get(k) is not None:
+                lab.sample(self.id + "_" + k, round(values[k], 9), MEASURE_UNITS.get(k, ""))
         return None
 
 

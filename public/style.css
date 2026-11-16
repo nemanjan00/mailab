@@ -294,3 +294,5 @@ details > summary { cursor: pointer; display: inline; }
 /* marker readings */
 .readings-wrap { max-height: 40%; overflow: auto; border-top: 1px solid var(--line); }
 table.readings td, table.readings th { padding: 2px 8px; font-size: 12px; }
+.measurements { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 10px; font: 12px var(--mono); }
+.measurements > span { white-space: nowrap; }

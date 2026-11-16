@@ -4,7 +4,7 @@
 
 import { axisStyle, eng, frameThrottle } from "./util.js";
 import { CANVAS_MODES } from "./plot2d.js";
-import { computeReadings, drawMarkers, readingsTable } from "./markers.js";
+import { computeReadings, drawMarkers, measurementsTable, readingsTable } from "./markers.js";
 
 const LEGEND_HEIGHT = 28;
 
@@ -37,7 +37,7 @@ export default {
 			}
 			readings = hasMarkers() ? computeReadings(trs, pane.config) : [];
 			const before = tableEl.offsetHeight;
-			tableEl.innerHTML = readingsTable(readings);
+			tableEl.innerHTML = measurementsTable(trs[0] && trs[0].measurements) + readingsTable(readings);
 			if (plot && tableEl.offsetHeight !== before) {
 				plot.setSize(size());
 			}

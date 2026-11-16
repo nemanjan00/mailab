@@ -160,6 +160,8 @@ const create = (options) => {
 				xUnit: data.xUnit || "",
 				yUnit: data.yUnit || "",
 				mode: data.mode || "line",
+				// optional [{name, value, unit}] shown as a table under the plot (scope measurements)
+				measurements: data.measurements || null,
 				t: Date.now()
 			};
 			if (isNew) {

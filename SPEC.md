@@ -56,8 +56,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
 | TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
-| Scope: triggered display + max/min hold + averaging | ⬜ | flowgraph `scope` sink: trigger edge/level/auto/normal/pre-trigger, traces live/max/min/avg (same as spectrum) |
-| Scope measurements: Vpp, Vmax, Vmin, RMS, mean, frequency, period, duty | ⬜ | computed per capture, channels `<dev>_<id>_<meas>` + measurement table in the trace pane |
+| Scope: triggered display + max/min hold + averaging | ✅ | flowgraph `scope` sink: trigger rising/falling/none, level, auto/normal, pretrigger; traces live/max/min/avg; complex input → real/imag/mag |
+| Scope measurements: Vpp, Vmax, Vmin, RMS, mean, frequency, period, duty | ✅ | per capture (frequency via mid-level crossings with hysteresis); selected ones → channels `<dev>_<id>_<m>`; strip under the trace plot. Verified: 10 kHz/30 % square, 1234 Hz sine |
 | libvolk | ⬜ | Not yet: the hot spots are per-symbol Python loops (carrier recovery, modem demod), and VOLK through ctypes wouldn't help. Move those loops into liquid/numpy/a small C helper first, then use VOLK kernels there |
 | Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |
 
@@ -103,14 +103,18 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 
 ## 6. Order of work from here
 
-1. ~~Webcam / V4L2 stream + snapshot~~ ✅ (XR1 capture: use `camera` on `lab`; P2 Pro thermal still open)
-2. ~~Spectrum markers + readings table~~ ✅
-3. Kaitai view (+ blobs: minipro dumps, captures)
-4. findus map preview (heatmap)
-5. Markdown live values
-6. MHO900 siggen; Soapy TX block with safety gate
-7. nRF52840 modem, Bus Pirate, minipro, Glasgow, ChipWhisperer Husky, uhubctl, system monitor drivers; Harogic IQ streaming
-8. Digital analysis: FSK/GFSK, baud estimation, packet decoding
+Done so far (in order): core, 21 drivers, flowgraph DSP, batch, multi-instance, Dracula, camera, markers/readings,
+Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurements.
+
+Next:
+1. Kaitai view (+ blobs: minipro dumps, captures, net-received data)
+2. findus map preview (delay × length heatmap)
+3. Markdown live values (`{{channel}}`, `{{= expr}}`)
+4. MHO900 siggen; Soapy TX block with an allow-TX + power gate
+5. Drivers: nRF52840 modem, Bus Pirate, minipro, Glasgow, ChipWhisperer Husky, uhubctl, system monitor (nvtop-like), InfiRay P2 Pro, rtl_power
+6. Digital analysis: FSK/GFSK, baud estimation, bit/packet output
+7. Harogic IQ streaming source; MHO900 VXI-11 transport
+8. Optional WebGPU renderers; native hot loops (then VOLK)
 9. Deployment on `lab`: waiting on your decision
 
 ## Appendix: requests in order (this session)
@@ -175,3 +179,4 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 58. max hold, min hold, everaging, including for scope
 59. scope trigger preview... Vpp and similar measurements
 60. frequency too
+61. spec update
