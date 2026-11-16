@@ -29,6 +29,7 @@ const DRIVERS = [
 	require("./rtl_power"),
 	require("./flashrom"),
 	require("./minipro"),
+	require("./cynthion"),
 	require("./vnc")
 ];
 

@@ -16,6 +16,7 @@ tasks, so device libraries never see concurrent calls.
 """
 
 import json
+import os
 import queue
 import sys
 import threading
@@ -23,6 +24,8 @@ import time
 import traceback
 
 _out_lock = threading.Lock()
+# protocol stream; None = sys.stdout (see protect_stdout)
+_out = None
 
 
 _SWITCH = {"on": True, "off": False, "true": True, "false": False}
@@ -40,8 +43,22 @@ def parse_switch(value, name="value"):
 
 def emit(msg):
     with _out_lock:
-        sys.stdout.write(json.dumps(msg) + "\n")
-        sys.stdout.flush()
+        out = _out or sys.stdout
+        out.write(json.dumps(msg) + "\n")
+        out.flush()
+
+
+def protect_stdout():
+    """Keep the protocol on a private copy of stdout and send everything else
+    written there (library print()s, C stdio) to stderr, where the lab logs it.
+    For bridges around chatty libraries."""
+    global _out
+    if _out is not None:
+        return
+    sys.stdout.flush()
+    _out = os.fdopen(os.dup(1), "w")
+    os.dup2(2, 1)
+    sys.stdout = sys.stderr
 
 
 def sample(field, value, unit=None, t=None):
