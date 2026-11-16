@@ -42,7 +42,9 @@ const DEFAULTS = {
 	// a SearXNG instance (JSON format enabled) for keyless web search
 	SEARXNG_URL: "",
 	// web lookups (datasheets, FCC ID) only reach public addresses; local mirrors allowed here: "host,10.0.5.0/24"
-	MAILAB_HTTP_ALLOW: ""
+	MAILAB_HTTP_ALLOW: "",
+	// where the bench is, for radio TX allow-lists (rfcat): eu | us | none
+	MAILAB_RF_REGION: "eu"
 };
 
 // a DATA_DIR with control characters (e.g. ANSI colour codes from a

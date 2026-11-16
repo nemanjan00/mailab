@@ -77,7 +77,7 @@ const venvDir = () => path.join(config.get("DATA_DIR"), VENV_DIR);
 const venvPython = () => path.join(venvDir(), "bin", "python");
 
 // import name for a pip package when they differ
-const IMPORT_NAMES = { hidapi: "hid", pyserial: "serial", "opencv-python-headless": "cv2", "opencv-contrib-python-headless": "cv2" };
+const IMPORT_NAMES = { hidapi: "hid", pyserial: "serial", "opencv-python-headless": "cv2", "opencv-contrib-python-headless": "cv2", rfcat: "rflib", ipython: "IPython" };
 
 /**
  * A driver requirement: a pip spec string, or an object for what a string
