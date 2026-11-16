@@ -87,7 +87,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | MCP connection help in the UI | ✅ | the header's MCP address opens a modal: `claude mcp add` with this lab's URL, JSON config for other clients, token hint when auth is on, channel-bridge config, copy buttons |
 | libsigrokdecode for external inputs | ✅ | flowgraph `decode` block + `decode`/`feed` commands (base64/hex/bits/lab blob; net_source u8/u16/u32/bits; sigrok `capture_blob`): the installed libsigrokdecode decoder scripts run in-process through a `sigrokdecode` stand-in (stacking works, e.g. spi+spiflash), because local sigrok-cli 0.7.2 + libsigrokdecode-git fails on any channel mapping; built-in numpy uart/spi/i2c/manchester with the same annotations. → value table, events, log, data blob, count channel. Regression test. `capture_blob` untested |
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
-| HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
+| HackRF / bladeRF modulation (TX) | ⬜ in progress (agent) | flowgraph `soapy_sink` (HackRF / bladeRF / any SoapySDR TX) and a hackrf_transfer TX path: modulated output from any flowgraph chain (mod, analog_mod, uart_tx, files). Safety: one shared RF TX policy for all transmitters (rfcat too): lab region bands (`MAILAB_RF_REGION`) + lab-level extra bands (e.g. amateur with a licence) only a person can configure; every TX start needs approval; gain / power caps; automatic stop after a max duration; TX state visible in the UI with a kill switch |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
 | UART in/out | ✅ | flowgraph `uart_tx` (text/hex → line levels: start/stop, parity, data bits, oversampling, repeat) and `uart_rx` (logic/analog/bits at any oversampling → bytes; parity/framing errors; value + blob + per-line `uart` log entries for classifiers). Verified 8N1/8E1/8O2, noise, fractional oversampling; regression test. Serial consoles: `serial` driver + log pane command box |
@@ -175,9 +175,9 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. In progress (agents): pymp305 0.6.4 fixes, flowgraph block docs, NanoKVM (torch 2.15.0+cu134 is in the managed venv)
+1. In progress (agents): flowgraph block docs, NanoKVM, SDR TX (torch 2.15.0+cu134 is in the managed venv)
 2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
-3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
+3. MHO900 siggen
 4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
 5. PCB tracing tool (PDF/photo background → traced connectivity → schematic graph + board view; ~/rib/docs sample); datasheet + FCC ID search MCP
 6. Shared terminals (shell-session-mcp), protokai, OpenCV, analog video, journal, timebase, ngscopeclient-style decoders, beamforming DoA
@@ -340,3 +340,4 @@ Next:
 152. make docs for each block, with screenshot and use example; docs/ markdowns, dir per block
 153. reviewer: torch install could pick PyPI's CPU 2.15.0 and resolve unpinned deps across two indexes → torch==2.15.0+cu134, --index-url for that step, constraints file with the exact dependency closure
 154. nanokvm+ from sipeed
+155. you need sdr tx
