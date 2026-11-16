@@ -19,6 +19,7 @@ const classifyModule = require("../classify");
 const trendsModule = require("../trends");
 const recordingsModule = require("../recordings");
 const profilesModule = require("../profiles");
+const boardModule = require("../board");
 const pathModule = require("path");
 const panesModule = require("../panes");
 const storeModule = require("../store");
@@ -881,6 +882,8 @@ const create = (options) => {
 	lab.trends = trendsModule.create(pathModule.join(options.dataDir, "trends"), saved.trends);
 	lab.recordings = recordingsModule.create(lab, pathModule.join(options.dataDir, "recordings"));
 	lab.profiles = profilesModule.create(lab, pathModule.join(options.dataDir, "profiles"));
+	// boards are stored next to lab.json, not in it (layers are big)
+	lab.boards = boardModule.create(pathModule.join(options.dataDir, "boards"), { onChange: (name) => events.emit("board", { name: name }) });
 	lab.classifier = classifyModule.create(lab, saved.classifier);
 	lab.classifier.changed = changed;
 	lab.udev = udevModule.create({

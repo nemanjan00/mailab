@@ -73,6 +73,11 @@ const TYPES = {
 		description: "serial terminal for a uart device (USB-UART adapter): scrollback, send line / hex, live baud, format, line ending, hex view",
 		config: { device: "uart device id" }
 	},
+	board: {
+		description: "board tracing: PDF pages / photos as background layers, trace parts, pins and wires over them; nets come from the drawn geometry; "
+			+ "board view + auto-laid-out schematic graph with cross-probing, text search, netlist export (see board_* tools)",
+		config: { board: "board name", view: "split | board | graph (default split)" }
+	},
 	usb: {
 		description: "USB tree: hubs, ports, devices with /dev nodes and the lab devices using them; power toggles on switchable hubs (uhubctl)",
 		config: {}
