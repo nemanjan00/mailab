@@ -517,6 +517,14 @@ body.has-maximized .grid-stack-item:not(.maximized) { visibility: hidden; }
 .vnc-toggle input { width: auto; margin: 0; accent-color: #bd93f9; }
 .vnc-clip { flex: 1 1 120px; min-width: 80px; width: auto; font-family: var(--mono); }
 .vnc .widget { flex: 1; min-height: 0; background: #282a36; overflow: hidden; }
+.kvm { display: flex; flex-direction: column; height: 100%; }
+.kvm .toolbar { flex-wrap: wrap; padding: 4px 6px; background: var(--panel); }
+.kvm .toolbar button { width: auto; flex: none; }
+.kvm-view { flex: 1; min-height: 0; background: #282a36; overflow: hidden; display: flex; outline: 1px solid transparent; }
+.kvm-view.captured { outline-color: #bd93f9; }
+.kvm-screen { width: 100%; height: 100%; object-fit: contain; outline: none; cursor: crosshair; user-select: none; }
+.kvm-led { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border-radius: 3px; color: var(--muted); border: 1px solid var(--muted); }
+.kvm-led.on { color: #282a36; background: #50fa7b; border-color: #50fa7b; }
 /* hex editor */
 .hexpane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .hx-bar { flex-wrap: wrap; padding: 4px 8px; }

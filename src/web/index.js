@@ -15,6 +15,7 @@ const captureModule = require("../capture");
 const fccid = require("../services/fccid");
 const datasheets = require("../services/datasheets");
 const vncProxy = require("./vnc");
+const kvmPane = require("./kvm");
 const blobEdit = require("../blobs/edit");
 const checksum = require("../utils/checksum");
 const vision = require("../vision");
@@ -456,7 +457,7 @@ const api = (lab) => {
 /**
  * Push lab events to every connected browser.
  */
-const attachSockets = (server, lab, pushIntervalMs, auth, capture) => {
+const attachSockets = (server, lab, pushIntervalMs, auth, capture, kvm) => {
 	// one upgrade handler for every WebSocket path: two ws servers attached to
 	// the same http server would each reject the other's paths
 	const wss = new ws.Server({
@@ -476,6 +477,8 @@ const attachSockets = (server, lab, pushIntervalMs, auth, capture) => {
 			});
 		} else if (vnc.handles(req)) {
 			vnc.upgrade(req, socket, head);
+		} else if (kvm.handles(req)) {
+			kvm.upgrade(req, socket, head);
 		} else {
 			socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
 			socket.destroy();
@@ -570,6 +573,7 @@ const attachSockets = (server, lab, pushIntervalMs, auth, capture) => {
 		clearInterval(pusher);
 		wss.close();
 		vnc.close();
+		kvm.close();
 	});
 
 	wss.on("connection", (socket, req) => {
@@ -630,6 +634,9 @@ const create = (lab, options) => {
 	// MCP calls are checked per tool (read-only tokens get read tools only)
 	app.all("/mcp", auth.middleware(() => true), express.json({ limit: "20mb" }), sessions.handle);
 
+	// the kvm pane: MJPEG proxy, status, power (people only); GETs are reads
+	const kvm = kvmPane.create(lab, auth);
+	app.use("/api/kvm", auth.middleware(), kvm.router);
 	app.use("/api", auth.middleware((req) => {
 		return req.method === "GET" || READ_POSTS.indexOf(req.path) !== -1;
 	}), api(lab));
@@ -637,7 +644,7 @@ const create = (lab, options) => {
 	app.use(express.static(path.join(ROOT, "public")));
 
 	const server = http.createServer(app);
-	attachSockets(server, lab, options.pushIntervalMs, auth, capture);
+	attachSockets(server, lab, options.pushIntervalMs, auth, capture, kvm);
 	return { app: app, server: server, sessions: sessions, capture: capture };
 };
 
