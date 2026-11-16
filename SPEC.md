@@ -22,8 +22,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Multi-call scripts ("script" = multi-MCP-call) for better timing | ✅ | `batch` tool: steps with `at`/`delayMs`/`repeat`/`intervalMs`, `$name.path` result references, loops, ~1 ms accuracy |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
-| HTTP MCP for collaboration | 🟡 | done: Streamable HTTP MCP at `/mcp` (stateless, any number of clients). Planned: per-collaborator bearer tokens (+ read-only role), the client's name in the activity feed, opt-in non-localhost binding |
-| Collab chat (web UI + MCP) with MCP push notifications | ⬜ | shared chat between people (chat pane) and AIs (`chat_send`/`chat_read` tools); new messages pushed to connected AI sessions (stateful MCP sessions + Claude Code channel notifications) |
+| HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
+| Collab chat (web UI + MCP) with MCP push notifications | ✅ | chat pane (markdown/KaTeX) + `chat_send`/`chat_read`, persisted; push: stdio channel bridge `bin/channel.js` (`notifications/claude/channel`, verified end to end: push in, reply out); HTTP sessions get `notifications/message`. Claude Code channels are stdio-only research preview |
 | Run on the lab host `nemanjan00@10.69.1.91` (`lab`) | ⬜ | Feather nRF52840, EVGA XR1 capture, sigrok, minipro and hackrf live there. Options: run mailab there, or add remote device agents. **Needs a decision** |
 
 ## 2. Panes / views
@@ -39,6 +39,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | markdown panes (+ KaTeX) | 🟡 | done: rendering, editing, AI `note` tool. Planned: live values inside notes (`{{channel}}`, `{{= expr}}`) |
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
 | Kaitai view | ✅ | lab blobs (devices/AI/upload) + server-side Kaitai (compiler in debug mode): field tree with byte ranges + hex dump with highlight; MCP `blob_write`/`blob_read`/`kaitai_parse` |
+| Shared terminals (shell-session-mcp) | ⬜ | github.com/nemanjan00/shell-session-mcp: PTY sessions (bash, gdb, openocd, serial consoles) as a `shell` device + terminal pane (xterm.js), driven by both the user and the AI; output pushes like its `notifications/message` events |
+| protokai (.proto → .ksy) in the Kaitai view | ⬜ | github.com/nemanjan00/protokai: kaitai pane/`kaitai_parse` accept `proto` → protokai → .ksy (needs multi-file .ksy imports in the Kaitai loader) → parse protobuf blobs with field names |
 | Readings table for spectrum markers | ✅ | trace pane `markers` (peak / fixed x / Δ to another marker), `peaks: N` auto peaks, shift-click adds, × removes |
 | findus map preview | ⬜ | binned delay × length heatmap of glitch results (success rate per cell), like findus' own web view |
 | audio output | ✅ | audio pane plays lab audio streams (WebAudio); flowgraph `audio` sink |
@@ -93,7 +95,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | DeepAce KC901K / KC908V | ⬜ | handheld RF analyzers, same vendor as the KC9531B (try its framing: 0xFE header + sum checksum); sweeps → spectrum trace |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
-| ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher |
+| ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
 
 ## 5. Project
 
@@ -187,3 +189,6 @@ Next:
 63. kc901k kc908v
 64. http mcp for collab
 65. mcp chat for collab, with web ui and mcp push notifications
+66. https://github.com/nemanjan00/protokai
+67. https://github.com/nemanjan00/shell-session-mcp
+68. https://github.com/nemanjan00/cw-scope as reference, not direct integration

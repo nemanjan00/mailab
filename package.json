@@ -12,7 +12,8 @@
 		"lint": "eslint src/ bin/ public/",
 		"test": "jest",
 		"test:watch": "jest --watch",
-		"prepare": "husky"
+		"prepare": "husky",
+		"channel": "node bin/channel.js"
 	},
 	"jest": {
 		"testEnvironment": "node",

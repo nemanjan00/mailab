@@ -62,6 +62,28 @@ the mdp-p906/ci-v checkouts (mount them and set `MDP_HOST_PATH` / `CIV_PATH`).
 Python bridges need their libraries: `pymp305`, `findus`, `SoapySDR` + `numpy`,
 and `libliquid` for demodulation.
 
+## Collaboration
+
+Several people and AIs can share one lab:
+
+- `MAILAB_TOKENS="alice:secret:rw,bob:secret2:rw,viewer:secret3:ro"` turns on
+  auth for the UI, REST, WebSocket and MCP (Bearer token, `?token=`, or the
+  UI's cookie). `ro` tokens can look and chat but can't change the lab.
+  Set `HOST=0.0.0.0` to accept remote collaborators.
+- Every MCP call is attributed (`alice/claude-code`) in the AI activity pane.
+- **Lab chat**: the chat pane for people, `chat_send` / `chat_read` for AIs.
+- **Push to Claude Code**: chat messages arrive in a Claude Code session as
+  channel events through the stdio bridge `bin/channel.js` (channels are
+  stdio-only):
+
+  ```json
+  {"mcpServers": {"mailab-chat": {"command": "node", "args": ["/path/to/mailab/bin/channel.js"],
+    "env": {"MAILAB_URL": "http://127.0.0.1:3000", "MAILAB_NAME": "claude", "MAILAB_TOKEN": "secret"}}}}
+  ```
+
+  `claude --dangerously-load-development-channels server:mailab-chat` (research preview).
+  HTTP MCP sessions also get each chat message as a `notifications/message` log event.
+
 ## MCP tools
 
 | Tool | |
@@ -72,6 +94,9 @@ and `libliquid` for demodulation.
 | `trace_read`, `trace_write`, `image_get` | captures and screenshots |
 | `math_eval`, `math_derive`, `math_remove` | analysis |
 | `pane_types`, `pane_add`, `pane_update`, `pane_remove`, `note` | the user's UI |
+| `value_read`, `value_write`, `blob_write`, `blob_read`, `kaitai_parse` | JSON values, binary blobs, Kaitai parsing |
+| `chat_send`, `chat_read` | lab chat |
+| `batch` | many calls in one request with ~1 ms timing |
 
 Every call shows up in the **AI activity** pane.
 

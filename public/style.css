@@ -307,3 +307,11 @@ table.readings td, table.readings th { padding: 2px 8px; font-size: 12px; }
 .err { color: var(--err); }
 @media (max-width: 700px) { .kaitai { grid-template-columns: 1fr; } }
 ul.tree li > details { display: inline; }
+
+/* chat */
+.chat-msg { padding: 4px 10px !important; }
+.chat-msg.ai b { color: var(--c4); }
+.chat-msg.human b { color: var(--c1); }
+.chat-text { padding: 0 !important; font-family: var(--sans); white-space: normal !important; }
+.chat-text p { margin: 2px 0; }
+.chat-name { width: 90px !important; flex: none; }

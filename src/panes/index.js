@@ -66,6 +66,10 @@ const TYPES = {
 		description: "editor for a flowgraph device: blocks, links, live rates and errors",
 		config: { device: "flowgraph device id" }
 	},
+	chat: {
+		description: "lab chat between people and AIs (markdown + KaTeX)",
+		config: {}
+	},
 	devices: {
 		description: "device list with status and start/stop",
 		config: {}

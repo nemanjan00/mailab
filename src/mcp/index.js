@@ -15,7 +15,8 @@ const INSTRUCTIONS = [
 	"Devices publish live time series as channels named <device>_<field>, captured arrays (spectra, VNA sweeps, scope/logic captures, glitch scatter) as traces, and images (screenshots).",
 	"Use math_eval for analysis (mathjs; a channel name is a vector of its recent values, a trace name is its first series' y and <name>_x its x).",
 	"Shape the user's web UI with panes (pane_types, pane_add, pane_update, note) so they can see what you see: charts for channels, trace panes for captures, markdown notes with KaTeX for findings.",
-	"Hardware can be damaged: confirm with the user before enabling power outputs, transmitting (ptt) or glitching unknown targets."
+	"Hardware can be damaged: confirm with the user before enabling power outputs, transmitting (ptt) or glitching unknown targets.",
+	"Several people and AIs may share this lab: coordinate in the lab chat (chat_read / chat_send) before changing shared devices."
 ].join(" ");
 
 const PREVIEW_ARRAY_ITEMS = 6;
@@ -96,11 +97,24 @@ const toContent = (value) => {
 	return text(value);
 };
 
+// tools a read-only collaborator may use (chat is collaboration, so it's allowed)
+const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read",
+	"blob_read", "kaitai_parse", "math_eval", "pane_types", "chat_read", "chat_send"];
+
 /**
  * Build an MCP server bound to a lab.
  * @param {Object} lab from src/lab
+ * @param {{who: {name: string, role: string}, session: Object}} [context]
+ *   who: authenticated collaborator; session: MCP session (knows the client name)
  */
-const create = (lab) => {
+const create = (lab, context) => {
+	const ctx = context || {};
+	const who = ctx.who || { name: "local", role: "rw" };
+	// "alice/claude-code" once the client introduced itself
+	const actor = () => {
+		const client = ctx.session && ctx.session.client;
+		return client ? who.name + "/" + client : who.name;
+	};
 	const server = new McpServer({ name: "mailab", version: pkg.version }, { instructions: INSTRUCTIONS });
 
 	// name -> handler, so batch can call tools directly
@@ -108,18 +122,24 @@ const create = (lab) => {
 
 	// register a tool whose handler returns a value or promise; records activity
 	const tool = (name, description, shape, handler) => {
-		handlers[name] = handler;
+		const guarded = (args) => {
+			if (who.role === "ro" && READ_TOOLS.indexOf(name) === -1) {
+				throw new Error(who.name + " is read-only: " + name + " is not allowed");
+			}
+			return handler(args);
+		};
+		handlers[name] = guarded;
 		server.registerTool(name, { description: description, inputSchema: shape }, (args) => {
 			const preview = summarize(args || {}).slice(0, ARGS_PREVIEW);
 			return Promise.resolve()
 				.then(() => {
-					return handler(args || {});
+					return guarded(args || {});
 				})
 				.then((result) => {
-					lab.recordActivity({ tool: name, args: preview, ok: true });
+					lab.recordActivity({ who: actor(), tool: name, args: preview, ok: true });
 					return toContent(result);
 				}, (err) => {
-					lab.recordActivity({ tool: name, args: preview, ok: false, error: err.message });
+					lab.recordActivity({ who: actor(), tool: name, args: preview, ok: false, error: err.message });
 					return { isError: true, content: [{ type: "text", text: err.message }] };
 				});
 		});
@@ -388,6 +408,21 @@ const create = (lab) => {
 		return lab.panes.update(a.id, changes);
 	});
 
+	// ---- chat ------------------------------------------------------------
+
+	tool("chat_send", "Post to the lab chat (people in the web UI and other AIs read it)", {
+		text: z.string()
+	}, (a) => {
+		return lab.postChat({ from: actor(), kind: "ai", text: a.text, session: ctx.session && ctx.session.id });
+	});
+
+	tool("chat_read", "Read the lab chat (newest last)", {
+		since: z.number().optional().describe("only messages with id > since"),
+		last: z.number().optional().describe("default 50")
+	}, (a) => {
+		return lab.getChat({ since: a.since, last: a.last || 50 });
+	});
+
 	// ---- batch -----------------------------------------------------------
 
 	tool("batch", "Run several tool calls in one request with precise timing (~1 ms), instead of one round-trip per call. "
@@ -420,10 +455,10 @@ const create = (lab) => {
 					return handlers[name](args);
 				})
 				.then((result) => {
-					lab.recordActivity({ tool: name, args: preview, ok: true });
+					lab.recordActivity({ who: actor(), tool: name, args: preview, ok: true });
 					return result;
 				}, (err) => {
-					lab.recordActivity({ tool: name, args: preview, ok: false, error: err.message });
+					lab.recordActivity({ who: actor(), tool: name, args: preview, ok: false, error: err.message });
 					throw err;
 				});
 		};

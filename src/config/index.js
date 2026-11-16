@@ -15,7 +15,9 @@ const DEFAULTS = {
 	SIGROK_CLI: "sigrok-cli",
 	PYTHON: "python3",
 	PM3_CLIENT: "proxmark3",
-	CIV_PATH: path.join(os.homedir(), "ci-v")
+	CIV_PATH: path.join(os.homedir(), "ci-v"),
+	// "name:token[:rw|ro],..." enables auth for collaboration (empty = open)
+	MAILAB_TOKENS: ""
 };
 
 const config = {

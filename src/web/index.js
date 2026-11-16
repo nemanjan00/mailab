@@ -5,8 +5,8 @@ const path = require("path");
 const http = require("http");
 const express = require("express");
 const ws = require("ws");
-const StreamableHTTPServerTransport = require("@modelcontextprotocol/sdk/server/streamableHttp.js").StreamableHTTPServerTransport;
-const mcp = require("../mcp");
+const mcpSessions = require("../mcp/sessions");
+const authModule = require("../auth");
 const math = require("../math");
 const devices = require("../devices");
 const kaitai = require("../kaitai");
@@ -89,6 +89,25 @@ const api = (lab) => {
 	router.post("/kaitai", route((req) => {
 		return kaitai.parse(req.body.ksy, lab.getBlob(req.body.blob).data);
 	}));
+	router.get("/chat", route((req) => {
+		return lab.getChat({ since: req.query.since === undefined ? undefined : Number(req.query.since), last: Number(req.query.last) || 200 });
+	}));
+	router.post("/chat", route((req) => {
+		// the authenticated name wins over whatever the browser claims
+		let from = req.body.from || "anonymous";
+		if (req.who && req.who.name !== "local") {
+			from = req.who.name;
+		}
+		// the channel bridge posts on behalf of an AI
+		let kind = "human";
+		if (req.body.kind === "ai") {
+			kind = "ai";
+		}
+		return lab.postChat({ from: from, kind: kind, text: req.body.text });
+	}));
+	router.get("/whoami", route((req) => {
+		return req.who || { name: "local", role: "rw" };
+	}));
 	router.get("/logs", route((req) => {
 		return lab.getLogs({ device: req.query.device, last: Number(req.query.last) || 300 });
 	}));
@@ -146,34 +165,17 @@ const api = (lab) => {
 	return router;
 };
 
-const mcpHandler = (lab) => {
-	return (req, res) => {
-		const server = mcp.create(lab);
-		const transport = new StreamableHTTPServerTransport({
-			sessionIdGenerator: undefined,
-			enableJsonResponse: true
-		});
-		res.on("close", () => {
-			transport.close();
-			server.close();
-		});
-		server.connect(transport)
-			.then(() => {
-				return transport.handleRequest(req, res, req.body);
-			})
-			.catch((err) => {
-				if (!res.headersSent) {
-					res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: err.message }, id: null });
-				}
-			});
-	};
-};
-
 /**
  * Push lab events to every connected browser.
  */
-const attachSockets = (server, lab, pushIntervalMs) => {
-	const wss = new ws.Server({ server: server, path: "/ws" });
+const attachSockets = (server, lab, pushIntervalMs, auth) => {
+	const wss = new ws.Server({
+		server: server,
+		path: "/ws",
+		verifyClient: (info) => {
+			return Boolean(auth.identify(info.req));
+		}
+	});
 	const lastTraceSent = {};
 	const traceTimers = {};
 	let stateTimer = null;
@@ -211,6 +213,11 @@ const attachSockets = (server, lab, pushIntervalMs) => {
 		}, Math.max(0, wait));
 	});
 
+	lab.events.on("chat", (msg) => {
+		const entry = Object.assign({}, msg);
+		delete entry.session;
+		broadcast({ type: "chat", message: entry });
+	});
 	lab.events.on("blob", (e) => {
 		broadcast({ type: "blob", name: e.name });
 	});
@@ -249,23 +256,36 @@ const attachSockets = (server, lab, pushIntervalMs) => {
  * @param {{pushIntervalMs: number}} options
  * @returns {{app: Object, server: http.Server}}
  */
+// REST calls that only read even though they POST
+const READ_POSTS = ["/eval", "/kaitai", "/chat"];
+
 const create = (lab, options) => {
 	const app = express();
+	const auth = options.auth || authModule.create();
+	const sessions = mcpSessions.create(lab);
 
-	app.post("/mcp", express.json({ limit: "20mb" }), mcpHandler(lab));
-	app.all("/mcp", (req, res) => {
-		res.status(405).set("Allow", "POST").json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed (stateless server)" }, id: null });
+	// chat reaches connected AIs as MCP notifications (Claude Code shows them via the
+	// stdio channel bridge, bin/channel.js; other clients may read them as log messages)
+	lab.events.on("chat", (msg) => {
+		const text = msg.from + ": " + msg.text;
+		sessions.notifyAll("notifications/claude/channel", { content: text, meta: { source: "mailab", from: msg.from, kind: msg.kind } }, msg.session);
+		sessions.notifyAll("notifications/message", { level: "info", logger: "mailab-chat", data: text }, msg.session);
 	});
 
-	app.use("/api", api(lab));
+	// MCP calls are checked per tool (read-only tokens get read tools only)
+	app.all("/mcp", auth.middleware(() => true), express.json({ limit: "20mb" }), sessions.handle);
+
+	app.use("/api", auth.middleware((req) => {
+		return req.method === "GET" || READ_POSTS.indexOf(req.path) !== -1;
+	}), api(lab));
 	Object.keys(VENDOR).forEach((name) => {
 		app.use("/vendor/" + name, express.static(path.join(ROOT, VENDOR[name])));
 	});
 	app.use(express.static(path.join(ROOT, "public")));
 
 	const server = http.createServer(app);
-	attachSockets(server, lab, options.pushIntervalMs);
-	return { app: app, server: server };
+	attachSockets(server, lab, options.pushIntervalMs, auth);
+	return { app: app, server: server, sessions: sessions };
 };
 
 module.exports = {

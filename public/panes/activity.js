@@ -8,6 +8,7 @@ const line = (entry) => {
 		detail = detail + "  ✗ " + entry.error;
 	}
 	return "<div class=\"" + (entry.ok ? "" : "fail") + "\"><span class=\"t\">" + time(entry.t) + "</span> "
+		+ (entry.who ? "<span class=\"muted\">" + escapeHtml(entry.who) + "</span> " : "")
 		+ "<span class=\"tool\">" + escapeHtml(entry.tool) + "</span> " + escapeHtml(detail) + "</div>";
 };
 

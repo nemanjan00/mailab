@@ -16,8 +16,9 @@ import audio from "/panes/audio.js";
 import json from "/panes/json.js";
 import flowgraph from "/panes/flowgraph.js";
 import kaitai from "/panes/kaitai.js";
+import chat from "/panes/chat.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;
@@ -44,12 +45,29 @@ const emit = (event, payload) => {
 
 // ---- api ----------------------------------------------------------------
 
+// collaboration mode: the server wants a token; keep it in a cookie for api + ws
+let asked = false;
+const askToken = () => {
+	if (asked) {
+		return;
+	}
+	asked = true;
+	const token = prompt("This lab needs an access token:");
+	if (token) {
+		document.cookie = "mailab_token=" + encodeURIComponent(token) + "; path=/; SameSite=Strict";
+		location.reload();
+	}
+};
+
 const api = (method, path, body) => {
 	return fetch("/api" + path, {
 		method: method,
 		headers: { "content-type": "application/json" },
 		body: body === undefined ? undefined : JSON.stringify(body)
 	}).then((res) => {
+		if (res.status === 401) {
+			askToken();
+		}
 		return res.json().then((json) => {
 			if (!res.ok) {
 				throw new Error(json.error || res.statusText);

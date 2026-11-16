@@ -18,6 +18,8 @@ const storeModule = require("../store");
 
 const LOG_SIZE = 2000;
 const ACTIVITY_SIZE = 500;
+const CHAT_SIZE = 500;
+const CHAT_PERSISTED = 200;
 const MAX_SCATTER_POINTS = 100000;
 const MAX_DERIVED_DEPTH = 8;
 
@@ -51,6 +53,8 @@ const create = (options) => {
 	const blobs = {};
 	const logs = [];
 	const activity = [];
+	const chat = (saved.chat || []).slice();
+	let chatId = chat.reduce((max, m) => Math.max(max, m.id), 0);
 	const derived = {};
 	// samples not yet pushed to web clients: name -> {t: [], v: []}
 	let pending = {};
@@ -64,7 +68,8 @@ const create = (options) => {
 			derived: Object.keys(derived).map((name) => {
 				return { name: name, expression: derived[name].expression, unit: derived[name].unit };
 			}),
-			panes: panes.list()
+			panes: panes.list(),
+			chat: chat.slice(-CHAT_PERSISTED)
 		};
 	};
 
@@ -322,6 +327,30 @@ const create = (options) => {
 
 		getActivity: () => {
 			return activity;
+		},
+
+		/**
+		 * Lab chat between people (web UI) and AIs (MCP).
+		 * @param {{from: string, kind: string, text: string, session: string}} msg
+		 *   kind "human" | "ai"; session: MCP session that sent it (not echoed back to it)
+		 */
+		postChat: (msg) => {
+			if (!msg.text || !String(msg.text).trim()) {
+				throw new Error("empty message");
+			}
+			chatId++;
+			const entry = { id: chatId, t: Date.now(), from: msg.from || "anonymous", kind: msg.kind || "human", text: String(msg.text) };
+			ring(chat, entry, CHAT_SIZE);
+			store.save(snapshot);
+			events.emit("chat", Object.assign({ session: msg.session }, entry));
+			return entry;
+		},
+
+		getChat: (options) => {
+			const opts = options || {};
+			return chat.filter((m) => {
+				return opts.since === undefined || m.id > opts.since;
+			}).slice(-(opts.last || 100));
 		},
 
 		// ---- devices ----------------------------------------------------
