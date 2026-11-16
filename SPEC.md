@@ -130,6 +130,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | Icom CI-V (ci-v) | 🟡 | cloned to `~/ci-v`, packaged as **icom-ci-v** (npm refused `ci-v` as too similar to `civ`). npm shows the staged `0.0.0-stage`, waiting for publish approval on npmjs.com |
 | tinySA / tinySA Ultra | 🟡 in progress (agent) | `tinysa` driver (USB serial shell): sweep/scan → `spectrum` trace (dBm), configurable start/stop/points/RBW, markers → readings, calibration/level output, device info; hardened from the actual firmware shell (`scanraw`, `data`, `sweep`, `marker`). Ultra vs basic differences handled. Untested on hardware |
 | NanoVNA (H / H4, shell protocol) | ⬜ in progress (agent) | `nanovna` driver (USB serial shell, distinct from the binary `litevna`): `scan`/`frequencies`/`data 0|1` → S11 & S21, logmag / phase / Smith / VSWR traces, sweep range + points, calibration state read; markers → readings. Covers NanoVNA-H, H4, and shell-compatible clones |
+| Othernet Morfeus RF siggen | ⬜ in progress (agent) | `morfeus` driver (USB serial, Othernet Morfeus: 2× MAX2871, 23.5 MHz-6 GHz): per-channel frequency + output level + on/off, basic sweep; RF output on/sweep is a transmitter → goes through the shared RF TX safety policy (region bands `MAILAB_RF_REGION` + per-enable approval + chamber bypass), since a bare siggen into an antenna radiates. Device info/version. Protocol from the Morfeus serial command set (firmware/community docs) |
 | LiteVNA 64 | 🟡 | protocol from docs |
 | HackRF / bladeRF | 🟡 | hackrf_sweep, soapy bridge, flowgraph source |
 | Proxmark3 / Proxmark5 (node-proxmark3) | ✅ | runs on the lab's PM5 (AT32F437, Iceman firmware from ~/pm5-og): `PM3_CLIENT` defaults to ~/pm5-og/client/proxmark3 when built; `match` {serial} picks the Proxmark by USB serial; start timeout kills a client that never starts. node-proxmark3 0.0.12 on npm lacks json.lua (ignored via .gitignore) → mailab adds a LUA_PATH shim (dkjson); fixed upstream in node-proxmark3 8a33621 (0.0.13, not yet published to npm) |
@@ -350,3 +351,4 @@ Next:
 159. oh, use real wifi modulation (OFDM, not single-carrier QAM256)
 160. all-safety-bypass mode for a non-persistent env in an RF chamber
 161. nanovna, tinysa
+162. https://www.crowdsupply.com/othernet/morfeus (dual-channel RF signal generator)
