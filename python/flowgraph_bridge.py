@@ -21,6 +21,7 @@ import wave
 
 import numpy as np
 
+import audio_blocks
 import liquid_dsp as dsp
 import mailab_bridge as lab
 import modem
@@ -907,13 +908,17 @@ class Spectrum(Throttled):
     params = {"rbw": (0.0, "resolution bandwidth Hz (0 = use fft)"), "fft": (1024, "FFT size when rbw is 0"),
               "window": ("hann", "hann|blackmanharris|flattop|rect"), "traces": (["live"], "any of live, max, min, avg"),
               "average": (8, "frames in the avg trace (exponential, power domain)"), "points": (0, "display points (0 = all bins)"),
-              "detector": ("peak", "peak|sample when reducing to points"), "fps": (10, ""), "center": (0.0, "Hz added to x axis")}
+              "detector": ("peak", "peak|sample when reducing to points"), "fps": (10, ""), "center": (0.0, "Hz added to x axis"),
+              "onesided": ("auto", "auto (real input: positive frequencies only) | true | false"),
+              "overlay": ([], "ids of other spectrum blocks drawn here too (before/after: put one before and one after a chain)")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
         self.buf = np.zeros(0, np.complex64)
         self.hold = {}
         self.logged_n = None
+        self.real = True
+        self.last = None
 
     def fft_size(self, rate):
         window, enbw = WINDOWS[self.p["window"]]
@@ -934,6 +939,8 @@ class Spectrum(Throttled):
     def work(self, x, rate):
         n = self.fft_size(rate)
         self.buf = np.concatenate([self.buf, x.astype(np.complex64)])[-n * 64:]
+        # audio sources hand out complex64 with a zero imaginary part: treat as real
+        self.real = not np.iscomplexobj(x) or not np.any(np.imag(x))
         if not self.due():
             return None
         frames = len(self.buf) // n
@@ -955,13 +962,26 @@ class Spectrum(Throttled):
         curves = {"live": spectra[-1], "max": self.hold["max"], "min": self.hold["min"], "avg": self.hold["avg"]}
         labels = {"live": "live", "max": "max hold", "min": "min hold", "avg": "avg %d" % int(self.p["average"])}
         points = int(self.p["points"])
-        freqs = float(self.p["center"]) + np.fft.fftshift(np.fft.fftfreq(n, 1 / rate))
-        if points and points < n:
-            freqs = freqs[np.linspace(0, n, points + 1).astype(int)[:-1]]
+        freqs = np.fft.fftshift(np.fft.fftfreq(n, 1 / rate))
+        onesided = self.p["onesided"]
+        if onesided is True or onesided == "true" or (onesided == "auto" and self.real):
+            keep = freqs >= 0
+            freqs = freqs[keep]
+            curves = {k: v[keep] for k, v in curves.items()}
+        bins = len(freqs)
+        freqs = float(self.p["center"]) + freqs
+        if points and points < bins:
+            freqs = freqs[np.linspace(0, bins, points + 1).astype(int)[:-1]]
         series = []
         for name in self.p["traces"]:
             db = 10 * np.log10(self.reduce(curves[name], points, self.p["detector"]) + 1e-20)
             series.append({"label": labels[name], "y": np.round(db, 2).tolist()})
+        self.last = {"x": freqs, "series": series}
+        for other_id in self.p["overlay"] or []:
+            other = graph.blocks.get(other_id)
+            last = getattr(other, "last", None)
+            if last and len(last["x"]) == len(freqs) and np.allclose(last["x"], freqs):
+                series = series + [{"label": "%s %s" % (other_id, s["label"]), "y": s["y"]} for s in last["series"]]
         lab.trace(self.id, freqs.tolist(), series, "Hz", "dBFS")
         if self.logged_n != n:
             self.logged_n = n
@@ -1328,6 +1348,8 @@ BLOCKS = {
     "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger, "uart_tx": UartTx, "uart_rx": UartRx,
     "decode": Decode,
 }
+# realtime audio blocks (filters, dynamics, noise reduction, neural denoise): python/audio_blocks.py
+BLOCKS.update(audio_blocks.BLOCKS)
 
 
 # ---- graph ----------------------------------------------------------------------
@@ -1445,8 +1467,16 @@ def publish():
 
 
 def stats():
-    return {bid: {"type": next(s["type"] for s in graph.spec["blocks"] if s["id"] == bid), "in": b.samples_in,
-                  "out": b.samples_out, "rate": b.in_rate, "error": graph.errors.get(bid)} for bid, b in graph.blocks.items()}
+    out = {bid: {"type": next(s["type"] for s in graph.spec["blocks"] if s["id"] == bid), "in": b.samples_in,
+                 "out": b.samples_out, "rate": b.in_rate, "error": graph.errors.get(bid)} for bid, b in graph.blocks.items()}
+    # block-specific stats (audio blocks: latency, gain reduction, RTF...)
+    for bid, b in graph.blocks.items():
+        if hasattr(b, "extra_stats"):
+            extra = b.extra_stats()
+            error = out[bid]["error"] or extra.get("error")
+            out[bid].update(extra)
+            out[bid]["error"] = error
+    return out
 
 
 # ---- commands -------------------------------------------------------------------
@@ -1506,15 +1536,31 @@ def disconnect(args):
     return graph.spec
 
 
-@bridge.command("set_param", "{block, key, value} change a parameter (the block restarts)")
+@bridge.command("set_param", "{block, key, value} change a parameter (audio blocks apply it live keeping state; others restart)")
 def set_param(args):
     spec = json.loads(json.dumps(graph.spec))
     block = next((b for b in spec["blocks"] if b["id"] == args["block"]), None)
     if block is None:
         raise ValueError("unknown block: %s" % args["block"])
     block.setdefault("params", {})[args["key"]] = args["value"]
+    live = graph.blocks.get(args["block"])
+    if hasattr(live, "set_live") and live.set_live(args["key"], args["value"]):
+        graph.spec = spec
+        publish()
+        return dict(block, live=True)
     graph.load(spec)
     return block
+
+
+@bridge.command("templates", "graph templates (audio presets): name -> description and args")
+def templates(_args):
+    return {name: doc for name, (doc, _fn) in audio_blocks.TEMPLATES.items()}
+
+
+@bridge.command("load_template", "{name, ...args} replace the graph with a template, e.g. voice_cleanup {stream} / {path}")
+def load_template(args):
+    graph.load(audio_blocks.template(args.get("name"), args))
+    return graph.spec
 
 
 @bridge.command("run", "{on} pause / resume the graph")

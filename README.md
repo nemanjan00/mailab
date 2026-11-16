@@ -41,6 +41,17 @@ the AI wire up live:
   libsigrokdecode decoder (stackable, e.g. spi + spiflash) on flowgraph bits,
   captures or blobs.
 - **Audio files:** an `audio_file` source reads WAV/FLAC/MP3/… (ffmpeg).
+- **Realtime audio** (live on a browser mic, SDR demod output or audio files;
+  state kept across chunks, `set_param` applies live, latency and gain
+  reduction in the stats): RBJ biquads (LP/HP/BP/notch/peaking/shelves,
+  cascaded), FIR, 50/60 Hz hum notch with harmonics, auto-tracking tone
+  notch, compressor (knee, lookahead, RMS/peak, sidechain HPF), brickwall
+  limiter, gate/expander, AGC, spectral noise reduction (Wiener /
+  subtraction), de-click, DC blocker, and neural `denoise`: DeepFilterNet3
+  on CUDA (pinned torch installed into the mailab venv on first use),
+  RNNoise on CPU, NVIDIA Maxine detection (SDK not bundled). Templates
+  (`load_template`): voice_cleanup, sdr_fm_audio, sdr_am_audio,
+  hum_removal, broadcast; spectrum `overlay` draws before/after in one trace.
 - **Scripting:** a `python` block for your own DSP.
 
 **Views**: configurable panes that you and the AI share, organized in
@@ -278,7 +289,8 @@ accessor gives the value to sort and export when the cell renders something
 else; `tools: false` hides the filter/export row. The logic lives in
 `src/utils/table` (jest-tested).
 
-**Flowgraph block**: a class in `python/flowgraph_bridge.py` with
+**Flowgraph block**: a class in `python/flowgraph_bridge.py` (audio blocks:
+`python/audio_blocks.py` over the engines in `python/audio_dsp.py`) with
 `params`, `doc` and `work(x, rate) -> (y, rate)`, or write it inline in a
 `python` block.
 

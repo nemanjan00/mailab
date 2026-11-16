@@ -4,6 +4,9 @@
 // Protocol decoding (python/protocol_decode.py): the `decode` block, plus the
 // `decode` / `feed` commands for external captures (base64, hex, bits, or a
 // lab blob by name, resolved here).
+// Realtime audio blocks (python/audio_blocks.py): biquad/fir/hum/auto notch,
+// compressor/limiter/gate/AGC, spectral NR, de-click, neural denoise; stats carry
+// latency_ms and gain reduction / RTF, set_param applies live.
 // Lab audio streams (e.g. a browser mic, <dev>_mic) reach `audio_in` blocks:
 // this device subscribes to lab audio and forwards the wanted streams to the
 // bridge as `audio_in` commands, one in flight per stream.
@@ -19,7 +22,8 @@ const AUDIO_DROP_LOG_EVERY = 100;
 
 const preset = processDriver.pythonPreset({
 	// pip packages, installed into the mailab-managed venv on first use
-	requires: ["numpy==2.5.3"],
+	// (the denoise block's deepfilternet backend installs torch on first use, see python/audio_dsp.py)
+	requires: ["numpy==2.5.3", "scipy==1.18.1"],
 	name: "flowgraph",
 	description: "Composable DSP blocks (sources, liquid-dsp processing, sinks to traces/channels/audio, protocol decoders). Run command \"blocks\" for the catalog",
 	script: "flowgraph_bridge.py",
@@ -34,7 +38,9 @@ const preset = processDriver.pythonPreset({
 		remove_block: "{id}",
 		connect: "{from, to}",
 		disconnect: "{from, to}",
-		set_param: "{block, key, value}",
+		set_param: "{block, key, value} (audio blocks apply it live, keeping filter/envelope state)",
+		templates: "graph templates: voice_cleanup, sdr_fm_audio, sdr_am_audio, hum_removal, broadcast",
+		load_template: "{name, stream | path | source: {type, params}, ...} replace the graph with a template (audio chain + audio sink + spectra before/after)",
 		run: "{on}",
 		stats: "per-block throughput and errors",
 		decode: "{decoder, samplerate, blob | data (base64) | hex | bits, format: u8|u16|u32|bits, options, channels, stack, engine: auto|sigrok|builtin, annotations, name?} one-shot protocol decode of an external capture",

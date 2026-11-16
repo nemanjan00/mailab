@@ -93,12 +93,25 @@ export default {
 				if (s.rate) {
 					info = eng(s.rate, 1) + "S/s";
 				}
+				// audio blocks: added latency, gain reduction, neural denoise state
+				if (s.latency_ms) {
+					info += " · " + s.latency_ms + "ms";
+				}
+				if (s.gr_db) {
+					info += " · GR " + s.gr_db;
+				}
+				if (s.status && s.status !== "ready") {
+					info += " · " + s.status;
+				} else if (s.rtf !== undefined && s.rtf !== null) {
+					info += " · rtf " + Number(s.rtf).toFixed(2);
+				}
 				return "<g class=\"fg-block " + kind + (s.error ? " err" : "") + "\" data-id=\"" + escapeHtml(b.id) + "\" transform=\"translate(" + p.x + "," + p.y + ")\">"
 					+ "<rect width=\"" + BOX_W + "\" height=\"" + BOX_H + "\" rx=\"6\"/>"
 					+ "<text x=\"10\" y=\"20\" class=\"fg-id\">" + escapeHtml(b.id) + "</text>"
 					+ "<text x=\"10\" y=\"36\" class=\"fg-type\">" + escapeHtml(b.type) + "</text>"
 					+ "<text x=\"10\" y=\"49\" class=\"fg-info\">" + escapeHtml(s.error ? "⚠ " + s.error.slice(0, 22) : info) + "</text>"
-					+ "<title>" + escapeHtml(JSON.stringify(b.params || {}, null, 1) + (s.error ? "\n\n" + s.error : "")) + "</title></g>";
+					+ "<title>" + escapeHtml(JSON.stringify(b.params || {}, null, 1) + (s.error ? "\n\n" + s.error : "")
+						+ (s.latency_ms !== undefined ? "\n\nstats " + JSON.stringify(s, null, 1) : "")) + "</title></g>";
 			}).join("");
 			canvas.innerHTML = "<svg width=\"" + width + "\" height=\"" + height + "\">" + edges + boxes + "</svg>";
 			if (!graph.blocks.length) {
