@@ -7,6 +7,7 @@ const pkg = require("../../package.json");
 const batch = require("../batch");
 const kaitai = require("../kaitai");
 const blobs = require("../blobs");
+const blobEdit = require("../blobs/edit");
 const media = require("../services/media");
 const sweepModule = require("../sweep");
 
@@ -102,7 +103,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "blob_peek", "blob_search", "blob_checksum", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -379,6 +380,90 @@ const create = (lab, context) => {
 	}, (a) => {
 		return blobs.diff(lab.getBlob(a.a).data, lab.getBlob(a.b).data);
 	});
+
+	// ---- hex editor --------------------------------------------------------
+
+	const searchShape = {
+		hex: z.string().optional().describe("hex pattern, ?? = any byte: \"de ad ?? ef\""),
+		text: z.string().optional(),
+		encoding: z.enum(["ascii", "latin1", "utf8", "utf16le"]).optional().describe("for text (default ascii)"),
+		ignoreCase: z.boolean().optional().describe("for text: ASCII case-insensitive"),
+		regex: z.string().optional().describe("JavaScript regex over the latin1 view (\\xNN = byte NN); offsets are byte offsets"),
+		flags: z.string().optional().describe("regex flags: i, s, m")
+	};
+
+	tool("blob_peek", "Read part of a blob as hex / base64 / ascii / utf8 / utf16le / bin or as typed values "
+		+ "(u8, i8, u16le, u16be, i16le, i16be, u32le, u32be, i32le, i32be, u64le, u64be, i64le, i64be (as strings), f32le, f32be, f64le, f64be)", {
+		name: z.string(),
+		offset: z.number().int().optional(),
+		length: z.number().int().optional().describe("bytes, default 256, max 65536"),
+		as: z.string().optional().describe("default hex")
+	}, (a) => blobEdit.peek(lab, a));
+
+	tool("blob_poke", "Overwrite bytes in a blob at offset: hex, or value + type (e.g. value \"0x1234\", type u16le; value 3.3, type f32le). "
+		+ "Writing past the end extends the blob. Returns undo ops for blob_patch", {
+		name: z.string(),
+		offset: z.number().int(),
+		hex: z.string().optional(),
+		value: z.union([z.number(), z.string()]).optional(),
+		type: z.string().optional().describe("u8…u64 / i8…i64 / f32 / f64 with le|be suffix (u8/i8 without)")
+	}, (a) => blobEdit.poke(lab, a, "ai"));
+
+	tool("blob_patch", "Apply edit ops to a blob in order, each seeing the previous result: "
+		+ "{op:\"poke\", offset, hex} overwrite · {op:\"insert\", offset, hex} · {op:\"delete\", offset, length} · {op:\"fill\", offset, length, hex (pattern, default 00)}. "
+		+ "base64 works instead of hex. Returns `undo` (ops that restore the blob)", {
+		name: z.string(),
+		ops: z.array(z.object({
+			op: z.enum(["poke", "insert", "delete", "fill"]),
+			offset: z.number().int(),
+			length: z.number().int().optional(),
+			hex: z.string().optional(),
+			base64: z.string().optional()
+		})).min(1)
+	}, (a) => {
+		const r = blobEdit.patch(lab, a, "ai");
+		delete r.inverses;
+		return r;
+	});
+
+	tool("blob_search", "Search a blob: hex with ?? wildcards, text (ascii / utf8 / utf16le, optional ignoreCase) or regex. "
+		+ "dir all (default, non-overlapping hits) | next (first at/after from) | prev (last before from)", Object.assign({
+		name: z.string(),
+		dir: z.enum(["all", "next", "prev"]).optional(),
+		from: z.number().int().optional(),
+		start: z.number().int().optional().describe("range start"),
+		end: z.number().int().optional().describe("range end (exclusive)"),
+		max: z.number().int().optional().describe("most hits (default 1000, max 10000)"),
+		wrap: z.boolean().optional()
+	}, searchShape), (a) => blobEdit.search(lab, a));
+
+	tool("blob_replace", "Find and replace in a blob: the next hit at/after `from`, or all hits (in [start, end)). "
+		+ "find: {hex (?? wildcards) | text | regex}; replace: {hex | text, encoding}; ?? in a hex replacement keeps the matched byte. "
+		+ "A different length inserts / deletes. Returns count and undo ops", {
+		name: z.string(),
+		find: z.union([z.string().describe("hex pattern"), z.object(searchShape)]),
+		replace: z.union([z.string().describe("hex"), z.object({ hex: z.string().optional(), text: z.string().optional(), encoding: z.string().optional() })]),
+		all: z.boolean().optional(),
+		from: z.number().int().optional(),
+		start: z.number().int().optional(),
+		end: z.number().int().optional(),
+		max: z.number().int().optional()
+	}, (a) => blobEdit.replace(lab, a, "ai"));
+
+	tool("blob_checksum", "Checksums / hashes over a blob range (default whole blob): CRC-8/16/32 variants (crc8, crc8-maxim, crc16-ccitt-false, crc16-xmodem, "
+		+ "crc16-modbus, crc16-kermit, crc16-arc, crc32, crc32c, crc32-mpeg2 (STM32), …), adler32, sum8/16/32, word sums, xor8, twos8, inet16, md5, sha1, sha256, sha512, entropy, histogram", {
+		name: z.string(),
+		offset: z.number().int().optional(),
+		length: z.number().int().optional(),
+		algorithms: z.union([z.array(z.string()), z.literal("all")]).optional().describe("default: a common set; \"all\" for every one")
+	}, (a) => blobEdit.checksum(lab, a));
+
+	tool("blob_slice", "Copy a range of a blob into a new blob `to` (whole blob = save as / snapshot before editing)", {
+		name: z.string(),
+		offset: z.number().int().optional(),
+		length: z.number().int().optional(),
+		to: z.string()
+	}, (a) => blobEdit.slice(lab, a, "ai"));
 
 	tool("kaitai_parse", "Parse a blob with a Kaitai Struct .ksy (YAML text): returns the field tree and each field's byte range", {
 		blob: z.string(),

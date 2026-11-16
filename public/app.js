@@ -28,13 +28,14 @@ import kaitai from "./panes/kaitai.js";
 import chat from "./panes/chat.js";
 import graph from "./panes/graph.js";
 import blob from "./panes/blob.js";
+import hex from "./panes/hex.js";
 import classifier from "./panes/classifier.js";
 import trend from "./panes/trend.js";
 import custom from "./panes/custom.js";
 import usb from "./panes/usb.js";
 import terminal from "./panes/terminal.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, hex, classifier, trend, custom, usb, terminal };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;
