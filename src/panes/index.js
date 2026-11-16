@@ -38,7 +38,7 @@ const TYPES = {
 		config: { image: "image name", device: "camera device id: adds a snapshot button" }
 	},
 	markdown: {
-		description: "notes; markdown with $inline$ and $$block$$ KaTeX math",
+		description: "notes; markdown with $inline$ and $$block$$ KaTeX math, live values with {{channel}} / {{channel|digits}}",
 		config: { content: "markdown text" }
 	},
 	math: {
