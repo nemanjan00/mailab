@@ -50,7 +50,9 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 - [ ] Track front-panel function changes (unit is only refreshed on `configure`)
 
 ### mho900
-- [ ] Confirm the SCPI port (notes mention 5555 and 55555)
+- [ ] SCPI over LAN: unit at 10.69.1.89 (RIGOL Web Control on :80) accepts TCP 5555 but doesn't answer `*IDN?` (2026-11-16). Check that LAN SCPI is enabled and no other client holds it
+- [x] 55555 is **ADB** (stock, root, no auth; ~/rigol/mho900/MOD.md), not SCPI. The driver must never use it
+- [ ] Port 111 (portmapper) is open: add a VXI-11 transport as an alternative to the raw socket
 - [ ] Verify `:WAV:FORM BYTE` scaling against the 12-bit ADC; try `WORD`
 - [ ] `:DISPlay:DATA? PNG` screenshot format
 - [ ] RAW-mode deep memory captures (chunked `:WAV:STAR/STOP`)

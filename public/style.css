@@ -255,3 +255,35 @@ dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top
 	-webkit-box-orient: vertical;
 	overflow: hidden;
 }
+
+/* json tree */
+.jsonview { font-size: 12px; }
+ul.tree { list-style: none; margin: 0; padding-left: 16px; border-left: 1px solid var(--line); }
+ul.tree li { white-space: nowrap; }
+details > summary { cursor: pointer; display: inline; }
+.j-key { color: var(--c4); }
+.j-str { color: var(--c5); }
+.j-num { color: var(--c3); }
+.j-bool, .j-null { color: var(--c2); }
+
+/* audio */
+.audiopane { display: flex; flex-direction: column; gap: 10px; }
+.audiopane input[type=range] { width: 160px; vertical-align: middle; }
+.meter { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.meter div { height: 100%; width: 0; background: var(--accent); transition: width 0.1s; }
+
+/* flowgraph */
+.fg-toolbar { display: flex; gap: 6px; align-items: center; border-bottom: 1px solid var(--line); }
+.fg-canvas { overflow: auto; position: relative; }
+.fg-edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.fg-block { cursor: pointer; }
+.fg-block rect { fill: var(--panel-2); stroke: var(--c4); stroke-width: 1.5; }
+.fg-block.source rect { stroke: var(--c0); }
+.fg-block.sink rect { stroke: var(--c1); }
+.fg-block.err rect { stroke: var(--err); }
+.fg-block:hover rect { fill: var(--line); }
+.fg-block text { font-family: var(--mono); fill: var(--text); }
+.fg-id { font-size: 12px; font-weight: 600; }
+.fg-type { font-size: 11px; fill: var(--muted) !important; }
+.fg-info { font-size: 10px; fill: var(--c5) !important; }
+.fg-block.err .fg-info { fill: var(--err) !important; }

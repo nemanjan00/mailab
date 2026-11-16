@@ -1,78 +1,8 @@
 // x/y plot of captured traces: spectra, VNA sweeps, scope & logic captures
 // (uPlot), and scatter datasets such as glitch campaigns (canvas).
 
-import { axisStyle, cssVar, eng, frameThrottle, plotSize } from "./util.js";
-
-// glitch-result classes -> theme colours
-const SCATTER_VARS = {
-	success: "--err",
-	expected: "--c0",
-	"no-reply": "--c1",
-	other: "--c2",
-	error: "--c4"
-};
-
-const drawScatter = (canvas, tr, ctx) => {
-	const dpr = window.devicePixelRatio || 1;
-	const w = canvas.clientWidth;
-	const h = canvas.clientHeight;
-	canvas.width = w * dpr;
-	canvas.height = h * dpr;
-	const g = canvas.getContext("2d");
-	g.scale(dpr, dpr);
-	g.clearRect(0, 0, w, h);
-	const pad = { l: 56, r: 12, t: 26, b: 28 };
-	const all = tr.series.reduce((acc, s) => {
-		return { x: acc.x.concat(s.x || []), y: acc.y.concat(s.y) };
-	}, { x: [], y: [] });
-	if (!all.x.length) {
-		return;
-	}
-	const range = (v) => {
-		const min = v.reduce((a, b) => Math.min(a, b), Infinity);
-		const max = v.reduce((a, b) => Math.max(a, b), -Infinity);
-		const span = max - min || 1;
-		return [min - span * 0.03, max + span * 0.03];
-	};
-	const rx = range(all.x);
-	const ry = range(all.y);
-	const px = (x) => pad.l + (x - rx[0]) / (rx[1] - rx[0]) * (w - pad.l - pad.r);
-	const py = (y) => h - pad.b - (y - ry[0]) / (ry[1] - ry[0]) * (h - pad.t - pad.b);
-
-	g.strokeStyle = cssVar("--grid-line");
-	g.fillStyle = cssVar("--muted");
-	g.font = "11px " + cssVar("--mono");
-	[0, 0.25, 0.5, 0.75, 1].forEach((f) => {
-		const x = rx[0] + f * (rx[1] - rx[0]);
-		const y = ry[0] + f * (ry[1] - ry[0]);
-		g.beginPath();
-		g.moveTo(px(x), pad.t);
-		g.lineTo(px(x), h - pad.b);
-		g.moveTo(pad.l, py(y));
-		g.lineTo(w - pad.r, py(y));
-		g.stroke();
-		g.fillText(eng(x, 1), px(x) - 14, h - 10);
-		g.fillText(eng(y, 1), 4, py(y) + 4);
-	});
-	g.fillText(tr.xUnit + " →", w - pad.r - 70, h - 10);
-	g.fillText("↑ " + tr.yUnit, 4, 14);
-
-	let legendX = pad.l + 50;
-	tr.series.forEach((s, i) => {
-		const color = SCATTER_VARS[s.label] ? cssVar(SCATTER_VARS[s.label]) : ctx.color(i);
-		g.fillStyle = color;
-		g.globalAlpha = 0.75;
-		s.y.forEach((y, j) => {
-			g.fillRect(px(s.x[j]) - 1.5, py(y) - 1.5, 3, 3);
-		});
-		g.globalAlpha = 1;
-		const label = s.label + " (" + s.y.length + ")";
-		g.fillRect(legendX, 9, 8, 8);
-		g.fillStyle = cssVar("--text");
-		g.fillText(label, legendX + 12, 17);
-		legendX += g.measureText(label).width + 26;
-	});
-};
+import { axisStyle, eng, frameThrottle, plotSize } from "./util.js";
+import { CANVAS_MODES } from "./plot2d.js";
 
 export default {
 	mount: (body, initial, ctx) => {
@@ -150,17 +80,18 @@ export default {
 				signature = "";
 				return;
 			}
-			const scatter = trs[0].mode === "scatter";
+			const draw = CANVAS_MODES[trs[0].mode];
 			// rebuild uPlot only when the series layout changes
 			const sig = JSON.stringify(trs.map((tr) => [tr.name, tr.mode, tr.series.map((s) => s.label)])) + document.documentElement.dataset.theme;
-			if (scatter) {
+			if (draw) {
 				if (!canvas) {
 					teardown();
 					canvas = document.createElement("canvas");
 					canvas.className = "full";
 					body.appendChild(canvas);
 				}
-				drawScatter(canvas, trs[0], ctx);
+				draw(canvas, trs[0], ctx.color);
+				signature = "";
 				return;
 			}
 			if (sig !== signature || !plot) {

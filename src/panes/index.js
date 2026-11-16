@@ -16,7 +16,7 @@ const TYPES = {
 		config: { channel: "channel name", precision: "decimals (default 4)", label: "" }
 	},
 	trace: {
-		description: "x/y plot of a captured trace (spectrum, VNA, scope capture, logic capture, glitch scatter)",
+		description: "x/y plot of traces: spectrum, VNA, scope/logic capture, glitch scatter, constellation, eye diagram (drawn by the trace's mode)",
 		config: { traces: "[trace names]", logX: "bool", yMin: "", yMax: "" }
 	},
 	waterfall: {
@@ -42,6 +42,18 @@ const TYPES = {
 	activity: {
 		description: "feed of what the AI did through MCP",
 		config: {}
+	},
+	audio: {
+		description: "play a lab audio stream (e.g. a flowgraph audio sink) in the browser",
+		config: { stream: "stream name, e.g. fg_audio" }
+	},
+	json: {
+		description: "collapsible JSON view of a lab value",
+		config: { value: "value name, e.g. fg_stats", depth: "levels expanded (default 2)" }
+	},
+	flowgraph: {
+		description: "editor for a flowgraph device: blocks, links, live rates and errors",
+		config: { device: "flowgraph device id" }
 	},
 	devices: {
 		description: "device list with status and start/stop",

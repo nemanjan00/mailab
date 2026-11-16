@@ -9,7 +9,8 @@ export default {
 		const render = () => {
 			const chans = ctx.state.channels;
 			const traces = ctx.state.traces;
-			if (!chans.length && !traces.length) {
+			const values = ctx.state.values || [];
+			if (!chans.length && !traces.length && !values.length) {
 				body.innerHTML = "<div class=\"empty\">no data yet</div>";
 				return;
 			}
@@ -30,6 +31,11 @@ export default {
 					+ "<td class=\"muted\">trace · " + escapeHtml(t.mode) + "</td>"
 					+ "<td><button class=\"icon\" data-act=\"trace\" title=\"plot\">📈</button>"
 					+ "<button class=\"icon\" data-act=\"waterfall\" title=\"waterfall\">≋</button></td></tr>";
+			})).concat(values.map((v) => {
+				return "<tr data-value=\"" + escapeHtml(v.name) + "\"><td class=\"mono\">" + escapeHtml(v.name) + "</td>"
+					+ "<td class=\"num\">json</td>"
+					+ "<td class=\"muted\">value · " + escapeHtml(v.source || "") + "</td>"
+					+ "<td><button class=\"icon\" data-act=\"json\" title=\"view\">{}</button></td></tr>";
 			}));
 			body.innerHTML = "<table><thead><tr><th>name</th><th>latest</th><th>source</th><th></th></tr></thead><tbody>"
 				+ rows.join("") + "</tbody></table>";
@@ -44,11 +50,13 @@ export default {
 			const act = button.dataset.act;
 			const channel = row.dataset.channel;
 			const trace = row.dataset.trace;
+			const value = row.dataset.value;
 			const specs = {
 				chart: { type: "chart", title: channel, config: { channels: [channel], seconds: 30 } },
 				value: { type: "value", title: channel, w: 3, h: 3, config: { channel: channel } },
 				trace: { type: "trace", title: trace, config: { traces: [trace] } },
-				waterfall: { type: "waterfall", title: trace + " waterfall", config: { trace: trace } }
+				waterfall: { type: "waterfall", title: trace + " waterfall", config: { trace: trace } },
+				json: { type: "json", title: value, config: { value: value } }
 			};
 			ctx.api("POST", "/panes", specs[act]);
 		});

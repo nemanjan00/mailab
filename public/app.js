@@ -12,8 +12,11 @@ import log from "/panes/log.js";
 import activity from "/panes/activity.js";
 import devices from "/panes/devices.js";
 import channels from "/panes/channels.js";
+import audio from "/panes/audio.js";
+import json from "/panes/json.js";
+import flowgraph from "/panes/flowgraph.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;
