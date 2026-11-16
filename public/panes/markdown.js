@@ -13,13 +13,13 @@ export const renderMarkdown = (source) => {
 	const stash = [];
 	const keep = (html) => {
 		stash.push(html);
-		return "\u0000" + (stash.length - 1) + "\u0000";
+		return "@@MATH" + (stash.length - 1) + "@@";
 	};
 	const withMath = String(source || "")
 		.replace(/\$\$([\s\S]+?)\$\$/g, (_m, tex) => keep(renderMath(tex, true)))
 		.replace(/\$([^$\n]+?)\$/g, (_m, tex) => keep(renderMath(tex, false)));
 	const html = marked.parse(withMath);
-	return html.replace(/\u0000(\d+)\u0000/g, (_m, i) => stash[Number(i)]);
+	return html.replace(/@@MATH(\d+)@@/g, (_m, i) => stash[Number(i)]);
 };
 
 export default {

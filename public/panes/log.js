@@ -49,7 +49,7 @@ export default {
 			}
 			const space = text.indexOf(" ");
 			const name = space === -1 ? text : text.slice(0, space);
-			let args = {};
+			let args;
 			try {
 				args = space === -1 ? {} : JSON.parse(text.slice(space + 1));
 			} catch (err) {

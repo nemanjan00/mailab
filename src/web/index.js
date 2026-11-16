@@ -4,7 +4,7 @@
 const path = require("path");
 const http = require("http");
 const express = require("express");
-const WebSocket = require("ws");
+const ws = require("ws");
 const StreamableHTTPServerTransport = require("@modelcontextprotocol/sdk/server/streamableHttp.js").StreamableHTTPServerTransport;
 const mcp = require("../mcp");
 const math = require("../math");
@@ -76,7 +76,7 @@ const api = (lab) => {
 
 	router.post("/eval", route((req) => {
 		const result = lab.evaluate(req.body.expression, { samples: req.body.samples, seconds: req.body.seconds });
-		let tex = "";
+		let tex;
 		try {
 			tex = math.tex(req.body.expression);
 		} catch (_err) {
@@ -151,7 +151,7 @@ const mcpHandler = (lab) => {
  * Push lab events to every connected browser.
  */
 const attachSockets = (server, lab, pushIntervalMs) => {
-	const wss = new WebSocket.Server({ server: server, path: "/ws" });
+	const wss = new ws.Server({ server: server, path: "/ws" });
 	const lastTraceSent = {};
 	const traceTimers = {};
 	let stateTimer = null;
@@ -159,7 +159,7 @@ const attachSockets = (server, lab, pushIntervalMs) => {
 	const broadcast = (msg) => {
 		const data = JSON.stringify(msg);
 		wss.clients.forEach((client) => {
-			if (client.readyState === WebSocket.OPEN) {
+			if (client.readyState === ws.OPEN) {
 				client.send(data);
 			}
 		});

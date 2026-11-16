@@ -244,7 +244,7 @@ const parseJson = (text) => {
 	try {
 		return JSON.parse(text);
 	} catch (err) {
-		throw new Error("invalid JSON: " + err.message);
+		throw new Error("invalid JSON: " + err.message, { cause: err });
 	}
 };
 

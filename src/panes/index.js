@@ -1,7 +1,7 @@
 // Pane layout: the web UI is a 12-column grid of typed panes. Both the user
 // (drag/resize/edit) and the AI (MCP) edit this same list.
 
-const uuid = require("uuid").v4;
+const randomUUID = require("crypto").randomUUID;
 
 const GRID_COLUMNS = 12;
 
@@ -118,7 +118,7 @@ const create = (initial, onChange) => {
 				spot = freeSpot(w, h);
 			}
 			const pane = {
-				id: spec.id || uuid().slice(0, 8),
+				id: spec.id || randomUUID().slice(0, 8),
 				type: spec.type,
 				title: spec.title || spec.type,
 				config: spec.config || {},
