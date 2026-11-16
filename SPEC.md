@@ -23,7 +23,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | GUI SDK for readable panes | 🟡 | `public/sdk/`: `pane()` (reactive config, auto-dispose), `table`, `feed`, `iconButton`, `empty`, `toolbar`, `field`, `widget` (uPlot/canvas composed in, disposed with the scope). Panes on it: devices, channels, activity, chat. Next: log, value, json, kaitai, flowgraph, image, audio; then chart/trace via `widget` |
 | Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
 | Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | app store is qrp `state()` (lab state, activity/chat feeds, live values at 4 Hz in `batch`); 4 panes migrated via the SDK; imperative panes still work against the same store |
-| Tablet interface: numeric entry popover | ⬜ | SDK `numberField`: tap a value → popover keypad (digits, `.`, `±`, ⌫) + unit buttons (Hz/kHz/MHz/GHz, dBm/dB, mV/V, mA/A, µs/ms/s), like an instrument front panel; touch-friendly sizes; used in panes and dialogs |
+| Tablet interface: numeric entry popover | ✅ | SDK `numberField`: tap → keypad popover (digits, `.`, `±`, ⌫, C, set) + unit buttons from the field's unit (V → mV/V/kV, Hz → Hz…GHz, s → ns…s, A → µA/mA/A, dBm only dBm; W, Ω, F, H); bottom sheet under 520 px; desktop typing with suffixes (`2.4G`, `100m`, `4.7u`, `3meg`), base units out. Used by custom-pane `number` controls. Verified in the browser (set + typed values reach the device). No device dialog takes numbers yet |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
 | Auth hardening (reviewer feedback, rounds 2–3) | ✅ | `?token=` only as a login link (→ HttpOnly SameSite=Strict cookie + redirect), never accepted on API/MCP/WS; token table is a `Map` (inherited keys like `constructor`/`__proto__` were accepted as tokens: fixed); writes need role `rw` exactly (REST + MCP); non-loopback `HOST` without tokens refuses to start (`MAILAB_ALLOW_OPEN=1` overrides; Docker README uses tokens); open mode accepts only loopback/`MAILAB_ALLOWED_HOSTS` Host headers and same-origin requests, which blocks DNS rebinding (REST, MCP, WS). Verified against a live server |
 | Math sandbox (reviewer feedback, round 4) | ✅ | inside expressions `import`, `createUnit`, `evaluate`, `parse`, `compile`, `simplify`, `derivative`, `resolve`, `reviver` are disabled (a read-only user could redefine units for everyone); matrix constructors/growth (`zeros`, `ones`, `identity`, `random*`, `range`, `resize`, `reshape`, `concat`, `kron`, outer `multiply`, broadcasting `add`/`subtract`/`.*`/`./`/`.^`) are capped at 1M elements (memory exhaustion would stop PSU polling). Tests |
@@ -34,9 +34,9 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Server-enforced safety rules | ✅ | `src/safety`: `when` (mathjs over latest channel values, `<ch>_age` = seconds since last sample) held for `for_ms` → action `{device, command, args}`, cooldown; checked on every input sample + a 250 ms tick; firings → activity + chat; `locked` rules only removable by a person (REST), not by the AI (MCP `rule_remove` refused). MCP `rule_add`/`rule_remove`/`safety_overview`, REST `/api/safety`. Tests + verified live: a rule pulled back an approved AI change |
 | Safety hardening (reviewer feedback, round 5) | ✅ | AI `rule_add` whose action matches the approval policy waits for a person (rules can't smuggle `output on`); rule ids are random (a boot counter could hand a new rule a restored locked rule's id) and locked rules can't be replaced; rules that fail to evaluate alarm in chat; new token role `human` (people): only humans approve, change the policy or remove locked rules; `rw` = AIs. Open mode = one local human (documented limit: a shell-capable agent on the same machine without tokens). Regression tests for each |
 | Approve-in-UI for risky commands | ✅ | policy (default: outputs on, voltage > 5 V, PTT, glitch/campaign, pairing; editable only via REST/UI, not by the AI) → AI `device_command` waits; Approve/Deny card in the chat pane; approve runs it, deny/timeout (120 s) refuses. Tests + clicked through in the browser |
-| Generic sweep & optimize | ⬜ | generalize the glitch campaign: sweep any setpoints (P906 voltage, SoapySDR frequency, a delay) against any measured result → map view + narrowing search. Brown-out profiling = one call (lower V until the target UART stops answering) |
+| Generic sweep & optimize | ✅ | `src/sweep`: `sweep` (1-2 params, linear/log/list, settle, mean/latest reads, stopWhen, after-command → table value + trace) and `optimize` (golden-section / hill-climb, iteration/tolerance limits → value + scatter trace); device commands go through `safety.gate` (one approval for the whole plan; denial runs nothing). Verified on sim over MCP. Not done: a heatmap pane for 2-D grids |
 | One timebase across instruments | ⬜ | samples carry host time, so PSU/scope/logic drift by ms; a sync pulse every instrument sees aligns them (matters for glitching and power analysis) |
-| Record & replay as a device | ⬜ | save a session's channels/traces/logs, play it back as a fake instrument: test panes and AI workflows without the bench, CI on real data, live demos without hardware |
+| Record & replay as a device | ✅ | `src/recordings`: `recording_start` / `recording_stop` / `recordings` (channel globs + traces/values/events/logs → `DATA_DIR/recordings/*.ndjson`, maxSeconds/maxBytes); REST list/start/stop/download, delete for humans; `replay` driver (original names or prefix, speed, loop, pause/seek). Verified record → replay over MCP. Not done: a recordings pane |
 | Experiment journal with evidence tags | ⬜ | each batch/run stores device options, setpoints and data; AI conclusions in notes link to their data and get tagged [HW] automatically, or [INF] when nothing backs them (the mdp-p906 convention, enforced); export a run to markdown |
 | Binary diff for blobs | ✅ | `blob_diff` + blob pane `compare`: merged changed ranges, side-by-side hex with highlights. Next: map changed ranges to Kaitai fields |
 | mailab-managed Python venv | ✅ | `src/services/pyenv`: venv in `DATA_DIR/python` (system site packages for apt SoapySDR/liquid), created on first use; Python drivers declare `requires` (flowgraph/soapy/harogic: numpy; mp305: pymp305, hidapi; picoglitcher: findus, pyserial), installed on device start if not importable, progress in the device log; serialized pip; opt-out `MAILAB_MANAGE_PYTHON=0` / `PYTHON`. Verified: venv creation, system numpy reuse, pymp305+hidapi install. Helpers that crash now show `error` + their last stderr line |
@@ -55,7 +55,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | constellation diagram | ✅ | trace mode `constellation` (flowgraph sink) |
 | eye diagram | ✅ | trace mode `eye`; needs a matched-filter step in the demo graph to look open |
 | waterfall | ✅ | |
-| markdown panes (+ KaTeX) | 🟡 | done: rendering, editing, AI `note` tool. Planned: live values inside notes (`{{channel}}`, `{{= expr}}`) |
+| markdown panes (+ KaTeX) | ✅ | rendering, editing, AI `note` tool, live values `{{channel}}` / `{{channel|digits}}` (also inside math), re-rendered at most 5 Hz and only on change |
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
 | Kaitai view | ✅ | lab blobs (devices/AI/upload) + server-side Kaitai (compiler in debug mode): field tree with byte ranges + hex dump with highlight; MCP `blob_write`/`blob_read`/`kaitai_parse` |
 | Grafana-like long-term trends | ✅ | `src/trends`: recorded channels (glob patterns; defaults `*_v *_i *_p *_temp *_vin cls_*`) → min/max/mean buckets at 1 s (6 h), 10 s (3 d), 1 min (30 d), 1 h (2 y), appended to `DATA_DIR/trends`, reloaded at boot; queries use the finest tier covering the range, merged to the point budget; late samples merge. Trend pane (5 min … 30 d, mean line in min/max band); MCP `trend_read` (relative times like -24h) / `trend_record`. Verified with a 24 h CC/CV battery charge, incl. restart |
@@ -82,7 +82,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Analog video decode | ⬜ | PAL/NTSC composite from SDR/scope samples (e.g. FM-demodulated FPV): H/V sync detection, line assembly → image frames in the image pane |
 | ngscopeclient decoders & blocks | ⬜ | reference/reuse libscopehal's filter catalog: CDR/PLL, TIE & jitter, eye masks, 8b/10b, Manchester, UART/SPI/I2C/CAN/USB/Ethernet, math filters; port key ones as flowgraph blocks or run libscopehal headless as a bridge |
 | MCP connection help in the UI | ✅ | the header's MCP address opens a modal: `claude mcp add` with this lab's URL, JSON config for other clients, token hint when auth is on, channel-bridge config, copy buttons |
-| libsigrokdecode for external inputs | ⬜ | run sigrok protocol decoders (uart, spi, i2c, manchester, …) on bits/logic from any source (flowgraph bit streams, scope captures, blobs) via `sigrok-cli -I binary` + `-P`; flowgraph `decode` sink + MCP tool; annotations → log/value |
+| libsigrokdecode for external inputs | ✅ | flowgraph `decode` block + `decode`/`feed` commands (base64/hex/bits/lab blob; net_source u8/u16/u32/bits; sigrok `capture_blob`): the installed libsigrokdecode decoder scripts run in-process through a `sigrokdecode` stand-in (stacking works, e.g. spi+spiflash), because local sigrok-cli 0.7.2 + libsigrokdecode-git fails on any channel mapping; built-in numpy uart/spi/i2c/manchester with the same annotations. → value table, events, log, data blob, count channel. Regression test. `capture_blob` untested |
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
@@ -90,6 +90,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | UART in/out | ✅ | flowgraph `uart_tx` (text/hex → line levels: start/stop, parity, data bits, oversampling, repeat) and `uart_rx` (logic/analog/bits at any oversampling → bytes; parity/framing errors; value + blob + per-line `uart` log entries for classifiers). Verified 8N1/8E1/8O2, noise, fractional oversampling; regression test. Serial consoles: `serial` driver + log pane command box |
 | Tables: sort, filter, export | ⬜ | every SDK table (devices, channels, readings/markers, classifier, values, uart ports, …): click-to-sort columns (numeric-aware), a filter box, export of the visible rows to CSV and JSON |
 | USB-UART consoles (ttyUSB / ttyACM, Tigard port A, CP210x, CH340, FTDI, CDC-ACM) | ✅ | `uart` driver: port by stable identity (`match` {vid, pid, serial, product, usbPath, interface, byId}) or fixed `path`; waits while the adapter is absent and reconnects after replugs/re-enumeration; live `set` of baud / format (8N1, 7E1…) / flow / eol / display; `write`, `write_hex`, `query` (until regex); rx lines (ANSI stripped, idle-flushed prompts) → log "rx" (classifier, notifications), hex display; raw `capture_start/stop` → blob. `terminal` pane (scrollback, send with history, hex send, baud/format/eol/display). `uart_ports` tool + `/api/uart/ports` (adapter identity, by-id, which lab device uses it). Tested over a socat pty pair (jest) and live in the browser; not yet on a real Tigard/CP210x |
+| Web terminal with colors (xterm.js, Dracula theme) | ⬜ | terminal pane renders the raw byte stream in xterm.js: ANSI colors, cursor movement, full-screen TUIs (menuconfig, vi on targets), keystrokes sent as typed (raw mode) or line mode; Dracula palette from the theme |
 | SDR level trigger | ✅ | flowgraph `level_trigger` (power squelch): gates the stream above threshold_db with pretrigger/hold, logs + counts bursts, saves each as IQ blob + envelope trace. Verified on gated GFSK bursts |
 | Beamforming math | 🟡 | done: `steering(n, d, θ)`, `array_factor(n, d, steer, θ)`, `array_factor_db` (ULA, d in λ, degrees; −100 dB floor) in all math; beam patterns verified in the graph pane (dB vs angle, polar with `equal` aspect). Next: UCA, DoA (delay-and-sum, MUSIC) once multi-channel coherent SDR input exists (bladeRF 2×2, KrakenSDR) |
 | Boardview: PCB analysis / schematic tracing | ⬜ | pane with imported board photos, layer scans and PDFs (pdf.js) as aligned layers; draw traces/pads/components/test points/nets on top, highlight nets; DM858 continuity → net connections; probe points ↔ scope channels; netlist export; annotations as values the AI can read and extend. Sample material: `~/rib/docs` (Motorola GM600 service-manual schematic PDFs, renders, EEPROM dumps; vendor files stay local, never committed) |
@@ -123,9 +124,9 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | nRF52840 modem | ⬜ | the mdp-p906 bridge firmware as a generic 2.4 GHz ESB radio (listen/send) |
 | InfiRay P2 Pro thermal camera | ⬜ | UVC; false-colour image + min/max/centre temperature channels |
 | Bus Pirate | ⬜ | BPIO2, using the buspirate skill |
-| XGecu programmers (minipro) | ⬜ | `minipro` CLI: identify, read/write/verify chips; dumps as blobs for the Kaitai view |
+| XGecu programmers (minipro) | 🟡 | `minipro` driver: presence, info, search, read_id, autodetect, read (→ blob + EEPROM blob + fuses value), verify, write, erase, blank/pin check (write/erase need approval). info/search/presence run for real; read_id/autodetect formats unverified on hardware (the programmer is on `lab`) |
 | Glasgow | ⬜ | `glasgow` CLI applets |
-| RTL-SDR | 🟡 | via `soapy` driver / flowgraph `soapy` source with `driver=rtlsdr` (SoapyRTLSDR in the Docker image). Planned: `rtl_power` wideband sweep driver, `rtl_tcp` interop through the net IQ blocks |
+| RTL-SDR | 🟡 | via `soapy` driver / flowgraph `soapy` source with `driver=rtlsdr`. `rtl_power` driver (rtl_power / soapy_power → `<id>_spectrum` trace + peak channels; range, bin, gain, interval, ppm, crop, offset): parser + fake-tool tested, no dongle attached yet; soapy_power args unrun. Planned: `rtl_tcp` interop |
 | Harogic HTRA spectrum analyzer | 🟡 | `harogic` driver: sweep → `spectrum` trace via vendor `libhtraapi` (ctypes, struct layouts checked against `htra_api.h` with the C compiler). Library from SAStudio4 on `lab` (desktop shortcut → `~/sastudio/SAStudio4_x86_64_4.4.55.50`). Device not on `lab`'s USB at the time; not run yet. Next: IQ streaming (IQS) as a flowgraph source |
 | DeepAce KC901K / KC908V | ⬜ | handheld RF analyzers, same vendor as the KC9531B (try its framing: 0xFE header + sum checksum); sweeps → spectrum trace |
 | ThunderScope | ⬜ | open-source 4-ch 1 GS/s PCIe/Thunderbolt scope; TS.NET SCPI + waveform data socket (as used by ngscopeclient) → traces, scope measurements, triggers |
@@ -134,8 +135,8 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | J-Link | ⬜ | JLinkExe / pylink: connect, read/write memory, flash, halt/run, RTT → log |
 | OpenOCD | ⬜ | Tcl RPC (port 6666) / telnet: targets, mem read/write (dumps → blobs), flash, reset/halt |
 | Black Magic Probe | ⬜ | gdb remote over its serial port (`monitor swdp_scan`, attach, load, mem dump) + its UART |
-| flashrom | ⬜ | SPI flash probe/read/write/verify (ch341a, buspirate, linux_spi…) → dumps as blobs |
-| XGecu (minipro) | ⬜ | (also listed above) chip identify/read/write/verify → blobs |
+| flashrom | ✅ | `flashrom` driver: probe, read (→ blob), verify, write, erase (write/erase need approval); verified against flashrom's dummy programmer (emulated W25Q128) in jest and over MCP; no real programmer yet |
+| XGecu (minipro) | 🟡 | see above |
 | binwalk | ✅ | `blob_analyze` + blob pane: signatures (offset/type/size/description) from binwalk 3 JSON. Next: extraction |
 | `file` (libmagic) | ✅ | type + MIME in `blob_analyze` and the blob pane |
 | File & bitstream entropy | ✅ | sliding-window Shannon entropy → trace `<blob>_entropy` + plot; high/low regions with a window-aware threshold (small-window bias); bit streams via the bitview/framer blobs |
@@ -144,7 +145,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | USB tree view with hub power toggles | ✅ | `usb` pane + `usb_tree` / `GET /api/usb`: inventory ported from proxyslave's logic (`src/inventory/usb`: PCI controllers by class → buses → ports from sysfs names, interfaces with bound drivers, network interfaces + IPv4, hub port count from `-port` entries, usb.ids/pci.ids names, speed); plus /dev nodes (tty, video, hidraw) and which lab device uses each node. Empty ports are shown only on switchable hubs |
 | USB hub power control (uhubctl) | ✅ | on/off/cycle toggles on ppps hubs; `usb_power` MCP tool needs a person's approval (default policy); REST only for the human role; inputs validated. uhubctl missing → the pane says so. Not run against a real ppps hub yet |
 | udev-like notifications (in-app rules) | ✅ | not system udev: `udev_rule_add` / `udev_rules` / `udev_rule_remove` (+ REST `/api/udev`, form in the usb pane). USB inventory polled every 2 s; add / remove / change (drivers or /dev nodes bound) events matching a rule (globs on vid, pid, product, manufacturer, serial, driver, node, path) raise `{type: "udev"}` lab notifications, pushed to MCP sessions (the creating session is subscribed automatically; `subscribe` types `udev`, filter `rule`) and shown in the UI. Rules are part of lab state/profiles |
-| GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
+| GPU / system monitor (nvtop-like) | ✅ | `sysmon` driver: CPU, memory, swap, hwmon temperatures, NVIDIA (nvidia-smi: load, VRAM, temp, power) and AMD GPUs (sysfs; fixture-tested only). Verified on this PC (RTX 5080) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
 
 ## 5. Project
@@ -164,10 +165,10 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
-2. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry
+1. Web terminal (xterm.js, Dracula); table sort / filter / CSV + JSON export
+2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
 3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
-4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, OpenOCD, flashrom, minipro, Tigard, CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
+4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
 5. Boardview (PDF/photo layers, schematic tracing; ~/rib/docs sample)
 6. Shared terminals (shell-session-mcp), protokai, OpenCV, analog video, journal, timebase, ngscopeclient-style decoders, beamforming DoA
 7. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
@@ -297,3 +298,6 @@ Next:
 120. when I said uart, I meant usb to uart, tigard... ttyUSB / ttyACM
 121. ~/pm5-og: the Proxmark5 (Iceman tree, PM5 platform) client + firmware; the lab's proxmark on ttyACM0 is a PM5
 122. table sort, filter, export to csv and json
+123. fix node-proxmark3 to publish lua (json.lua) too
+124. webterm, so it supports colors
+125. xterm dracula theme

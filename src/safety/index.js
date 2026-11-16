@@ -32,6 +32,22 @@ const DEFAULT_POLICY = [
 	{ driver: "minipro", command: "erase", reason: "erases a chip in the programmer" }
 ];
 
+const policyKey = (p) => [p.driver || "", p.device || "", p.command, p.when || ""].join("|");
+
+/**
+ * A saved policy plus default entries added since it was saved (e.g. a new
+ * driver's write/erase), so upgrading never silently drops an approval.
+ * Defaults the person removed stay removed: `seen` lists the defaults the
+ * saved policy already knew about (missing in labs saved before this existed).
+ */
+const withNewDefaults = (policy, seen) => {
+	if (!policy) {
+		return DEFAULT_POLICY.slice();
+	}
+	const known = new Set((seen || []).concat(policy.map(policyKey)));
+	return policy.concat(DEFAULT_POLICY.filter((p) => !known.has(policyKey(p))));
+};
+
 const truthy = (value) => {
 	return value === true || (typeof value === "number" && value !== 0);
 };
@@ -66,7 +82,7 @@ const argsScope = (args) => {
 const create = (lab, saved) => {
 	const s = saved || {};
 	let rules = [];
-	let policy = s.policy || DEFAULT_POLICY.slice();
+	let policy = withNewDefaults(s.policy, s.defaultsSeen);
 	const fired = [];
 	const pending = {};
 	let nextApproval = 1;
@@ -357,7 +373,7 @@ const create = (lab, saved) => {
 			const d = describe(r);
 			delete d.lastFired;
 			return d;
-		}), policy: policy }),
+		}), policy: policy, defaultsSeen: DEFAULT_POLICY.map(policyKey) }),
 
 		/**
 		 * Replace rules and policy (loading a lab profile).
@@ -367,7 +383,7 @@ const create = (lab, saved) => {
 			(snap.rules || []).forEach((spec) => {
 				rules.push(compileRule(spec));
 			});
-			policy = (snap.policy || DEFAULT_POLICY).slice();
+			policy = withNewDefaults(snap.policy, snap.defaultsSeen);
 			safety.changed();
 		},
 
@@ -394,5 +410,6 @@ const create = (lab, saved) => {
 module.exports = {
 	create: create,
 	argsScope: argsScope,
-	DEFAULT_POLICY: DEFAULT_POLICY
+	DEFAULT_POLICY: DEFAULT_POLICY,
+	withNewDefaults: withNewDefaults
 };

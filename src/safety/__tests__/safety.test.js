@@ -200,3 +200,19 @@ describe("safety bypasses (review round 5)", () => {
 		});
 	});
 });
+
+describe("policy upgrades", () => {
+	const safetyModule = require("..");
+	const keyOf = (p) => [p.driver || "", p.command].join(":");
+
+	test("new default entries reach a saved policy, removed ones stay removed", () => {
+		const old = [{ command: "output", when: "on", reason: "x" }];
+		const upgraded = safetyModule.withNewDefaults(old);
+		expect(upgraded.map(keyOf)).toEqual(expect.arrayContaining(["flashrom:write", "minipro:erase", ":usb_power"]));
+		expect(upgraded.filter((p) => p.command === "output").length).toBe(1);
+		const seen = safetyModule.DEFAULT_POLICY.map((p) => [p.driver || "", p.device || "", p.command, p.when || ""].join("|"));
+		const kept = safetyModule.withNewDefaults(old, seen);
+		expect(kept).toEqual(old);
+		expect(safetyModule.withNewDefaults(undefined).length).toBe(safetyModule.DEFAULT_POLICY.length);
+	});
+});
