@@ -33,8 +33,9 @@ import trend from "./panes/trend.js";
 import custom from "./panes/custom.js";
 import usb from "./panes/usb.js";
 import terminal from "./panes/terminal.js";
+import capture from "./panes/capture.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;
@@ -162,7 +163,18 @@ const ctx = {
 		});
 	},
 	dialog: null,
-	editPane: null
+	editPane: null,
+	// send a message to the server over the live socket (capture pane: mic / camera);
+	// false while disconnected. "ws_open" fires on every (re)connect.
+	send: (msg) => {
+		if (!socket || socket.readyState !== WebSocket.OPEN) {
+			return false;
+		}
+		socket.send(JSON.stringify(msg));
+		return true;
+	},
+	// bytes queued on the socket, for senders that back off when the link is slow
+	sendBacklog: () => (socket ? socket.bufferedAmount : 0)
 };
 
 const pushFeed = (feed, entry) => {
@@ -198,14 +210,19 @@ setInterval(() => {
 
 // ---- websocket ------------------------------------------------------------
 
+let socket = null;
+
 const connect = () => {
 	const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
 	const dot = document.getElementById("conn");
+	socket = ws;
 	ws.onopen = () => {
 		dot.classList.add("on");
+		emit("ws_open", {});
 	};
 	ws.onclose = () => {
 		dot.classList.remove("on");
+		emit("ws_close", {});
 		setTimeout(connect, 1000);
 	};
 	ws.onmessage = (event) => {

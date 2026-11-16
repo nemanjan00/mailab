@@ -411,3 +411,14 @@ dialog.help a { color: var(--accent-2); }
 .terminal .widget { flex: 1; min-height: 0; background: #282a36; padding: 4px 0 0 6px; }
 .terminal .xterm { height: 100%; }
 .terminal .xterm-viewport, .terminal .xterm-scrollable-element { background-color: #282a36 !important; }
+
+/* capture pane: this browser's mic / camera into the lab */
+.capture { display: flex; flex-direction: column; height: 100%; }
+.capture-bar { flex-wrap: wrap; }
+.capture-bar select { width: auto; flex: none; max-width: 12em; }
+.capture-status { font-size: 12px; }
+.capture-error { color: var(--err); margin-top: 4px; }
+.capture-media { flex: 1; min-height: 0; display: flex; gap: 6px; padding: 0 10px 8px; }
+.capture-cam, .capture-scope { flex: 1; min-width: 0; min-height: 0; position: relative; }
+.capture-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.capture-scope .widget, .capture-scope canvas { width: 100%; height: 100%; display: block; }

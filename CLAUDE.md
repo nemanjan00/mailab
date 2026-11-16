@@ -15,6 +15,7 @@ MCP server + live web UI for a hardware lab the AI operates. See README.md
 - `src/services/tty`: raw serial "socket" (write / on("data")). Use it instead of node-serialport, which delivers reads late on Node 26 (found in mdp-p906)
 - `src/services/scpi`: TCP / usbtmc SCPI client with IEEE block parsing
 - `src/mcp`: MCP tools (identity-aware, read-only gating); every call is recorded via `lab.recordActivity`. `sessions.js`: stateful Streamable HTTP sessions (stateless fallback), `notifyAll` for push
+- `src/capture`: browser media (capture pane: getUserMedia mic + camera) over `/ws` → virtual `browser` devices (`src/devices/browser`); validation, caps, snapshot requests to the browser
 - `src/auth`: optional `MAILAB_TOKENS` (name:token:rw|ro), used by REST, `/mcp` and `/ws`
 - `src/batch`: multi-call scripts with ~1 ms timing (the `batch` tool)
 - `src/sweep`: `sweep` (1-2 parameter grid → table value + trace) and `optimize` (golden-section / hill-climb); device commands go through `lab.safety.gate(who)` (one approval per plan), never `lab.commandDevice` directly

@@ -11,6 +11,7 @@ and per-block stats are published as lab values "<device>_graph" / "_stats".
 
 import argparse
 import base64
+import collections
 import json
 import socket
 import time
@@ -178,6 +179,38 @@ class SoapySource(Block):
     def close(self):
         self.sdr.deactivateStream(self.stream)
         self.sdr.closeStream(self.stream)
+
+
+class AudioIn(Block):
+    kind = "source"
+    doc = ("lab audio stream in (e.g. a browser mic <device>_mic, or another graph's audio sink): "
+           "real samples in [-1, 1) at the stream's rate")
+    params = {"stream": ("", "lab audio stream name"), "channel": ("mix", "stereo streams: mix|left|right"),
+              "max_queue": (32, "chunks buffered before the oldest is dropped")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.queue = collections.deque(maxlen=max(1, int(self.p["max_queue"])))
+        self.dropped = 0
+
+    def feed(self, data, rate, channels):
+        """int16 LE PCM bytes (interleaved when stereo) -> queued float32 mono"""
+        x = np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
+        if channels == 2:
+            x = x[:len(x) - len(x) % 2].reshape(-1, 2)
+            x = {"left": x[:, 0], "right": x[:, 1]}.get(self.p["channel"], x.mean(axis=1))
+        if len(self.queue) == self.queue.maxlen:
+            self.dropped += 1
+        self.queue.append((np.ascontiguousarray(x, dtype=np.float32), float(rate)))
+
+    def produce(self):
+        if not self.queue:
+            return None
+        chunks = list(self.queue)
+        self.queue.clear()
+        # a rate change mid-queue: keep the chunks at the newest rate
+        rate = chunks[-1][1]
+        return np.concatenate([c for c, r in chunks if r == rate]), rate
 
 
 # dsp ----------------------------------------------------------------------
@@ -1221,7 +1254,7 @@ class NetSink(Block):
 
 
 BLOCKS = {
-    "signal": SignalSource, "modulated": ModulatedSource, "file": FileSource, "soapy": SoapySource,
+    "signal": SignalSource, "modulated": ModulatedSource, "file": FileSource, "soapy": SoapySource, "audio_in": AudioIn,
     "shift": Shift, "resample": Resample, "lowpass": Lowpass, "agc": Agc, "fm_demod": FmDemod, "am_demod": AmDemod,
     "symbol_sync": SymbolSync, "carrier_recovery": CarrierRecovery, "demod": Demod, "mag": Mag, "decimate": Decimate,
     "python": Python,
@@ -1473,6 +1506,20 @@ def decode_once(args):
             lab.blob(args["name"], data)
     return {"engine": pdec.pick_engine(args.get("decoder", "uart"), args.get("engine", "auto")), "samples": len(x),
             "count": len(anns), "annotations": anns[:5000], "data_hex": data.hex()}
+
+
+@bridge.command("audio_in", "{stream, rate, channels, data (base64 int16 LE)} a lab audio chunk for the audio_in blocks "
+                "listening to `stream` (the device forwards these itself)")
+def audio_in(args):
+    rate = float(args["rate"])
+    channels = int(args.get("channels", 1))
+    if not 0 < rate <= 384000 or channels not in (1, 2):
+        raise ValueError("bad audio format: %s Hz, %s channels" % (rate, channels))
+    data = base64.b64decode(args["data"])
+    targets = [b for b in graph.blocks.values() if isinstance(b, AudioIn) and b.p["stream"] == args["stream"]]
+    for block in targets:
+        block.feed(data, rate, channels)
+    return {"blocks": len(targets), "dropped": sum(b.dropped for b in targets)}
 
 
 @bridge.command("stats", "per-block samples in/out, rate, last error")
