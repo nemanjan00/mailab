@@ -120,3 +120,5 @@ export const widget = (create) => {
 	});
 	return host;
 };
+
+export { numberField } from "./number-field.js";

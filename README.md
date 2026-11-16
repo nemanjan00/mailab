@@ -32,7 +32,8 @@ the AI wire up live:
 - **Plots:** live charts, traces with spectrum markers and readings, waterfall,
   constellation, eye diagram, glitch scatter and findus-style parameter map.
 - **Math:** graphing calculator, live math (KaTeX), value readouts.
-- **Data:** markdown notes, JSON view, Kaitai Struct view (parse binary blobs:
+- **Data:** markdown notes (`{{channel}}` / `{{channel|digits}}` show live
+  values), JSON view, Kaitai Struct view (parse binary blobs:
   field tree + hex).
 - **Lab:** flowgraph editor, audio, camera, device consoles, AI activity, lab chat.
 

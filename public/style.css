@@ -365,11 +365,34 @@ dialog.help p { margin: 6px 0; }
 .c-value { min-width: 110px; padding: 6px 10px; background: var(--panel-2); border-radius: 6px; }
 .c-value .num { font: 600 20px var(--mono); color: var(--accent); }
 .c-control { display: inline-flex; align-items: center; gap: 6px; }
-.c-number { width: 90px !important; font-family: var(--mono); }
+.c-number { width: 120px !important; }
 .c-slider input { width: 160px; }
 .c-chart { position: relative; height: 180px; }
 .c-image { max-width: 100%; }
 .c-text { padding: 0; }
+
+/* numeric entry: input + keypad popover (public/sdk/number-field.js) */
+input.number-field { font-family: var(--mono); cursor: pointer; }
+input.number-field.bad { border-color: var(--err); }
+.keypad {
+	position: fixed; inset: auto; margin: 0; width: 300px; padding: 10px;
+	background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); font-family: var(--sans);
+}
+.keypad.sheet { left: 0; right: 0; bottom: 0; width: auto; border-radius: 12px 12px 0 0; }
+.kp-display {
+	display: flex; justify-content: flex-end; align-items: baseline; gap: 8px; padding: 8px 12px; margin-bottom: 8px;
+	background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font: 600 26px var(--mono); min-height: 52px;
+}
+.kp-display.fresh .kp-value { color: var(--muted); }
+.kp-display.bad { border-color: var(--err); }
+.kp-unit { color: var(--accent-2); font-size: 18px; }
+.kp-units { display: flex; gap: 6px; margin-bottom: 6px; }
+.kp-units .key { flex: 1; font-size: 16px; }
+.kp-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.keypad .key { min-height: 52px; font: 600 20px var(--mono); border-radius: 8px; touch-action: manipulation; }
+.keypad .kp-set { grid-column: span 2; font-family: var(--sans); }
+.kp-cancel { width: 100%; margin-top: 6px; min-height: 40px; background: none; color: var(--muted); }
 label.upload { cursor: pointer; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; }
 dialog.help a { color: var(--accent-2); }
 
