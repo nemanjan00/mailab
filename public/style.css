@@ -417,3 +417,23 @@ dialog.help a { color: var(--accent-2); }
 .terminal .widget { flex: 1; min-height: 0; background: #282a36; padding: 4px 0 0 6px; }
 .terminal .xterm { height: 100%; }
 .terminal .xterm-viewport, .terminal .xterm-scrollable-element { background-color: #282a36 !important; }
+
+/* dashboard tabs */
+.tabs { display: flex; gap: 2px; margin-left: 10px; overflow-x: auto; max-width: 55vw; scrollbar-width: thin; }
+.tab { border: 1px solid transparent; background: none; color: var(--muted); padding: 3px 10px; border-radius: 6px; white-space: nowrap; }
+.tab:hover { color: var(--text); background: var(--panel-2); }
+.tab.active { color: var(--text); background: var(--panel-2); border-color: var(--line); box-shadow: inset 0 -2px 0 var(--accent); }
+.tab .count { margin-left: 6px; font: 10px var(--mono); color: var(--muted); }
+.tab .close { margin-left: 6px; color: var(--muted); }
+.tab .close:hover { color: var(--err); }
+.tab.add { color: var(--accent); }
+
+/* collapse / move / maximize */
+.pane.collapsed .pane-body { display: none; }
+.pane.collapsed .pane-head { border-bottom: none; }
+.pane-move-wrap { position: relative; color: var(--muted); font-size: 12px; padding: 0 4px; cursor: pointer; }
+.pane-move-wrap:hover { color: var(--text); }
+.pane-move { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.grid-stack-item.maximized { position: fixed !important; inset: 52px 6px 6px 6px !important; width: auto !important; height: auto !important; transform: none !important; z-index: 50; }
+.grid-stack-item.maximized .grid-stack-item-content { inset: 0 !important; }
+body.has-maximized .grid-stack-item:not(.maximized) { visibility: hidden; }

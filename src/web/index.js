@@ -273,6 +273,12 @@ const api = (lab) => {
 	router.delete("/panes/:id", route((req) => {
 		return lab.panes.remove(req.params.id);
 	}));
+	// dashboard tabs (pages of panes)
+	router.get("/tabs", route(() => lab.panes.tabs()));
+	router.post("/tabs", route((req) => lab.panes.addTab(req.body.name)));
+	router.put("/tabs", route((req) => lab.panes.orderTabs([].concat(req.body.tabs || []))));
+	router.patch("/tabs/:name", route((req) => lab.panes.renameTab(req.params.name, req.body.name)));
+	router.delete("/tabs/:name", route((req) => lab.panes.removeTab(req.params.name, req.query.into)));
 	router.put("/layout", route((req) => {
 		return lab.panes.arrange(req.body.items || []);
 	}));

@@ -87,6 +87,7 @@ const create = (options) => {
 				return { name: name, expression: derived[name].expression, unit: derived[name].unit };
 			}),
 			panes: panes.list(),
+			tabs: panes.tabs(),
 			chat: chat.slice(-CHAT_PERSISTED),
 			safety: lab.safety.snapshot(),
 			classifier: { templates: lab.classifier.snapshot() },
@@ -100,7 +101,7 @@ const create = (options) => {
 		events.emit("state");
 	};
 
-	const panes = panesModule.create(saved.panes, changed);
+	const panes = panesModule.create(saved.panes, changed, saved.tabs);
 
 	// /dev node -> lab devices using it (fixed paths and the ports drivers resolved)
 	const devUsers = () => {
@@ -769,6 +770,7 @@ const create = (options) => {
 				blobs: lab.listBlobs(),
 				derived: lab.listDerived(),
 				panes: panes.list(),
+				tabs: panes.tabs(),
 				paneTypes: panesModule.TYPES
 			};
 		},
@@ -852,7 +854,7 @@ const create = (options) => {
 			return Promise.all(Object.keys(instances).map((id) => lab.removeDevice(id))).then(() => {
 				Object.keys(derived).forEach((name) => lab.removeDerived(name));
 				(state.derived || []).forEach((d) => lab.defineDerived(d.name, d.expression, d.unit));
-				panes.replaceAll(state.panes || []);
+				panes.replaceAll(state.panes || [], state.tabs);
 				lab.safety.load(state.safety || {});
 				lab.classifier.load((state.classifier && state.classifier.templates) || []);
 				lab.udev.load(state.udev || []);

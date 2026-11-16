@@ -146,7 +146,7 @@ const FEED_SIZE = 500;
 const ctx = {
 	// reactive (qrp) store: lab state from the server, feeds, live values.
 	// qrp panes bind to it; imperative panes read it like a plain object.
-	state: state({ devices: [], channels: [], traces: [], images: [], values: [], blobs: [], panes: [], paneTypes: {} }),
+	state: state({ devices: [], channels: [], traces: [], images: [], values: [], blobs: [], panes: [], tabs: ["main"], paneTypes: {} }),
 	store: state({ activity: [], chat: [], live: {}, approvals: {} }),
 	data: data,
 	traces: traces,
@@ -216,6 +216,7 @@ const connect = () => {
 					ctx.state[key] = msg.state[key];
 				});
 			});
+			renderTabs();
 			syncPanes(msg.state.panes);
 			emit("state", msg.state);
 		} else if (msg.type === "samples") {
@@ -362,6 +363,142 @@ const grid = GridStack.init({
 const mounted = {};
 let applyingRemote = false;
 
+// ---- tabs, collapse, maximize ----------------------------------------------------
+
+const TAB_KEY = "mailab.tab";
+
+const readStored = () => {
+	try {
+		return localStorage.getItem(TAB_KEY);
+	} catch (_err) {
+		return null;
+	}
+};
+
+const fromUrl = () => new URLSearchParams(location.hash.slice(1)).get("tab");
+
+let currentTab = fromUrl() || readStored();
+
+// the remembered tab, if it still exists; else the first one
+const activeTab = () => {
+	const tabs = ctx.state.tabs.length ? ctx.state.tabs : ["main"];
+	return tabs.indexOf(currentTab) !== -1 ? currentTab : tabs[0];
+};
+
+const setTab = (tab) => {
+	currentTab = tab;
+	try {
+		localStorage.setItem(TAB_KEY, tab);
+	} catch (_err) {
+		// private mode: per-session only
+	}
+	history.replaceState(null, "", "#tab=" + encodeURIComponent(tab));
+	renderTabs();
+	syncPanes(ctx.state.panes);
+};
+
+window.addEventListener("hashchange", () => {
+	if (fromUrl() && fromUrl() !== currentTab) {
+		setTab(fromUrl());
+	}
+});
+
+const tabButton = (tab) => {
+	const count = ctx.state.panes.filter((p) => (p.tab || "main") === tab).length;
+	const b = document.createElement("button");
+	b.className = "tab" + (tab === activeTab() ? " active" : "");
+	b.title = "double-click to rename";
+	b.textContent = tab;
+	const n = document.createElement("span");
+	n.className = "count";
+	n.textContent = count;
+	b.appendChild(n);
+	b.addEventListener("click", () => setTab(tab));
+	b.addEventListener("dblclick", () => {
+		const name = prompt("Rename tab", tab);
+		if (name && name !== tab) {
+			api("PATCH", "/tabs/" + encodeURIComponent(tab), { name: name }).then(() => setTab(name), (err) => alert(err.message));
+		}
+	});
+	if (tab === activeTab() && ctx.state.tabs.length > 1) {
+		const x = document.createElement("span");
+		x.className = "close";
+		x.title = "remove tab (its panes move to the first other tab)";
+		x.textContent = "×";
+		x.addEventListener("click", (e) => {
+			e.stopPropagation();
+			if (confirm("Remove tab \"" + tab + "\"?" + (count ? " Its " + count + " pane(s) move to another tab." : ""))) {
+				api("DELETE", "/tabs/" + encodeURIComponent(tab)).then((r) => setTab(r.into), (err) => alert(err.message));
+			}
+		});
+		b.appendChild(x);
+	}
+	return b;
+};
+
+const renderTabs = () => {
+	const nav = document.getElementById("tabs");
+	nav.replaceChildren(...ctx.state.tabs.map(tabButton));
+	const add = document.createElement("button");
+	add.className = "tab add";
+	add.title = "new tab";
+	add.textContent = "+";
+	add.addEventListener("click", () => {
+		const name = prompt("New tab name");
+		if (name) {
+			api("POST", "/tabs", { name: name }).then(() => setTab(name.trim()), (err) => alert(err.message));
+		}
+	});
+	nav.appendChild(add);
+};
+
+const fillMove = (select, pane) => {
+	const tabs = ctx.state.tabs.length ? ctx.state.tabs : ["main"];
+	select.replaceChildren(...tabs.map((t) => {
+		const o = document.createElement("option");
+		o.value = t;
+		o.textContent = t === (pane.tab || "main") ? "⇢ " + t : t;
+		o.selected = t === (pane.tab || "main");
+		return o;
+	}), Object.assign(document.createElement("option"), { value: "+", textContent: "+ new tab…" }));
+};
+
+const shownHeight = (pane) => (pane.collapsed ? 1 : pane.h);
+
+const showCollapsed = (root, item, pane) => {
+	root.classList.toggle("collapsed", Boolean(pane.collapsed));
+	root.querySelector("[data-act=collapse]").textContent = pane.collapsed ? "▸" : "▾";
+	if (pane.collapsed) {
+		item.setAttribute("gs-no-resize", "true");
+	} else {
+		item.removeAttribute("gs-no-resize");
+	}
+};
+
+let maximized = null;
+
+const toggleMaximize = (id) => {
+	const was = maximized;
+	if (maximized && mounted[maximized]) {
+		mounted[maximized].item.classList.remove("maximized");
+	}
+	maximized = was === id ? null : id;
+	if (maximized) {
+		mounted[maximized].item.classList.add("maximized");
+	}
+	document.body.classList.toggle("has-maximized", Boolean(maximized));
+	const m = mounted[id];
+	if (m && m.instance && m.instance.resize) {
+		requestAnimationFrame(() => m.instance.resize());
+	}
+};
+
+document.addEventListener("keydown", (e) => {
+	if (e.key === "Escape" && maximized) {
+		toggleMaximize(maximized);
+	}
+});
+
 const mountPane = (pane) => {
 	const item = document.createElement("div");
 	item.className = "grid-stack-item";
@@ -369,14 +506,17 @@ const mountPane = (pane) => {
 	item.setAttribute("gs-x", pane.x);
 	item.setAttribute("gs-y", pane.y);
 	item.setAttribute("gs-w", pane.w);
-	item.setAttribute("gs-h", pane.h);
+	item.setAttribute("gs-h", shownHeight(pane));
 	const content = document.createElement("div");
 	content.className = "grid-stack-item-content";
 	item.appendChild(content);
 
 	const root = document.createElement("div");
 	root.className = "pane";
-	root.innerHTML = "<div class=\"pane-head\"><span class=\"pane-title\"></span><span class=\"pane-type\"></span>"
+	root.innerHTML = "<div class=\"pane-head\"><button class=\"icon\" data-act=\"collapse\" title=\"collapse / expand\"></button>"
+		+ "<span class=\"pane-title\"></span><span class=\"pane-type\"></span>"
+		+ "<span class=\"pane-move-wrap icon\" title=\"move to tab\">⇢<select class=\"pane-move\"></select></span>"
+		+ "<button class=\"icon\" data-act=\"max\" title=\"maximize (Esc to restore)\">⤢</button>"
 		+ "<button class=\"icon\" data-act=\"edit\" title=\"edit\">⚙</button>"
 		+ "<button class=\"icon\" data-act=\"close\" title=\"remove\">×</button></div><div class=\"pane-body\"></div>";
 	content.appendChild(root);
@@ -390,6 +530,27 @@ const mountPane = (pane) => {
 	root.querySelector("[data-act=close]").addEventListener("click", () => {
 		api("DELETE", "/panes/" + pane.id);
 	});
+	root.querySelector("[data-act=collapse]").addEventListener("click", () => {
+		api("PATCH", "/panes/" + pane.id, { collapsed: !mounted[pane.id].pane.collapsed });
+	});
+	root.querySelector("[data-act=max]").addEventListener("click", () => {
+		toggleMaximize(pane.id);
+	});
+	const move = root.querySelector(".pane-move");
+	move.addEventListener("change", () => {
+		const tab = move.value === "+" ? prompt("New tab name") : move.value;
+		if (tab && tab !== mounted[pane.id].pane.tab) {
+			api("PATCH", "/panes/" + pane.id, { tab: tab });
+		} else {
+			fillMove(move, mounted[pane.id].pane);
+		}
+	});
+	// the drag handle shouldn't start a drag from the header controls
+	[move].concat(Array.from(root.querySelectorAll(".pane-head button"))).forEach((control) => {
+		control.addEventListener("mousedown", (e) => e.stopPropagation());
+	});
+	fillMove(move, pane);
+	showCollapsed(root, item, pane);
 
 	applyingRemote = true;
 	grid.el.appendChild(item);
@@ -414,6 +575,9 @@ const mountPane = (pane) => {
 
 const unmountPane = (id) => {
 	const m = mounted[id];
+	if (maximized === id) {
+		toggleMaximize(id);
+	}
 	if (m.instance && m.instance.destroy) {
 		m.instance.destroy();
 	}
@@ -424,8 +588,10 @@ const unmountPane = (id) => {
 	delete mounted[id];
 };
 
-const syncPanes = (panes) => {
+const syncPanes = (allPanes) => {
 	const seen = {};
+	// only the active tab's panes are mounted
+	const panes = allPanes.filter((pane) => (pane.tab || "main") === activeTab());
 	panes.forEach((pane) => {
 		seen[pane.id] = true;
 		const m = mounted[pane.id];
@@ -439,13 +605,16 @@ const syncPanes = (panes) => {
 			return;
 		}
 		const node = m.item.gridstackNode;
-		if (node && (node.x !== pane.x || node.y !== pane.y || node.w !== pane.w || node.h !== pane.h)) {
+		const h = shownHeight(pane);
+		if (node && (node.x !== pane.x || node.y !== pane.y || node.w !== pane.w || node.h !== h)) {
 			applyingRemote = true;
-			grid.update(m.item, { x: pane.x, y: pane.y, w: pane.w, h: pane.h });
+			grid.update(m.item, { x: pane.x, y: pane.y, w: pane.w, h: h, noResize: Boolean(pane.collapsed) });
 			applyingRemote = false;
 		}
 		if (JSON.stringify(m.pane) !== JSON.stringify(pane)) {
 			m.root.querySelector(".pane-title").textContent = pane.title;
+			fillMove(m.root.querySelector(".pane-move"), pane);
+			showCollapsed(m.root, m.item, pane);
 			if (m.instance && m.instance.update) {
 				m.instance.update(pane);
 			}
@@ -465,7 +634,10 @@ grid.on("change", (_event, items) => {
 	}
 	api("PUT", "/layout", {
 		items: items.map((item) => {
-			return { id: item.id, x: item.x, y: item.y, w: item.w, h: item.h };
+			const m = mounted[item.id];
+			// a collapsed pane keeps its expanded height on the server
+			const h = m && m.pane.collapsed ? m.pane.h : item.h;
+			return { id: item.id, x: item.x, y: item.y, w: item.w, h: h };
 		})
 	});
 });
@@ -516,7 +688,7 @@ document.getElementById("add-pane").addEventListener("click", () => {
 		{ name: "title", value: "" },
 		{ name: "config", type: "textarea", value: "{}" }
 	], (values) => {
-		return api("POST", "/panes", { type: values.type, title: values.title || values.type, config: parseJson(values.config) });
+		return api("POST", "/panes", { type: values.type, title: values.title || values.type, config: parseJson(values.config), tab: activeTab() });
 	});
 });
 

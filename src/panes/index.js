@@ -112,13 +112,26 @@ const TYPES = {
 };
 
 const DEFAULT_SIZE = { w: 6, h: 4 };
+const DEFAULT_TAB = "main";
+const TAB_MAX = 32;
+
+const checkTab = (name) => {
+	const tab = String(name === undefined || name === null ? "" : name).trim();
+	if (!tab || Array.from(tab).length > TAB_MAX || Array.from(tab).some((c) => c.charCodeAt(0) < 32)) {
+		throw new Error("tab names: 1-32 characters, no control characters");
+	}
+	return tab;
+};
 
 /**
  * @param {Object[]} initial persisted panes
  * @param {function()} onChange
+ * @param {string[]} [savedTabs] persisted tab order (dashboard pages)
  */
-const create = (initial, onChange) => {
-	let panes = (initial || []).slice();
+const create = (initial, onChange, savedTabs) => {
+	// panes from before tabs existed land on the default tab
+	let panes = (initial || []).map((p) => Object.assign({ tab: DEFAULT_TAB }, p));
+	let tabOrder = (savedTabs || []).slice();
 
 	const validate = (pane) => {
 		if (!TYPES[pane.type]) {
@@ -130,9 +143,10 @@ const create = (initial, onChange) => {
 		return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 	};
 
-	// first top-left spot where a w×h pane fits without overlapping others
-	const freeSpot = (w, h) => {
-		const bottom = panes.reduce((max, pane) => {
+	// first top-left spot in a tab where a w×h pane fits without overlapping others
+	const freeSpot = (w, h, tab) => {
+		const others = panes.filter((p) => p.tab === tab);
+		const bottom = others.reduce((max, pane) => {
 			return Math.max(max, pane.y + pane.h);
 		}, 0);
 		const candidates = Array.from({ length: bottom + 1 }, (_, y) => {
@@ -141,7 +155,7 @@ const create = (initial, onChange) => {
 			});
 		}).flat();
 		return candidates.find((spot) => {
-			return !panes.some((pane) => {
+			return !others.some((pane) => {
 				return overlaps(spot, pane);
 			});
 		});
@@ -152,6 +166,73 @@ const create = (initial, onChange) => {
 
 		list: () => {
 			return panes;
+		},
+
+		/**
+		 * Tabs in order: the saved order, then tabs panes use that it doesn't list.
+		 */
+		tabs: () => {
+			const out = tabOrder.slice();
+			panes.forEach((p) => {
+				if (out.indexOf(p.tab) === -1) {
+					out.push(p.tab);
+				}
+			});
+			return out.length ? out : [DEFAULT_TAB];
+		},
+
+		addTab: (name) => {
+			const tab = checkTab(name);
+			if (layout.tabs().indexOf(tab) === -1 || tabOrder.indexOf(tab) === -1) {
+				tabOrder = layout.tabs().filter((t) => t !== tab).concat([tab]);
+				onChange();
+			}
+			return layout.tabs();
+		},
+
+		renameTab: (from, to) => {
+			const next = checkTab(to);
+			if (layout.tabs().indexOf(from) === -1) {
+				throw new Error("unknown tab: " + from);
+			}
+			if (from !== next && layout.tabs().indexOf(next) !== -1) {
+				throw new Error("tab exists: " + next);
+			}
+			tabOrder = layout.tabs().map((t) => (t === from ? next : t));
+			panes = panes.map((p) => (p.tab === from ? Object.assign({}, p, { tab: next }) : p));
+			onChange();
+			return layout.tabs();
+		},
+
+		/**
+		 * Remove a tab; its panes move to `into` (default: the first other tab), below what's there.
+		 */
+		removeTab: (name, into) => {
+			const tabs = layout.tabs();
+			if (tabs.indexOf(name) === -1) {
+				throw new Error("unknown tab: " + name);
+			}
+			const target = into === undefined ? tabs.find((t) => t !== name) || DEFAULT_TAB : checkTab(into);
+			if (target === name) {
+				throw new Error("can't move a tab's panes into itself");
+			}
+			const moving = panes.filter((p) => p.tab === name);
+			const bottom = panes.filter((p) => p.tab === target).reduce((max, p) => Math.max(max, p.y + p.h), 0);
+			panes = panes.map((p) => (p.tab === name ? Object.assign({}, p, { tab: target, y: p.y + bottom }) : p));
+			tabOrder = tabs.filter((t) => t !== name);
+			if (tabOrder.indexOf(target) === -1) {
+				tabOrder.push(target);
+			}
+			onChange();
+			return { tabs: layout.tabs(), moved: moving.map((p) => p.id), into: target };
+		},
+
+		orderTabs: (list) => {
+			const known = layout.tabs();
+			const order = list.map(checkTab).filter((t, i, all) => all.indexOf(t) === i);
+			tabOrder = order.concat(known.filter((t) => order.indexOf(t) === -1));
+			onChange();
+			return layout.tabs();
 		},
 
 		get: (id) => {
@@ -171,9 +252,10 @@ const create = (initial, onChange) => {
 			validate(spec);
 			const w = Math.min(spec.w || DEFAULT_SIZE.w, GRID_COLUMNS);
 			const h = spec.h || DEFAULT_SIZE.h;
+			const tab = spec.tab === undefined ? layout.tabs()[0] : checkTab(spec.tab);
 			let spot = { x: spec.x, y: spec.y };
 			if (spec.x === undefined || spec.y === undefined) {
-				spot = freeSpot(w, h);
+				spot = freeSpot(w, h, tab);
 			}
 			const pane = {
 				id: spec.id || randomUUID().slice(0, 8),
@@ -183,7 +265,9 @@ const create = (initial, onChange) => {
 				x: spot.x,
 				y: spot.y,
 				w: w,
-				h: h
+				h: h,
+				tab: tab,
+				collapsed: Boolean(spec.collapsed)
 			};
 			panes = panes.concat([pane]);
 			onChange();
@@ -199,6 +283,14 @@ const create = (initial, onChange) => {
 				id: pane.id,
 				config: Object.assign({}, pane.config, changes.config || {})
 			});
+			next.tab = checkTab(next.tab);
+			next.collapsed = Boolean(next.collapsed);
+			if (changes.tab !== undefined && changes.tab !== pane.tab && changes.y === undefined) {
+				// moved to another tab: append below what's there
+				const spot = freeSpot(next.w, next.h, next.tab);
+				next.x = spot.x;
+				next.y = spot.y;
+			}
 			validate(next);
 			panes = panes.map((p) => {
 				if (p.id === id) {
@@ -236,9 +328,10 @@ const create = (initial, onChange) => {
 			onChange();
 		},
 
-		replaceAll: (list) => {
+		replaceAll: (list, tabs) => {
 			list.forEach(validate);
 			panes = [];
+			tabOrder = (tabs || []).slice();
 			list.forEach(layout.add);
 		}
 	};
@@ -248,5 +341,6 @@ const create = (initial, onChange) => {
 
 module.exports = {
 	create: create,
+	DEFAULT_TAB: DEFAULT_TAB,
 	TYPES: TYPES
 };

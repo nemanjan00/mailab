@@ -509,10 +509,12 @@ const create = (lab, context) => {
 		return lab.state().paneTypes;
 	});
 
-	tool("pane_add", "Add a pane to the user's web UI (12-column grid; omitted x/y = append below)", {
+	tool("pane_add", "Add a pane to the user's web UI (12-column grid; omitted x/y = append below). `tab` puts it on a dashboard tab (created if new; default: the first tab)", {
 		type: z.string(),
 		title: z.string().optional(),
 		config: json.optional(),
+		tab: z.string().optional(),
+		collapsed: z.boolean().optional(),
 		x: z.number().optional(),
 		y: z.number().optional(),
 		w: z.number().optional(),
@@ -521,10 +523,12 @@ const create = (lab, context) => {
 		return lab.panes.add(a);
 	});
 
-	tool("pane_update", "Change a pane (title, config — merged, position/size)", {
+	tool("pane_update", "Change a pane (title, config — merged, position/size, tab — moves it to that tab, collapsed)", {
 		id: z.string(),
 		title: z.string().optional(),
 		config: json.optional(),
+		tab: z.string().optional(),
+		collapsed: z.boolean().optional(),
 		x: z.number().optional(),
 		y: z.number().optional(),
 		w: z.number().optional(),
@@ -533,6 +537,28 @@ const create = (lab, context) => {
 		const changes = Object.assign({}, a);
 		delete changes.id;
 		return lab.panes.update(a.id, changes);
+	});
+
+	tool("pane_tabs", "Dashboard tabs (pages of panes): list, add, rename, remove (its panes move to `into` or the first other tab), order", {
+		action: z.enum(["list", "add", "rename", "remove", "order"]),
+		name: z.string().optional(),
+		to: z.string().optional().describe("rename: new name"),
+		into: z.string().optional().describe("remove: tab that gets the panes"),
+		tabs: z.array(z.string()).optional().describe("order: tab names in order")
+	}, (a) => {
+		if (a.action === "add") {
+			return lab.panes.addTab(a.name);
+		}
+		if (a.action === "rename") {
+			return lab.panes.renameTab(a.name, a.to);
+		}
+		if (a.action === "remove") {
+			return lab.panes.removeTab(a.name, a.into);
+		}
+		if (a.action === "order") {
+			return lab.panes.orderTabs(a.tabs || []);
+		}
+		return lab.panes.tabs();
 	});
 
 	tool("pane_remove", "Remove a pane", { id: z.string() }, (a) => {
