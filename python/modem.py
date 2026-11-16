@@ -7,6 +7,7 @@ flowgraph so it can be tested directly (python/test_modem.py).
 import numpy as np
 
 import liquid_dsp as dsp
+import protocol_decode
 
 # PRBS polynomials x^a + x^b + 1 (ITU O.150 style)
 PRBS_TAPS = {7: (7, 6), 9: (9, 5), 11: (11, 9), 15: (15, 14), 20: (20, 3), 23: (23, 18), 31: (31, 28)}
@@ -300,59 +301,14 @@ def uart_encode(data, bits=8, parity="none", stop=1, idle=2):
 
 class UartDecoder:
     """Line levels (oversampled by sps, real or 0/1) -> bytes with error flags.
-    Threshold adapts to the signal (works on analog captures too)."""
+    Threshold adapts to the signal (works on analog captures too). Thin
+    wrapper over protocol_decode's UART (shared with the `decode` block)."""
 
     def __init__(self, sps=1.0, bits=8, parity="none", stop=1, invert=False):
-        self.sps, self.bits, self.parity, self.stop, self.invert = float(sps), bits, parity, stop, invert
-        self.buf = np.zeros(0, dtype=np.float32)
-        self.lo = None
-        self.hi = None
-        self.started = False
+        self.input = protocol_decode.LogicInput(invert=invert)
+        self.line = protocol_decode.UartLine(sps, bits, parity, stop)
 
     def process(self, x):
         """-> list of (byte, error or None)"""
-        x = np.asarray(x, dtype=np.float32)
-        if self.invert:
-            x = -x
-        if len(x):
-            lo, hi = float(np.min(x)), float(np.max(x))
-            self.lo = lo if self.lo is None else min(self.lo * 0.99 + lo * 0.01, lo)
-            self.hi = hi if self.hi is None else max(self.hi * 0.99 + hi * 0.01, hi)
-        if not self.started and len(x):
-            # the line idles high before the first byte: assume it, so a frame
-            # at the very start still has a falling edge
-            x = np.concatenate([np.full(int(np.ceil(self.sps)) + 1, self.hi if self.hi is not None else np.max(x), dtype=np.float32), x])
-            self.started = True
-        self.buf = np.concatenate([self.buf, x])
-        if self.lo is None or self.hi - self.lo < 1e-9:
-            return []
-        level = (self.buf > (self.lo + self.hi) / 2).astype(np.uint8)
-        frame_bits = 1 + self.bits + (0 if self.parity == "none" else 1) + self.stop
-        span = int(np.ceil(frame_bits * self.sps))
-        out = []
-        i = 1
-        while i + span < len(level):
-            # falling edge = start bit
-            if level[i - 1] == 1 and level[i] == 0:
-                sample = lambda k: level[int(i + (k + 0.5) * self.sps)]
-                if sample(0) != 0:
-                    i += 1
-                    continue
-                data = [int(sample(1 + b)) for b in range(self.bits)]
-                byte = sum(bit << b for b, bit in enumerate(data))
-                error = None
-                k = 1 + self.bits
-                if self.parity != "none":
-                    p = int(sample(k))
-                    expect = sum(data) % 2 if self.parity == "even" else 1 - sum(data) % 2
-                    if p != expect:
-                        error = "parity"
-                    k += 1
-                if any(sample(k + s) != 1 for s in range(self.stop)):
-                    error = error or "framing"
-                out.append((byte, error))
-                i += int(frame_bits * self.sps)
-            else:
-                i += 1
-        self.buf = self.buf[max(0, i - 1):]
-        return out
+        words = self.input.process(np.asarray(x, dtype=np.float32))
+        return [(value, error) for _ss, _es, value, error in self.line.process(words)]
