@@ -102,3 +102,101 @@ describe("safety rules and approvals", () => {
 		});
 	});
 });
+
+describe("safety bypasses (review round 5)", () => {
+	const authModule = require("../../auth");
+	let lab;
+	let app;
+	let server;
+	let dataDir;
+	const AI = { authorization: "Bearer ai-token" };
+	const PERSON = { authorization: "Bearer me-token" };
+
+	const call = (name, args) => request(app).post("/mcp").set(MCP).set(AI).send({
+		jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: name, arguments: args || {} }
+	});
+
+	const boot = () => {
+		lab = labModule.create({ dataDir: dataDir, channelCapacity: 100 });
+		const auth = authModule.create(authModule.parseTokens("claude:ai-token:rw,me:me-token:human"));
+		const created = web.create(lab, { pushIntervalMs: 50, auth: auth });
+		app = created.app;
+		server = created.server;
+		return lab.restore().then(() => {
+			if (!lab.listDevices().length) {
+				return lab.addDevice("sim", "sim", { rateHz: 20 });
+			}
+			return null;
+		});
+	};
+
+	beforeAll(() => {
+		dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mailab-safety2-"));
+		return boot();
+	});
+
+	afterAll(() => {
+		server.close();
+		return lab.shutdown();
+	});
+
+	test("an AI rule whose action needs approval waits for a person; deny = no rule", () => {
+		lab.safety.setPolicy([{ command: "set", reason: "changes the signal" }]);
+		const adding = call("rule_add", { name: "sneaky", when: "1", action: { device: "sim", command: "set", args: { signal: "sine", key: "amp", value: 9 } } });
+		const deny = wait(150).then(() => {
+			const pending = lab.safety.listPending();
+			expect(pending.length).toBe(1);
+			expect(pending[0].reason).toMatch(/safety rule "sneaky"/);
+			return request(app).post("/api/approvals/" + pending[0].id).set(PERSON).send({ approve: false }).expect(200);
+		});
+		return Promise.all([adding, deny]).then((results) => {
+			expect(results[0].body.result.isError).toBe(true);
+			expect(lab.safety.listRules().some((r) => r.name === "sneaky")).toBe(false);
+			lab.safety.setPolicy([]);
+		});
+	});
+
+	test("only humans approve, edit the policy or remove locked rules", () => {
+		lab.safety.setPolicy([{ command: "set", reason: "x" }]);
+		// supertest requests are lazy: .then() sends it now
+		const pendingCall = call("device_command", { id: "sim", command: "set", args: { signal: "sine", key: "amp", value: 2 } }).then((res) => res);
+		return wait(150).then(() => {
+			const id = lab.safety.listPending()[0].id;
+			// the AI's own rw token can't approve its request over REST
+			return request(app).post("/api/approvals/" + id).set(AI).send({ approve: true }).expect(403)
+				.then(() => request(app).put("/api/safety/policy").set(AI).send({ policy: [] }).expect(403))
+				.then(() => request(app).post("/api/approvals/" + id).set(PERSON).send({ approve: true }).expect(200));
+		}).then(() => pendingCall).then((res) => {
+			expect(res.body.result.isError).toBeFalsy();
+			lab.safety.setPolicy([]);
+			lab.safety.addRule({ id: "guard", when: "sim_sine > 100", locked: true });
+			return request(app).delete("/api/safety/rules/guard").set(AI).expect(403);
+		}).then(() => {
+			expect(lab.safety.listRules().some((r) => r.id === "guard")).toBe(true);
+		});
+	});
+
+	test("rule ids stay unique across restarts and locked rules can't be replaced", () => {
+		return lab.shutdown().then(() => {
+			server.close();
+			return boot();
+		}).then(() => {
+			// the locked rule came back
+			expect(lab.safety.listRules().find((r) => r.id === "guard")).toMatchObject({ locked: true });
+			return call("rule_add", { name: "harmless", when: "sim_sine > 1000" });
+		}).then((res) => {
+			const added = JSON.parse(res.body.result.content[0].text);
+			expect(added.id).not.toBe("guard");
+			expect(() => lab.safety.addRule({ id: "guard", when: "0" })).toThrow(/locked/);
+			expect(lab.safety.listRules().find((r) => r.id === "guard")).toMatchObject({ locked: true, when: "sim_sine > 100" });
+		});
+	});
+
+	test("a rule that can't be evaluated alarms instead of staying silent", () => {
+		lab.safety.addRule({ id: "broken", name: "broken", when: "sim_sine + [1, 2] > \"x\"" });
+		return wait(400).then(() => {
+			expect(lab.getChat({}).some((m) => m.kind === "safety" && /can't be evaluated/.test(m.text))).toBe(true);
+			lab.safety.removeRule("broken", true);
+		});
+	});
+});

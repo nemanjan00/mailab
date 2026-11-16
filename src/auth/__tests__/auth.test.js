@@ -46,7 +46,7 @@ describe("open mode (no tokens)", () => {
 	const auth = authModule.create(new Map(), { allowedHosts: ["lab.local"] });
 
 	test("only loopback / allowed Host headers", () => {
-		expect(auth.identify(req({}))).toMatchObject({ role: "rw" });
+		expect(auth.identify(req({}))).toMatchObject({ role: "human" });
 		expect(auth.identify(req({ host: "localhost:3000" }))).toBeTruthy();
 		expect(auth.identify(req({ host: "lab.local:3000" }))).toBeTruthy();
 		// DNS rebinding: attacker's name pointed at 127.0.0.1

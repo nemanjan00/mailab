@@ -10,6 +10,7 @@
 // it in the chat pane. Default policy: power outputs on, voltage above 5 V,
 // PTT, glitch campaigns, pairing.
 
+const randomUUID = require("crypto").randomUUID;
 const math = require("../math");
 
 const TICK_MS = 250;
@@ -64,13 +65,15 @@ const create = (lab, saved) => {
 	const fired = [];
 	const pending = {};
 	let nextApproval = 1;
-	let ruleId = 0;
+
+	// unique ids: a counter restarting at boot could hand a new rule the id of a
+	// restored (locked) one and silently replace it
+	const newId = () => "r-" + randomUUID().slice(0, 8);
 
 	const compileRule = (spec) => {
 		const compiled = math.compile(spec.when);
-		ruleId++;
 		return Object.assign({
-			id: spec.id || "r" + ruleId,
+			id: spec.id || newId(),
 			for_ms: 0,
 			cooldown_ms: 5000,
 			enabled: true,
@@ -78,7 +81,8 @@ const create = (lab, saved) => {
 		}, spec, {
 			compiled: compiled,
 			since: null,
-			lastFired: 0
+			lastFired: 0,
+			failing: false
 		});
 	};
 
@@ -125,9 +129,16 @@ const create = (lab, saved) => {
 		let value;
 		try {
 			value = r.compiled.evaluate(scope);
-		} catch (_err) {
+		} catch (err) {
+			// fail loud: a safety rule that can't be evaluated protects nothing
+			if (!r.failing) {
+				r.failing = true;
+				lab.recordActivity({ who: "safety", tool: "rule " + (r.name || r.id), args: r.when, ok: false, error: err.message });
+				lab.postChat({ from: "safety", kind: "safety", text: "⚠ rule **" + (r.name || r.id) + "** can't be evaluated (`" + r.when + "`): " + err.message + ". It is not protecting anything until fixed." });
+			}
 			return;
 		}
+		r.failing = false;
 		if (!truthy(value)) {
 			r.since = null;
 			return;
@@ -151,6 +162,10 @@ const create = (lab, saved) => {
 			}
 			if (spec.action && (!spec.action.device || !spec.action.command)) {
 				throw new Error("rule action needs device and command");
+			}
+			const existing = spec.id && rules.find((x) => x.id === spec.id);
+			if (existing && existing.locked) {
+				throw new Error("rule " + spec.id + " is locked and can't be replaced");
 			}
 			const r = compileRule(spec);
 			rules = rules.filter((x) => x.id !== r.id).concat([r]);

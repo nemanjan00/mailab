@@ -125,7 +125,7 @@ const create = (lab, context) => {
 	// register a tool whose handler returns a value or promise; records activity
 	const tool = (name, description, shape, handler) => {
 		const guarded = (args) => {
-			if (who.role !== "rw" && READ_TOOLS.indexOf(name) === -1) {
+			if (who.role !== "rw" && who.role !== "human" && READ_TOOLS.indexOf(name) === -1) {
 				throw new Error(who.name + " is read-only: " + name + " is not allowed");
 			}
 			return handler(args);
@@ -212,7 +212,23 @@ const create = (lab, context) => {
 		action: z.object({ device: z.string(), command: z.string(), args: json.optional() }).optional(),
 		locked: z.boolean().optional().describe("locked rules can only be removed by a person in the web UI")
 	}, (a) => {
-		return lab.safety.addRule(a, actor());
+		// a rule action is a command the server will run unattended: if the
+		// policy wants a person for it, the person approves it now
+		const spec = Object.assign({}, a);
+		delete spec.id;
+		const act = spec.action;
+		if (!act) {
+			return lab.safety.addRule(spec, actor());
+		}
+		const device = lab.getDevice(act.device);
+		const rule = lab.safety.needsApproval(act.device, device.driver, act.command, act.args || {});
+		if (!rule) {
+			return lab.safety.addRule(spec, actor());
+		}
+		return lab.safety.requestApproval({
+			who: actor(), device: act.device, command: act.command, args: act.args || {},
+			reason: "safety rule \"" + spec.name + "\" would run it automatically when " + spec.when + " (" + (rule.reason || "approval required") + ")"
+		}).then(() => lab.safety.addRule(spec, actor()));
 	});
 
 	tool("rule_remove", "Remove a safety rule (locked rules can only be removed by a person)", { id: z.string() }, (a) => {

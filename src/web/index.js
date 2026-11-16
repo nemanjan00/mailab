@@ -28,7 +28,7 @@ const route = (handler) => {
 					res.json(result === undefined ? { ok: true } : result);
 				}
 			}, (err) => {
-				res.status(400).json({ error: err.message });
+				res.status(err.status || 400).json({ error: err.message });
 			});
 	};
 };
@@ -112,15 +112,26 @@ const api = (lab) => {
 	router.post("/safety/rules", route((req) => {
 		return lab.safety.addRule(req.body, (req.who && req.who.name) || "local");
 	}));
+	// people only (role human): locked rules, the policy, approvals
+	const human = (req) => {
+		if (!authModule.isHuman(req.who)) {
+			throw Object.assign(new Error((req.who && req.who.name) + " is not a human approver (role human)"), { status: 403 });
+		}
+	};
 	router.delete("/safety/rules/:id", route((req) => {
-		// people may remove locked rules; the AI may not (MCP passes human=false)
-		return lab.safety.removeRule(req.params.id, true);
+		const rule = lab.safety.listRules().find((r) => r.id === req.params.id);
+		if (rule && rule.locked) {
+			human(req);
+		}
+		return lab.safety.removeRule(req.params.id, authModule.isHuman(req.who));
 	}));
 	router.put("/safety/policy", route((req) => {
+		human(req);
 		lab.safety.setPolicy(req.body.policy || []);
 		return lab.safety.getPolicy();
 	}));
 	router.post("/approvals/:id", route((req) => {
+		human(req);
 		const decision = req.body.approve === true ? "approved" : "denied";
 		return lab.safety.decide(req.params.id, decision, (req.who && req.who.name) || "local");
 	}));

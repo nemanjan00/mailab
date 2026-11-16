@@ -12,8 +12,13 @@
 
 const config = require("../config");
 
-const ROLES = ["rw", "ro"];
-const OPEN = { name: "local", role: "rw" };
+// human: everything rw can do, plus approving risky AI commands, changing the
+// approval policy and removing locked safety rules. Give people `human`
+// tokens and AIs `rw` ones, so an AI can't approve its own requests.
+const ROLES = ["human", "rw", "ro"];
+const WRITE_ROLES = ["human", "rw"];
+// open mode = one local user at the keyboard
+const OPEN = { name: "local", role: "human" };
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]", "::1"];
 
 /**
@@ -27,7 +32,7 @@ const parseTokens = (text) => {
 		const parts = entry.split(":");
 		const role = parts[2] || "rw";
 		if (parts.length < 2 || !parts[0] || !parts[1] || ROLES.indexOf(role) === -1) {
-			throw new Error("bad MAILAB_TOKENS entry (name:token[:rw|ro]): " + entry);
+			throw new Error("bad MAILAB_TOKENS entry (name:token[:human|rw|ro]): " + entry);
 		}
 		tokens.set(parts[1], { name: parts[0], role: role });
 	});
@@ -149,7 +154,7 @@ const create = (tokens, options) => {
 					return;
 				}
 				const reading = isRead ? isRead(req) : req.method === "GET";
-				if (!reading && who.role !== "rw") {
+				if (!reading && WRITE_ROLES.indexOf(who.role) === -1) {
 					res.status(403).json({ error: who.name + " is read-only" });
 					return;
 				}
@@ -162,8 +167,17 @@ const create = (tokens, options) => {
 	return auth;
 };
 
+/**
+ * Only people approve risky commands, edit the policy and drop locked rules.
+ */
+const isHuman = (who) => {
+	return Boolean(who) && who.role === "human";
+};
+
 module.exports = {
 	create: create,
+	isHuman: isHuman,
+	WRITE_ROLES: WRITE_ROLES,
 	parseTokens: parseTokens,
 	checkExposure: checkExposure,
 	isLoopbackHost: isLoopbackHost,

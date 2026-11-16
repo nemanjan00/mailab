@@ -90,7 +90,7 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | Var | Default | |
 |---|---|---|
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | a non-loopback HOST needs `MAILAB_TOKENS` |
-| `MAILAB_TOKENS` | – | `name:token:rw\|ro,…` turns on auth |
+| `MAILAB_TOKENS` | – | `name:token:human\|rw\|ro,…` turns on auth |
 | `MAILAB_ALLOW_OPEN` | – | `1` = allow a non-loopback HOST without tokens (trusted networks) |
 | `MAILAB_ALLOWED_HOSTS` | – | extra Host names accepted without tokens |
 | `DATA_DIR` | `./data` | `lab.json`: devices, derived channels, panes, chat |
@@ -100,10 +100,18 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 
 ## Collaboration
 
-- `MAILAB_TOKENS="alice:secret:rw,bob:secret2:rw,viewer:secret3:ro"` turns on
+- `MAILAB_TOKENS="alice:secret:human,claude:secret2:rw,viewer:secret3:ro"` turns on
   auth for the UI, REST, WebSocket and MCP. Tokens go in a Bearer header, or
-  in the UI's HttpOnly cookie set by a one-time `/?token=` login link. `ro`
-  tokens can look and chat but can't change the lab.
+  in the UI's HttpOnly cookie set by a one-time `/?token=` login link.
+  - `human`: people. Can do everything, and are the only ones who can approve
+    risky AI commands, change the approval policy or remove locked safety rules.
+  - `rw`: AIs. Drive the lab, but their risky commands wait for a human.
+  - `ro`: look and chat.
+- Without tokens there is one local user, and that user counts as human. An
+  AI that can only reach the lab over MCP still can't approve its own commands
+  (there is no approval tool), but an agent with a shell on the same machine
+  could call the REST API directly. Give AIs `rw` tokens and people `human`
+  tokens whenever an agent has shell access.
 - Without tokens (local use) the server only accepts loopback `Host` headers
   (plus `MAILAB_ALLOWED_HOSTS`) and same-origin requests, which blocks DNS
   rebinding from web pages.
