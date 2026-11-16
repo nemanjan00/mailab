@@ -32,7 +32,8 @@ const DRIVERS = [
 	require("./minipro"),
 	require("./cynthion"),
 	require("./vnc"),
-	require("./nanokvm")
+	require("./nanokvm"),
+	require("./morfeus")
 ];
 
 const devices = {

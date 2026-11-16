@@ -46,7 +46,12 @@ const DEFAULT_POLICY = [
 	{ driver: "cynthion", command: "gateware", reason: "reconfigures the Cynthion FPGA (facedancer also rewrites the SoC firmware flash region; custom bitstreams run as given)" },
 	{ driver: "cynthion", command: "flash", reason: "overwrites the Cynthion's configuration flash" },
 	{ driver: "nanokvm", command: "power", reason: "presses the target machine's ATX power / reset button (NanoKVM)" },
-	{ driver: "nanokvm", command: "iso_mount", reason: "attaches a disk image to the target machine (NanoKVM virtual media)" }
+	{ driver: "nanokvm", command: "iso_mount", reason: "attaches a disk image to the target machine (NanoKVM virtual media)" },
+	// Morfeus RF signal generator transmits on the air. output-on is already
+	// gated by the generic `output`/on entry at the top; sweep and max-level are
+	// Morfeus-specific and added here.
+	{ driver: "morfeus", command: "sweep", reason: "runs an RF sweep on the Morfeus (transmits across a frequency range)" },
+	{ driver: "morfeus", command: "set_level", when: "level >= 7", reason: "sets the Morfeus to maximum output level" }
 ];
 
 const policyKey = (p) => [p.driver || "", p.device || "", p.command, p.when || ""].join("|");
