@@ -8,7 +8,8 @@
 //
 // Approvals: an AI command matching the policy waits for a person to approve
 // it in the chat pane. Default policy: power outputs on, voltage above 5 V,
-// PTT, glitch campaigns, pairing, chip write/erase (flashrom, minipro).
+// PTT, glitch campaigns, pairing, chip write/erase (flashrom, minipro),
+// RfCat TX / replay / TX power.
 
 const randomUUID = require("crypto").randomUUID;
 const math = require("../math");
@@ -29,7 +30,10 @@ const DEFAULT_POLICY = [
 	{ driver: "flashrom", command: "write", reason: "overwrites a flash chip" },
 	{ driver: "flashrom", command: "erase", reason: "erases a flash chip" },
 	{ driver: "minipro", command: "write", reason: "overwrites a chip in the programmer" },
-	{ driver: "minipro", command: "erase", reason: "erases a chip in the programmer" }
+	{ driver: "minipro", command: "erase", reason: "erases a chip in the programmer" },
+	{ driver: "rfcat", command: "tx", reason: "transmits on a sub-GHz radio (RfCat)" },
+	{ driver: "rfcat", command: "replay", reason: "retransmits a captured packet (RfCat)" },
+	{ driver: "rfcat", command: "power", reason: "changes the RfCat TX power" }
 ];
 
 const policyKey = (p) => [p.driver || "", p.device || "", p.command, p.when || ""].join("|");

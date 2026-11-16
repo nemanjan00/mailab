@@ -18,6 +18,7 @@ const DRIVERS = [
 	require("./litevna"),
 	require("./hackrf"),
 	require("./soapy"),
+	require("./rfcat"),
 	require("./proxmark3"),
 	require("./picoglitcher"),
 	require("./flowgraph"),
