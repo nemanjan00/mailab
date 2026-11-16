@@ -52,3 +52,20 @@ describe("math sandbox", () => {
 		expect(math.compile("v * i").evaluate({ v: 2, i: 3 })).toBe(6);
 	});
 });
+
+describe("beamforming", () => {
+	test("array factor peaks at the steering angle and nulls where expected", () => {
+		expect(math.evaluate("array_factor(8, 0.5, 20, 20)", {}).value).toBeCloseTo(1);
+		// half-wavelength ULA, broadside: first null at asin(1/N * 2) ... = asin(2/8 / 1)? -> asin(0.25)
+		expect(math.evaluate("array_factor(8, 0.5, 0, asin(0.25) * 180 / pi)", {}).value).toBeCloseTo(0, 5);
+		expect(math.evaluate("array_factor_db(8, 0.5, 0, 0)", {}).value).toBeCloseTo(0);
+	});
+
+	test("steering vector has unit-magnitude elements with linear phase", () => {
+		const v = math.evaluate("steering(4, 0.5, 30)", {}).value;
+		expect(v).toHaveLength(4);
+		v.forEach((c) => expect(Math.hypot(c.re, c.im)).toBeCloseTo(1));
+		// d sin(30°) = 0.25 wavelength -> pi/2 per element
+		expect(Math.atan2(v[1].im, v[1].re)).toBeCloseTo(Math.PI / 2);
+	});
+});

@@ -400,7 +400,10 @@ const create = (lab, context) => {
 		tmax: z.number().optional(),
 		points: z.number().optional(),
 		xUnit: z.string().optional(),
-		yUnit: z.string().optional()
+		yUnit: z.string().optional(),
+		ymin: z.number().optional(),
+		ymax: z.number().optional(),
+		equal: z.boolean().optional().describe("same scale on both axes (polar plots)")
 	}, (a) => {
 		const result = lab.plot(Object.assign({ source: "ai" }, a), a.name);
 		return { trace: a.name, series: result.series.map((s) => ({ label: s.label, points: s.y.length })) };

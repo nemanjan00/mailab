@@ -229,7 +229,23 @@ export const drawPlot = (canvas, tr, color) => {
 		return;
 	}
 	const box = { l: 56, r: c.w - 12, t: 24, b: c.h - 28 };
-	const m = axes(c.g, box, extent(xs), extent(ys), { x: tr.xUnit || "x", y: tr.yUnit || "y" });
+	let rx = extent(xs);
+	let ry = extent(ys);
+	if (tr.yMin !== undefined && tr.yMin !== null) {
+		ry = [Number(tr.yMin), ry[1]];
+	}
+	if (tr.yMax !== undefined && tr.yMax !== null) {
+		ry = [ry[0], Number(tr.yMax)];
+	}
+	if (tr.equal) {
+		// same units per pixel on both axes, centred on the data
+		const perPx = Math.max((rx[1] - rx[0]) / (box.r - box.l), (ry[1] - ry[0]) / (box.b - box.t));
+		const cx = (rx[0] + rx[1]) / 2;
+		const cy = (ry[0] + ry[1]) / 2;
+		rx = [cx - perPx * (box.r - box.l) / 2, cx + perPx * (box.r - box.l) / 2];
+		ry = [cy - perPx * (box.b - box.t) / 2, cy + perPx * (box.b - box.t) / 2];
+	}
+	const m = axes(c.g, box, rx, ry, { x: tr.xUnit || "x", y: tr.yUnit || "y" });
 	// zero axes, like a graphing calculator
 	c.g.strokeStyle = cssVar("--muted");
 	c.g.beginPath();

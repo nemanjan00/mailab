@@ -75,7 +75,7 @@ const TYPES = {
 	},
 	graph: {
 		description: "graphing calculator: mathjs expressions of x, parametric \"x(t); y(t)\", or lab data (db(mag(fft(ch))))",
-		config: { exprs: "[\"sin(x)\", {x: \"cos(t)\", y: \"sin(t)\"}]", xmin: "default -10", xmax: "default 10", refreshMs: "default 2000" }
+		config: { exprs: "[\"sin(x)\", {x: \"cos(t)\", y: \"sin(t)\"}]", xmin: "default -10", xmax: "default 10", ymin: "", ymax: "", equal: "same scale on both axes (polar)", refreshMs: "default 2000" }
 	},
 	chat: {
 		description: "lab chat between people and AIs (markdown + KaTeX)",

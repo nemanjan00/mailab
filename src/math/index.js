@@ -58,6 +58,33 @@ math.import({
 	w2dbm: elementwise((x) => {
 		return 10 * Math.log10(x) + 30;
 	}),
+	// beamforming (uniform linear array; d in wavelengths, angles in degrees)
+	steering: (n, d, thetaDeg) => {
+		const k = 2 * Math.PI * d * Math.sin(thetaDeg * Math.PI / 180);
+		return math.matrix(Array.from({ length: n }, (_, i) => math.complex({ r: 1, phi: k * i })));
+	},
+	array_factor_db: (n, d, steerDeg, thetaDeg) => {
+		const psi = 2 * Math.PI * d * (Math.sin(thetaDeg * Math.PI / 180) - Math.sin(steerDeg * Math.PI / 180));
+		let re = 0;
+		let im = 0;
+		for (let i = 0; i < n; i++) {
+			re += Math.cos(psi * i);
+			im += Math.sin(psi * i);
+		}
+		// -100 dB floor: exact nulls would otherwise dominate any plot
+		return Math.max(-100, 20 * Math.log10(Math.sqrt(re * re + im * im) / n + 1e-12));
+	},
+	// normalized |array response| at theta for a beam steered to steerDeg (0..1)
+	array_factor: (n, d, steerDeg, thetaDeg) => {
+		const psi = 2 * Math.PI * d * (Math.sin(thetaDeg * Math.PI / 180) - Math.sin(steerDeg * Math.PI / 180));
+		let re = 0;
+		let im = 0;
+		for (let i = 0; i < n; i++) {
+			re += Math.cos(psi * i);
+			im += Math.sin(psi * i);
+		}
+		return Math.sqrt(re * re + im * im) / n;
+	},
 	mag: (values) => {
 		if (mathjs.isComplex(values) || typeof values === "number") {
 			return math.abs(values);

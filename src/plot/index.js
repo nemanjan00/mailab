@@ -94,6 +94,10 @@ const plot = (scopeFor, spec) => {
 		series: curves.map((c) => ({ label: c.label, x: c.x, y: c.y })),
 		xUnit: spec.xUnit || "",
 		yUnit: spec.yUnit || "",
+		// optional axis limits and equal aspect (polar/parametric plots)
+		yMin: spec.ymin,
+		yMax: spec.ymax,
+		equal: Boolean(spec.equal),
 		mode: "plot"
 	};
 };

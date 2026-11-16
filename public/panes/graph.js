@@ -41,7 +41,10 @@ export default pane((ctx, p) => {
 		if (!exprs.length) {
 			return;
 		}
-		ctx.api("POST", "/plot", { exprs: exprs, xmin: Number(form.xmin), xmax: Number(form.xmax), points: 600 }).then((res) => {
+		ctx.api("POST", "/plot", {
+			exprs: exprs, xmin: Number(form.xmin), xmax: Number(form.xmax), points: 600,
+			ymin: cfg.ymin, ymax: cfg.ymax, equal: cfg.equal
+		}).then((res) => {
 			last = res;
 			form.error = "";
 			draw();
