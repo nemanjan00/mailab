@@ -68,6 +68,10 @@ const TYPES = {
 			quality: "JPEG quality 0..1 (default 0.8)"
 		}
 	},
+	vision: {
+		description: "OpenCV ROI editor on a live lab image: draw / move / resize regions, pick a kind (led, seven_seg, value_ocr, color, motion, template), see live values; saves a vision watch",
+		config: { watch: "vision watch name (created on first save)", image: "lab image to watch (default: the watch's image)", show: "\"annotated\": show the watch's overlay image <watch>_annotated" }
+	},
 	json: {
 		description: "collapsible JSON view of a lab value",
 		config: { value: "value name, e.g. fg_stats", depth: "levels expanded (default 2)", view: "\"table\": sortable/filterable table with CSV/JSON export (arrays of objects, sweep results)" }

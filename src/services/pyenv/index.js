@@ -47,7 +47,7 @@ const venvDir = () => path.join(config.get("DATA_DIR"), VENV_DIR);
 const venvPython = () => path.join(venvDir(), "bin", "python");
 
 // import name for a pip package when they differ
-const IMPORT_NAMES = { hidapi: "hid", pyserial: "serial" };
+const IMPORT_NAMES = { hidapi: "hid", pyserial: "serial", "opencv-python-headless": "cv2", "opencv-contrib-python-headless": "cv2" };
 
 // "pymp305==0.5.3" -> "pymp305": requirements are pinned, imports aren't
 const distName = (requirement) => String(requirement).split(/[<>=!~;[\s]/)[0];

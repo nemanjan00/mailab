@@ -9,6 +9,7 @@ const kaitai = require("../kaitai");
 const blobs = require("../blobs");
 const media = require("../services/media");
 const sweepModule = require("../sweep");
+const vision = require("../vision");
 
 const MAX_POINTS = 500;
 const ARGS_PREVIEW = 160;
@@ -102,7 +103,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "vision_ops", "vision_watches", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -461,6 +462,81 @@ const create = (lab, context) => {
 		return { _image: { data: img.data.toString("base64"), mime: img.mime }, name: img.name, t: img.t };
 	});
 
+	tool("image_write", "Store an image (PNG / JPEG / ... as base64, or from a blob) as lab image `name`: a reference for vision_run align/template, a photo to analyze, a frame for a vision_watch", {
+		name: z.string(),
+		data: z.string().optional().describe("base64"),
+		blob: z.string().optional().describe("take the bytes from this lab blob"),
+		mime: z.string().optional().describe("default: sniffed (png / jpeg / gif / webp / bmp)")
+	}, (a) => {
+		const bytes = a.blob ? lab.getBlob(a.blob).data : Buffer.from(a.data || "", "base64");
+		if (!bytes.length) {
+			throw new Error("data (base64) or blob is required");
+		}
+		const mime = a.mime || vision.sniffMime(bytes);
+		lab.setImage(a.name, bytes, mime);
+		return { name: a.name, bytes: bytes.length, mime: mime };
+	});
+
+	// ---- vision (OpenCV) ---------------------------------------------------
+
+	tool("vision_ops", "OpenCV ops for vision_run pipelines and ROI kinds for vision_watch, with their params", {}, () => ({ ops: vision.OPS, kinds: vision.KINDS }));
+
+	tool("vision_run", "Run an OpenCV pipeline on a lab image (camera frame, screenshot, photo): ops in order, e.g. "
+		+ "[{op: \"crop\", rect: [x, y, w, h]}, {op: \"seven_seg\", rect: [...], count: 4}, {op: \"led\", rect: [...]}, {op: \"ocr\", rect: [...], digits: true}, "
+		+ "{op: \"aruco\", marker_mm: 20}, {op: \"measure\", points: [[x, y], [x, y]]}, {op: \"template\", template: \"<lab image>\"}, {op: \"align\", reference: \"<lab image>\"}]. "
+		+ "Coordinates are image pixels (after earlier crop / warp / align). Overlays go to image <image>_annotated; show: true returns that image to look at. See vision_ops", {
+		image: z.string(),
+		ops: z.array(json),
+		annotate: z.boolean().optional().describe("default true: store <image>_annotated"),
+		output: z.string().optional().describe("store the final pipeline image (after crop / threshold / warp...) as this lab image"),
+		show: z.boolean().optional().describe("return the annotated image")
+	}, (a) => lab.vision.run({ image: a.image, ops: a.ops, annotate: a.annotate !== false || a.show, output: a.output }).then((out) => {
+		const reply = Object.assign({}, out);
+		delete reply.png;
+		if (a.show && out.png) {
+			reply._image = { data: out.png, mime: "image/png" };
+		}
+		return reply;
+	}));
+
+	tool("vision_watch", "Watch regions of an image stream (a camera's <cam>_frame, browser <dev>_frame, screenshots): every time the image updates (at most fps), "
+		+ "each ROI is evaluated into channel <name>_<roi>; changes raise lab notifications {type: \"vision\", watch, roi, state, prev, line} "
+		+ "(\"status LED turned red\", display shows \"Err\") pushed to this session (others: subscribe types [\"vision\"]). "
+		+ "ROI kinds: led (1/0), seven_seg (number), value_ocr (number via tesseract), color (hue, state = colour name), motion (changed fraction), template (match score). "
+		+ "Optional per ROI: above / below (notify on crossing), stable (frames a new state must hold), cooldownMs, notify: \"none\". "
+		+ "Live results: value <name>_vision; overlays: image <name>_annotated. Same name replaces the watch; it persists with the lab", {
+		name: z.string().describe("watch name: channel prefix"),
+		image: z.string(),
+		rois: z.array(z.object({
+			name: z.string(),
+			rect: z.array(z.number()).describe("[x, y, w, h] image px"),
+			kind: z.enum(["led", "seven_seg", "value_ocr", "color", "motion", "template"]),
+			params: json.optional(),
+			above: z.number().optional(),
+			below: z.number().optional(),
+			stable: z.number().optional(),
+			cooldownMs: z.number().optional(),
+			notify: z.enum(["change", "none"]).optional()
+		})),
+		fps: z.number().optional().describe("evaluation rate cap (default 2, max 30); extra frames are dropped"),
+		annotate: z.boolean().optional().describe("default true: image <name>_annotated")
+	}, (a) => {
+		const watch = lab.vision.add(a);
+		if (ctx.session && !ctx.session.subs.some((sub) => sub.watch === a.name)) {
+			ctx.session.subs.push({ id: "s" + (ctx.session.subs.length + 1), types: ["vision"], watch: a.name });
+		}
+		return watch;
+	});
+
+	tool("vision_unwatch", "Remove a vision watch", { name: z.string() }, (a) => {
+		if (ctx.session) {
+			ctx.session.subs = ctx.session.subs.filter((sub) => sub.watch !== a.name);
+		}
+		return lab.vision.remove(a.name);
+	});
+
+	tool("vision_watches", "Vision watches with their ROIs, stats (frames, dropped, errors, ms per frame) and the last state / value per ROI", {}, () => lab.vision.list());
+
 	// ---- math ------------------------------------------------------------
 
 	tool("math_eval", "Evaluate a mathjs expression. Channel names are vectors of recent samples; trace names are y of the first series (<name>_x for x). Extras: rms, vpp, db, undb, dbm2w, w2dbm, mag. Example: max(mag(fft(scope_ch1)))", {
@@ -739,8 +815,9 @@ const create = (lab, context) => {
 	tool("classifier_remove", "Remove a classifier template", { name: z.string() }, (a) => lab.classifier.removeTemplate(a.name));
 
 	tool("subscribe", "Get lab events pushed to this MCP session as notifications/message: types rule, approval, trigger, cluster (new unclassified "
-		+ "line clusters, debounced), match (template matches), line, udev (USB events matching an in-app udev rule). Optional filters: device, template, rule (udev rule id), pattern (regex on the line)", {
-		types: z.array(z.enum(["rule", "approval", "trigger", "cluster", "match", "line", "udev"])),
+		+ "line clusters, debounced), match (template matches), line, udev (USB events matching an in-app udev rule), vision (vision_watch ROI changes). Optional filters: device, template, rule (udev rule id), watch (vision watch), pattern (regex on the line)", {
+		types: z.array(z.enum(["rule", "approval", "trigger", "cluster", "match", "line", "udev", "vision"])),
+		watch: z.string().optional().describe("vision watch name"),
 		rule: z.string().optional(),
 		device: z.string().optional(),
 		template: z.string().optional(),
