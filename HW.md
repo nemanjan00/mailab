@@ -26,6 +26,7 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | Proxmark3 | `proxmark3` | RRG client | `node-proxmark3` | 🧪 |
 | PicoGlitcher | `picoglitcher` | findus | `findus` (pip) | 🧪 |
 | Bus Pirate 5/6 | – | BPIO2 | buspirate skill | 📝 |
+| Harogic HTRA (SAE/SAM/SAN) | `harogic` | USB, vendor libhtraapi | `htra_api.h` (SDK 0.55.x) | 🧪 |
 | ChipWhisperer / Husky | – | – | `findus.HuskyGlitcher`, `~/cw-scope` | 📝 |
 
 ## Per-instrument checklist
@@ -121,6 +122,11 @@ id (the channel prefix; leave it empty for `<driver>`, `<driver>2`, ...).
 - [ ] Verify two MDP modules on one bridge (link re-targeting per request)
 - [ ] Verify two radios on one CI-V bus
 - [ ] Use `/dev/serial/by-id/...` paths so instances survive replugging
+
+### harogic
+- [x] ctypes struct layouts match `htra_api.h` (sizeof/offsetof checked with gcc)
+- [ ] Run on `lab` with the analyzer attached: `{"lib": "~/sastudio/SAStudio4_x86_64_4.4.55.50/lib/libhtraapi.so"}`; needs `/etc/htrausb.conf` + udev (see the SAStudio setup notes); SAStudio must not hold the device
+- [ ] IQ streaming mode (IQS_*) as a flowgraph source block
 
 ## Cross-cutting
 - [ ] udev rules / stable device paths (`/dev/serial/by-id/...`) in the docs

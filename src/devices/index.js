@@ -20,7 +20,8 @@ const DRIVERS = [
 	require("./proxmark3"),
 	require("./picoglitcher"),
 	require("./flowgraph"),
-	require("./camera")
+	require("./camera"),
+	require("./harogic")
 ];
 
 const devices = {

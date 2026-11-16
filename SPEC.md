@@ -54,6 +54,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
+| libvolk | ⬜ | Not yet: the hot spots are per-symbol Python loops (carrier recovery, modem demod), and VOLK through ctypes wouldn't help. Move those loops into liquid/numpy/a small C helper first, then use VOLK kernels there |
+| Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |
 
 ## 4. Instruments
 
@@ -79,6 +81,9 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | Bus Pirate | ⬜ | BPIO2, using the buspirate skill |
 | XGecu programmers (minipro) | ⬜ | `minipro` CLI: identify, read/write/verify chips; dumps as blobs for the Kaitai view |
 | Glasgow | ⬜ | `glasgow` CLI applets |
+| Harogic HTRA spectrum analyzer | 🟡 | `harogic` driver: sweep → `spectrum` trace via vendor `libhtraapi` (ctypes, struct layouts checked against `htra_api.h` with the C compiler). Library from SAStudio4 on `lab` (desktop shortcut → `~/sastudio/SAStudio4_x86_64_4.4.55.50`). Device not on `lab`'s USB at the time; not run yet. Next: IQ streaming (IQS) as a flowgraph source |
+| USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
+| GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher |
 
 ## 5. Project
@@ -98,7 +103,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 4. findus map preview (heatmap)
 5. Markdown live values
 6. MHO900 siggen; Soapy TX block with safety gate
-7. nRF52840 modem, Bus Pirate, minipro, Glasgow, ChipWhisperer Husky drivers
+7. nRF52840 modem, Bus Pirate, minipro, Glasgow, ChipWhisperer Husky, uhubctl, system monitor drivers; Harogic IQ streaming
 8. Digital analysis: FSK/GFSK, baud estimation, packet decoding
 9. Deployment on `lab`: waiting on your decision
 
@@ -150,3 +155,10 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 44. glasgow
 45. take a break, write down spec.md, everything I said in this session and then keep going
 46. chipwhisperer husky
+47. harogic lib, you can grab .h on lab pc nemanjan00@10.69.1.91 (not installed there; taken from PentHertz `Install_HTRA_SDK.zip`, kept out of the repo)
+48. libvolk?
+49. optional webgpu?
+50. harogic sastudio shortcut is on desktop on lab pc
+51. uhubctl, hub power control
+52. nvtop
+53. update spec as I go
