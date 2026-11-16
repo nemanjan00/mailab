@@ -5,6 +5,8 @@
 const processDriver = require("../process");
 
 module.exports = processDriver.pythonPreset({
+	// pip packages, installed into the mailab-managed venv on first use
+	requires: ["numpy"],
 	name: "harogic",
 	description: "Harogic HTRA spectrum analyzer, sweep mode (vendor libhtraapi via ctypes): trace \"spectrum\" (dBm), peak_freq/peak_dbm/temp",
 	script: "harogic_bridge.py",

@@ -3,6 +3,8 @@
 const processDriver = require("../process");
 
 module.exports = processDriver.pythonPreset({
+	// pip packages, installed into the mailab-managed venv on first use
+	requires: ["numpy"],
 	name: "soapy",
 	description: "SoapySDR receiver (bladeRF, HackRF, RTL-SDR): live FFT trace \"spectrum\", peak_freq/peak_db channels",
 	script: "soapy_bridge.py",

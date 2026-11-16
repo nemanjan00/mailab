@@ -21,7 +21,9 @@ const DEFAULTS = {
 	// accept a non-loopback HOST without tokens (trusted networks only)
 	MAILAB_ALLOW_OPEN: "",
 	// extra Host names accepted without tokens, e.g. "lab.local"
-	MAILAB_ALLOWED_HOSTS: ""
+	MAILAB_ALLOWED_HOSTS: "",
+	// 0 = don't manage a python venv (use PYTHON as is)
+	MAILAB_MANAGE_PYTHON: "1"
 };
 
 const config = {

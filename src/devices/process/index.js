@@ -28,6 +28,7 @@ const STOP_GRACE_MS = 2000;
 const create = (options, io) => {
 	let child = null;
 	let nextId = 1;
+	let lastError = "";
 	const pending = {};
 
 	const handlers = {
@@ -116,15 +117,19 @@ const create = (options, io) => {
 			readline.createInterface({ input: child.stdout }).on("line", onLine);
 			readline.createInterface({ input: child.stderr }).on("line", (line) => {
 				io.log(line, "stderr");
+				if (line.trim()) {
+					lastError = line.trim();
+				}
 			});
 			child.on("error", (err) => {
 				io.status("error", err.message);
 			});
 			child.on("exit", (code, signal) => {
-				const err = new Error("helper exited (" + (signal || code) + ")");
+				const err = new Error("helper exited (" + (signal || code) + ")" + (code ? ": " + lastError : ""));
 				rejectAll(err);
 				child = null;
-				io.status("stopped", err.message);
+				// a crash is an error with its reason; a clean exit (or our stop) is just stopped
+				io.status(code ? "error" : "stopped", code ? lastError || err.message : err.message);
 			});
 			return Promise.resolve();
 		},
@@ -172,19 +177,29 @@ const create = (options, io) => {
  *   args maps device options to the bridge's command-line arguments
  */
 const pythonPreset = (spec) => {
-	const config = require("../../config");
 	const path = require("path");
+	const pyenv = require("../../services/pyenv");
 	return {
 		name: spec.name,
 		description: spec.description,
 		options: spec.options,
 		commands: spec.commands,
+		requires: spec.requires || [],
 		create: (options, io) => {
-			return create({
-				command: config.get("PYTHON"),
-				args: [path.join(__dirname, "..", "..", "..", "python", spec.script)].concat(spec.args(options)),
-				env: options.env
-			}, io);
+			let inner = null;
+			return {
+				// the mailab-managed venv gets the driver's pip requirements first
+				start: () => pyenv.ensure(spec.requires || [], (line) => io.log(line, "setup")).then((python) => {
+					inner = create({
+						command: python,
+						args: [path.join(__dirname, "..", "..", "..", "python", spec.script)].concat(spec.args(options)),
+						env: options.env
+					}, io);
+					return inner.start();
+				}),
+				stop: () => (inner ? inner.stop() : Promise.resolve()),
+				command: (name, args) => (inner ? inner.command(name, args) : Promise.reject(new Error("not started")))
+			};
 		}
 	};
 };

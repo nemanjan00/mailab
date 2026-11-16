@@ -62,8 +62,13 @@ Then ask it something like *"add the sim device, chart it and tell me the
 RMS"* or *"build a QPSK link with 20 dB SNR and show me the constellation and
 BER"*.
 
-Python bridges need their libraries: `numpy`, `libliquid` (liquid-dsp ≥ 1.6),
-and per instrument `SoapySDR`, `pymp305`, `findus`.
+Python is managed by mailab: on first use it creates a venv in
+`DATA_DIR/python` (with system site packages, so apt-installed SoapySDR and
+liquid-dsp bindings stay visible) and pip-installs each Python driver's
+requirements when you add the device (mp305 → pymp305, picoglitcher → findus,
+…), logging progress to the device log. System libraries stay system-level:
+`libliquid` (liquid-dsp ≥ 1.6) and SoapySDR. Set `MAILAB_MANAGE_PYTHON=0` or
+`PYTHON=/path/to/python` to manage Python yourself.
 
 ### Docker
 

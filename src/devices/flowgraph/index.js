@@ -5,6 +5,8 @@
 const processDriver = require("../process");
 
 module.exports = processDriver.pythonPreset({
+	// pip packages, installed into the mailab-managed venv on first use
+	requires: ["numpy"],
 	name: "flowgraph",
 	description: "Composable DSP blocks (sources, liquid-dsp processing, sinks to traces/channels/audio). Run command \"blocks\" for the catalog",
 	script: "flowgraph_bridge.py",

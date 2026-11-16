@@ -40,6 +40,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Record & replay as a device | ⬜ | save a session's channels/traces/logs, play it back as a fake instrument: test panes and AI workflows without the bench, CI on real data, live demos without hardware |
 | Experiment journal with evidence tags | ⬜ | each batch/run stores device options, setpoints and data; AI conclusions in notes link to their data and get tagged [HW] automatically, or [INF] when nothing backs them (the mdp-p906 convention, enforced); export a run to markdown |
 | Binary diff for blobs | ✅ | `blob_diff` + blob pane `compare`: merged changed ranges, side-by-side hex with highlights. Next: map changed ranges to Kaitai fields |
+| mailab-managed Python venv | ✅ | `src/services/pyenv`: venv in `DATA_DIR/python` (system site packages for apt SoapySDR/liquid), created on first use; Python drivers declare `requires` (flowgraph/soapy/harogic: numpy; mp305: pymp305, hidapi; picoglitcher: findus, pyserial), installed on device start if not importable, progress in the device log; serialized pip; opt-out `MAILAB_MANAGE_PYTHON=0` / `PYTHON`. Verified: venv creation, system numpy reuse, pymp305+hidapi install. Helpers that crash now show `error` + their last stderr line |
 | Test automation for python | ✅ | `python/test_modem.py` is pytest-style (4 tests) and runs from jest (`src/devices/flowgraph/__tests__/modem.test.js`), so the pre-commit hook covers the BER regression; skipped when numpy/liquid-dsp are missing |
 | Run on the lab host `nemanjan00@10.69.1.91` (`lab`) | ⬜ | Feather nRF52840, EVGA XR1 capture, sigrok, minipro and hackrf live there. Options: run mailab there, or add remote device agents. **Needs a decision** |
 
@@ -276,3 +277,4 @@ Next:
 106. reviewer: rule actions skip approval; restored locked rule replaceable via id collision; rule eval errors silent; same-machine agent can approve itself
 107. python headers for ui sdk elements, so it can build custom panes
 108. python venv?
+109. mailab managed (venv)
