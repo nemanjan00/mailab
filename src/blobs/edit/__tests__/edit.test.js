@@ -67,29 +67,59 @@ describe("blob editing", () => {
 
 	test("search, replace (same and different length, ?? keeps bytes)", () => {
 		lab.setBlob("t", Buffer.from("key=AAAA;key=BBBB;"));
-		expect(edit.search(lab, { name: "t", text: "key=" }).count).toBe(2);
-		expect(edit.search(lab, { name: "t", text: "key=", dir: "next", from: 1 }).hits).toEqual([{ offset: 9, length: 4 }]);
-
-		const one = edit.replace(lab, { name: "t", find: { text: "key=" }, replace: { text: "KEY=" } }, "ui");
-		expect(one.replaced).toBe(1);
-		expect(lab.getBlob("t").data.toString()).toBe("KEY=AAAA;key=BBBB;");
-
-		const all = edit.replace(lab, { name: "t", find: { regex: "[A-Z]{4};" }, replace: { text: "x;" }, all: true }, "ui");
-		expect(all.replaced).toBe(2);
-		expect(lab.getBlob("t").data.toString()).toBe("KEY=x;key=x;");
-		edit.patch(lab, { name: "t", ops: all.undo });
-		expect(lab.getBlob("t").data.toString()).toBe("KEY=AAAA;key=BBBB;");
-
-		// hex find/replace given as strings; ?? keeps the matched byte
-		edit.replace(lab, { name: "t", find: "41 41 ?? 41", replace: "42 ?? ?? 42", all: true }, "ui");
-		expect(lab.getBlob("t").data.toString()).toBe("KEY=BAAB;key=BBBB;");
-		expect(() => edit.replace(lab, { name: "t", find: "4b", replace: "?? ??" }, "ui")).toThrow(/past the match/);
-
-		// replace with nothing deletes; within a range only
-		edit.replace(lab, { name: "t", find: { text: ";" }, replace: {}, all: true, start: 10 }, "ui");
-		expect(lab.getBlob("t").data.toString()).toBe("KEY=BAAB;key=BBBB");
-		expect(edit.replace(lab, { name: "t", find: { text: "zzz" }, replace: { text: "y" } }).replaced).toBe(0);
+		const text = () => lab.getBlob("t").data.toString();
+		return edit.search(lab, { name: "t", text: "key=" })
+			.then((r) => {
+				expect(r.count).toBe(2);
+				return edit.search(lab, { name: "t", text: "key=", dir: "next", from: 1 });
+			})
+			.then((r) => {
+				expect(r.hits).toEqual([{ offset: 9, length: 4 }]);
+				return edit.replace(lab, { name: "t", find: { text: "key=" }, replace: { text: "KEY=" } }, "ui");
+			})
+			.then((one) => {
+				expect(one.replaced).toBe(1);
+				expect(text()).toBe("KEY=AAAA;key=BBBB;");
+				// a user regex runs in a worker thread
+				return edit.replace(lab, { name: "t", find: { regex: "[A-Z]{4};" }, replace: { text: "x;" }, all: true }, "ui");
+			})
+			.then((all) => {
+				expect(all.replaced).toBe(2);
+				expect(text()).toBe("KEY=x;key=x;");
+				edit.patch(lab, { name: "t", ops: all.undo });
+				expect(text()).toBe("KEY=AAAA;key=BBBB;");
+				// hex find/replace given as strings; ?? keeps the matched byte
+				return edit.replace(lab, { name: "t", find: "41 41 ?? 41", replace: "42 ?? ?? 42", all: true }, "ui");
+			})
+			.then(() => {
+				expect(text()).toBe("KEY=BAAB;key=BBBB;");
+				return expect(edit.replace(lab, { name: "t", find: "4b", replace: "?? ??" }, "ui")).rejects.toThrow(/past the match/);
+			})
+			// replace with nothing deletes; within a range only
+			.then(() => edit.replace(lab, { name: "t", find: { text: ";" }, replace: {}, all: true, start: 10 }, "ui"))
+			.then(() => {
+				expect(text()).toBe("KEY=BAAB;key=BBBB");
+				return edit.replace(lab, { name: "t", find: { text: "zzz" }, replace: { text: "y" } });
+			})
+			.then((r) => {
+				expect(r.replaced).toBe(0);
+			});
 	});
+
+	test("a catastrophic regex is stopped, not the lab", () => {
+		lab.setBlob("redos", Buffer.from("a".repeat(40) + "!"));
+		const started = Date.now();
+		let ticks = 0;
+		const timer = setInterval(() => ticks++, 50);
+		return expect(edit.search(lab, { name: "redos", regex: "^(a+)+$" })).rejects.toThrow(/longer than/)
+			.then(() => {
+				clearInterval(timer);
+				expect(Date.now() - started).toBeLessThan(6000);
+				// the event loop kept running while the worker was stuck
+				expect(ticks).toBeGreaterThan(20);
+				return expect(edit.search(lab, { name: "redos", regex: "(" })).rejects.toThrow();
+			});
+	}, 10000);
 
 	test("checksum over a range", () => {
 		lab.setBlob("c", Buffer.from("xx123456789yy"));

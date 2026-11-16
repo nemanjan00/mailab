@@ -2,6 +2,8 @@
 // (peek), typed pokes, patches (poke/insert/delete/fill with undo),
 // search / replace, checksums, slices and next/prev change between two blobs.
 
+const path = require("path");
+const Worker = require("worker_threads").Worker;
 const bytes = require("../../utils/bytes");
 const patch = require("../../utils/patch");
 const bytesearch = require("../../utils/bytesearch");
@@ -116,6 +118,41 @@ const poke = (lab, a, source) => {
 	return Object.assign(r, { offset: a.offset, written: data.toString("hex") });
 };
 
+const REGEX_TIMEOUT_MS = 3000;
+
+/**
+ * bytesearch.search as a promise; a user regex runs in a worker thread with a
+ * time limit (catastrophic backtracking would otherwise stall the whole lab).
+ */
+const runSearch = (data, spec, opts) => {
+	if (spec.regex === undefined || spec.regex === "") {
+		return Promise.resolve().then(() => bytesearch.search(data, spec, opts));
+	}
+	// syntax errors come back without starting a thread
+	return Promise.resolve().then(() => bytesearch.compile(spec)).then(() => new Promise((resolve, reject) => {
+		const worker = new Worker(path.join(__dirname, "..", "..", "utils", "bytesearch", "worker.js"), {
+			workerData: { data: new Uint8Array(data), spec: spec, opts: opts }
+		});
+		const timer = setTimeout(() => {
+			worker.terminate();
+			reject(Object.assign(new Error("regex search took longer than " + REGEX_TIMEOUT_MS / 1000 + " s: simplify the pattern"), { status: 422 }));
+		}, REGEX_TIMEOUT_MS);
+		worker.once("message", (msg) => {
+			clearTimeout(timer);
+			worker.terminate();
+			if (msg.error) {
+				reject(Object.assign(new Error(msg.error), { status: 400 }));
+			} else {
+				resolve(msg.result);
+			}
+		});
+		worker.once("error", (err) => {
+			clearTimeout(timer);
+			reject(err);
+		});
+	}));
+};
+
 const searchSpec = (a) => ({ hex: a.hex, text: a.text, encoding: a.encoding, ignoreCase: a.ignoreCase, regex: a.regex, flags: a.flags });
 
 /**
@@ -123,8 +160,8 @@ const searchSpec = (a) => ({ hex: a.hex, text: a.text, encoding: a.encoding, ign
  */
 const search = (lab, a) => {
 	const data = blobData(lab, a.name);
-	const r = bytesearch.search(data, searchSpec(a), { dir: a.dir, from: a.from, start: a.start, end: a.end, max: a.max, wrap: a.wrap });
-	return { name: a.name, size: data.length, hits: r.hits, count: r.hits.length, truncated: r.truncated };
+	return runSearch(data, searchSpec(a), { dir: a.dir, from: a.from, start: a.start, end: a.end, max: a.max, wrap: a.wrap })
+		.then((r) => ({ name: a.name, size: data.length, hits: r.hits, count: r.hits.length, truncated: r.truncated }));
 };
 
 // replacement bytes for one hit: ?? in a hex replacement keeps the matched byte
@@ -161,7 +198,11 @@ const replace = (lab, a, source) => {
 	const find = typeof a.find === "string" ? { hex: a.find } : (a.find || {});
 	const rep = typeof a.replace === "string" ? { hex: a.replace } : (a.replace || {});
 	const opts = { start: a.start, end: a.end, from: a.from, wrap: a.wrap };
-	const r = bytesearch.search(data, find, Object.assign(opts, a.all ? { dir: "all", max: Math.min(Number(a.max) || MAX_REPLACE, MAX_REPLACE) } : { dir: "next" }));
+	return runSearch(data, find, Object.assign(opts, a.all ? { dir: "all", max: Math.min(Number(a.max) || MAX_REPLACE, MAX_REPLACE) } : { dir: "next" }))
+		.then((r) => replaceHits(lab, a, data, rep, r, source));
+};
+
+const replaceHits = (lab, a, data, rep, r, source) => {
 	if (!r.hits.length) {
 		return { name: a.name, size: data.length, replaced: 0, hits: [], undo: [] };
 	}
