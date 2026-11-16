@@ -102,7 +102,8 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send",
+	"board_list", "board_get", "board_search", "board_graph", "board_netlist", "board_view"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -686,6 +687,159 @@ const create = (lab, context) => {
 			reason: "replaces the whole lab with profile \"" + a.name + "\" (" + (profile.devices || []).length + " devices, safety rules included)"
 				+ (diff.length ? ":\n" + diff.join("\n") : "")
 		}).then(() => lab.importState(profile)).then((state) => ({ loaded: a.name, devices: state.devices.map((d) => d.id + ":" + d.state) }));
+	});
+
+	// ---- boards: PCB / schematic tracing ---------------------------------------
+
+	const xy = z.array(z.number()).length(2);
+	const region = {
+		x: z.number().optional(), y: z.number().optional(), w: z.number().optional(), h: z.number().optional()
+	};
+
+	tool("board_list", "Boards: tracing workspaces for reverse engineering PCBs / schematics (background layers + traced components, pins, wires)", {}, () => lab.boards.list());
+
+	tool("board_get", "A board: layers (id, size, transform matrix [a,b,c,d,e,f] layer px → board units), traced components (refdes, pins with positions), "
+		+ "wires, vias, labels, test points, notes, and the nets computed from that geometry. With a region (board units) or `text`, "
+		+ "also the words on the layers there (refdes / net labels from PDFs)", Object.assign({
+		name: z.string(),
+		text: z.boolean().optional().describe("include layer words (inside the region if given)"),
+		layer: z.string().optional().describe("only words of this layer"),
+		geometry: z.boolean().optional().describe("include traced geometry (default true); false = summary + nets")
+	}, region), (a) => {
+		const snap = lab.boards.snapshot(a.name);
+		const inRegion = a.w && a.h ? { x: a.x || 0, y: a.y || 0, w: a.w, h: a.h } : null;
+		const out = Object.assign({}, snap);
+		if (a.geometry === false) {
+			["components", "wires", "vias", "labels", "testpoints", "notes"].forEach((k) => {
+				out[k] = snap[k].length;
+			});
+		}
+		if (a.text || inRegion) {
+			out.text = lab.boards.text(a.name, { layer: a.layer, region: inRegion || undefined });
+		}
+		return out;
+	});
+
+	tool("board_import", "Import a PDF (each page becomes a background layer rendered to PNG, with its words extracted for search) "
+		+ "or an image (photo of the top / bottom, SVG) into a board, creating the board if needed. Source: a file path on the lab host, a lab blob or a lab image", {
+		name: z.string().describe("board name: letters, digits, _ . -"),
+		path: z.string().optional(),
+		blob: z.string().optional(),
+		image: z.string().optional(),
+		pages: z.string().optional().describe("PDF pages like \"1-3,7\" (default all, max 30 per import)"),
+		dpi: z.number().optional().describe("PDF render resolution (default 150)"),
+		label: z.string().optional(),
+		side: z.string().optional().describe("top | bottom | any: which copper side the layer shows")
+	}, (a) => {
+		let data;
+		if (a.path) {
+			data = require("fs").readFileSync(a.path);
+		} else if (a.blob) {
+			data = lab.getBlob(a.blob).data;
+		} else if (a.image) {
+			data = lab.getImage(a.image).data;
+		} else {
+			throw new Error("give path, blob or image");
+		}
+		const label = a.label || (a.path ? require("path").basename(a.path).replace(/\.[^.]+$/, "") : a.blob || a.image);
+		return lab.boards.importData(a.name, data, { pages: a.pages, dpi: a.dpi, label: label, side: a.side })
+			.then((layers) => ({ layers: layers.map((l) => ({ id: l.id, name: l.name, width: l.width, height: l.height, words: l.words })) }));
+	});
+
+	tool("board_layer", "Change a board layer: visibility, opacity, side, order, transform (params: x, y, scale, rotate°, flip; or a raw matrix), "
+		+ "or align it with 2 point pairs (similarity, optional mirror for bottom photos) or 3 (affine): from = layer pixels, to = board units. remove: true deletes the layer", {
+		name: z.string(),
+		layer: z.string(),
+		visible: z.boolean().optional(),
+		opacity: z.number().optional(),
+		side: z.string().optional(),
+		order: z.number().optional().describe("new index (0 = bottom)"),
+		params: z.object({ x: z.number().optional(), y: z.number().optional(), scale: z.number().optional(), rotate: z.number().optional(), flip: z.boolean().optional() }).optional(),
+		matrix: z.array(z.number()).length(6).optional(),
+		align: z.array(z.object({ from: xy, to: xy })).optional(),
+		flip: z.boolean().optional().describe("mirror while aligning with 2 pairs"),
+		remove: z.boolean().optional()
+	}, (a) => {
+		if (a.remove) {
+			return lab.boards.removeLayer(a.name, a.layer);
+		}
+		if (a.align) {
+			lab.boards.alignLayer(a.name, a.layer, a.align, a.flip);
+		}
+		const changes = {};
+		["visible", "opacity", "side", "order", "params", "matrix"].forEach((k) => {
+			if (a[k] !== undefined) {
+				changes[k] = a[k];
+			}
+		});
+		return lab.boards.updateLayer(a.name, a.layer, changes);
+	});
+
+	tool("board_draw", "Trace on a board (all ops apply or none). Geometry IS the connectivity: wires (polylines) join pins, vias, labels, test points "
+		+ "and other wires wherever their points touch (within board.snap units, also mid-segment T-junctions); sides (top/bottom/…) only meet the same side "
+		+ "or unsided items (vias, THT parts). Net names are optional: a label on a wire or wire.net names the net, and equal names join. "
+		+ "ops: {op: add|update|remove, kind, ...}: component {id: refdes, value, footprint, side, box: [x,y,w,h], pins: [{name, x, y}], rename}; "
+		+ "pin {component, name, x, y}; wire {id?, points: [[x,y],...], side, width, net}; via {id?, x, y}; label {id?, x, y, name, side}; "
+		+ "testpoint {id?, x, y, side, channel (lab channel measuring it), reading, unit}; note {id?, x, y, text}; net {name, color, notes}", {
+		name: z.string(),
+		ops: z.array(json)
+	}, (a) => lab.boards.draw(a.name, a.ops));
+
+	tool("board_search", "Search a board: words on its layers (PDF text: refdes, net labels, part numbers; with board-unit boxes) and the traced graph "
+		+ "(components, nets, pins)", {
+		name: z.string(),
+		query: z.string(),
+		regex: z.boolean().optional(),
+		exact: z.boolean().optional().describe("whole word, case-insensitive")
+	}, (a) => lab.boards.search(a.name, a.query, { regex: a.regex, exact: a.exact }));
+
+	tool("board_graph", "Query the connectivity graph traced on a board. what: nets (all nets with pin counts) | net {net} (its pins, wires, test points) "
+		+ "| pin {pin: \"U3.12\"} (its net and what else is on it) | neighbors {ref} (per pin: net + connected pins; neighbouring parts) "
+		+ "| path {from, to} (shortest route between parts / pins / nets through components and nets) | search {text}. "
+		+ "avoid: nets not to walk through (GND, VCC)", {
+		name: z.string(),
+		what: z.enum(["nets", "net", "pin", "neighbors", "path", "search"]),
+		net: z.string().optional(),
+		pin: z.string().optional(),
+		ref: z.string().optional(),
+		from: z.string().optional(),
+		to: z.string().optional(),
+		text: z.string().optional(),
+		avoid: z.array(z.string()).optional()
+	}, (a) => lab.boards.query(a.name, a));
+
+	tool("board_netlist", "Export the netlist reconstructed from a board's tracing: json (components with pin nets, nets with nodes), csv (net,ref,pin) or kicad (.net)", {
+		name: z.string(),
+		format: z.enum(["json", "csv", "kicad"]).optional()
+	}, (a) => {
+		const out = lab.boards.netlist(a.name, a.format || "json");
+		return typeof out === "string" ? { format: a.format, text: out } : out;
+	});
+
+	tool("board_view", "Look at a board region: renders it from one layer (default the top visible one; PDF layers are re-rendered sharp at the needed zoom) "
+		+ "with the traced geometry drawn on top (net highlighted if given), returns the image and stores it as lab image <board>_view. "
+		+ "toBoard maps image pixels to board units: x' = a*x + c*y + e, y' = b*x + d*y + f", Object.assign({
+		name: z.string(),
+		layer: z.string().optional(),
+		maxPx: z.number().optional().describe("longest side of the image (default 1600)"),
+		overlay: z.boolean().optional().describe("draw traced geometry (default true)"),
+		net: z.string().optional().describe("net to highlight")
+	}, region), (a) => lab.boards.view(a.name, a).then((v) => {
+		const name = a.name + "_view";
+		if (who.role === "rw" || who.role === "human") {
+			lab.setImage(name, v.png, "image/png");
+		}
+		return { _image: { data: v.png.toString("base64"), mime: "image/png" }, image: name, layer: v.layer, width: v.width, height: v.height, toBoard: v.toBoard };
+	}));
+
+	tool("board_delete", "Delete a board with its layers and tracing. Waits for a person's approval", {
+		name: z.string()
+	}, (a) => {
+		const board = lab.boards.get(a.name);
+		return lab.safety.requestApproval({
+			who: actor(), device: "board", command: "delete", args: { board: a.name },
+			reason: "deletes board \"" + a.name + "\" (" + board.layers.length + " layers, " + board.components.length + " components, " + board.wires.length + " wires)"
+		}).then(() => lab.boards.remove(a.name));
 	});
 
 	// ---- long-term trends ----------------------------------------------------

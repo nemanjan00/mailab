@@ -176,6 +176,52 @@ const api = (lab) => {
 		human(req);
 		return lab.profiles.remove(req.params.name);
 	}));
+	// boards (PCB / schematic tracing): edits are normal writes, deleting a board is for people
+	router.get("/boards", route(() => lab.boards.list()));
+	router.post("/boards", route((req) => lab.boards.create(req.body.name, req.body.title)));
+	router.get("/boards/:name", route((req) => lab.boards.snapshot(req.params.name)));
+	router.delete("/boards/:name", route((req) => {
+		human(req);
+		return lab.boards.remove(req.params.name);
+	}));
+	// upload a PDF / image file as new layer(s); options in the query string
+	router.put("/boards/:name/upload", express.raw({ type: "*/*", limit: "200mb" }), route((req) => lab.boards.importData(req.params.name, req.body, {
+		label: req.query.label, pages: req.query.pages, dpi: req.query.dpi, side: req.query.side
+	}).then((layers) => ({ layers: layers.map((l) => l.id) }))));
+	router.get("/boards/:name/layers/:id/image", (req, res) => {
+		try {
+			const file = lab.boards.layerFile(req.params.name, req.params.id);
+			res.type(file.mime).sendFile(file.path);
+		} catch (err) {
+			res.status(404).json({ error: err.message });
+		}
+	});
+	router.patch("/boards/:name/layers/:id", route((req) => lab.boards.updateLayer(req.params.name, req.params.id, req.body || {})));
+	router.post("/boards/:name/layers/:id/align", route((req) => lab.boards.alignLayer(req.params.name, req.params.id, req.body.pairs, req.body.flip)));
+	router.delete("/boards/:name/layers/:id", route((req) => lab.boards.removeLayer(req.params.name, req.params.id)));
+	router.get("/boards/:name/text", route((req) => {
+		const q = req.query;
+		const region = q.w ? { x: Number(q.x), y: Number(q.y), w: Number(q.w), h: Number(q.h) } : undefined;
+		return lab.boards.text(req.params.name, { layer: q.layer, region: region, limit: Number(q.limit) || undefined });
+	}));
+	router.get("/boards/:name/search", route((req) => lab.boards.search(req.params.name, req.query.q, {
+		regex: req.query.regex === "1", exact: req.query.exact === "1"
+	})));
+	router.post("/boards/:name/draw", route((req) => lab.boards.draw(req.params.name, req.body.ops)));
+	router.post("/boards/:name/query", route((req) => lab.boards.query(req.params.name, req.body || {})));
+	router.get("/boards/:name/netlist", (req, res) => {
+		try {
+			const format = req.query.format || "json";
+			const out = lab.boards.netlist(req.params.name, format);
+			if (format === "json") {
+				res.json(out);
+				return;
+			}
+			res.attachment(req.params.name + (format === "kicad" ? ".net" : ".csv")).type("text/plain").send(out);
+		} catch (err) {
+			res.status(400).json({ error: err.message });
+		}
+	});
 	router.get("/lab/export", (req, res) => {
 		res.attachment("lab.mailab.json").json(lab.exportState());
 	});
@@ -367,6 +413,9 @@ const attachSockets = (server, lab, pushIntervalMs, auth, capture) => {
 	});
 	lab.events.on("image", (e) => {
 		broadcast({ type: "image", name: e.name, t: Date.now() });
+	});
+	lab.events.on("board", (e) => {
+		broadcast({ type: "board", name: e.name });
 	});
 	lab.events.on("log", (entry) => {
 		broadcast({ type: "log", entry: entry });

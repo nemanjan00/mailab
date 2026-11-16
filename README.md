@@ -174,6 +174,7 @@ laptop), a phone needs https (e.g. a reverse proxy with a certificate).
 | `batch` | many calls in one request, ~1 ms timing, loops, result references |
 | `sweep`, `optimize` | step 1-2 command parameters (linear/log/list) and tabulate channel readings; golden-section / hill-climb search for a min/max. One approval per plan when the policy matches |
 | `recording_start`, `recording_stop`, `recordings` | record channels (globs), traces, values, events and logs to ndjson; play back with the `replay` driver (prefix, speed, loop) |
+| `board_list`, `board_get`, `board_import`, `board_layer`, `board_draw`, `board_search`, `board_graph`, `board_netlist`, `board_view`, `board_delete` | PCB / schematic tracing: PDF pages (rendered + text extracted) and photos as aligned background layers; parts, pins, wires, vias, labels traced over them; nets come from the drawn geometry; graph queries (net, pin, neighbours, path), JSON/CSV/KiCad netlists, sharp rendered crops to look at. Deleting a board needs approval |
 
 Every call shows up in the **AI activity** pane.
 
