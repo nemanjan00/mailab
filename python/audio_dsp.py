@@ -33,7 +33,10 @@ EPS = 1e-12
 # DeepFilterNet backend: pinned install set (torch from the PyTorch CUDA 13.4 index;
 # deepfilternet itself pins numpy<2, so it goes in with --no-deps on top of its real deps)
 TORCH_INDEX = "https://download.pytorch.org/whl/cu134"
-TORCH_REQUIREMENT = "torch==2.15.0"
+# the local version pins the CUDA build (plain 2.15.0 would also match PyPI's CPU wheel)
+TORCH_REQUIREMENT = "torch==2.15.0+cu134"
+# exact versions of torch's dependency closure, resolved from the PyTorch index only
+TORCH_CONSTRAINTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "torch-cu134-constraints.txt")
 DF_REQUIREMENTS = ["deepfilterlib==0.5.6", "loguru==0.8.0", "appdirs==1.4.4"]
 DF_NODEPS = ["deepfilternet==0.5.6"]
 DF_RATE = 48000
@@ -1009,7 +1012,9 @@ def _shim_torchaudio():
 def deepfilternet_install_commands():
     py = sys.executable
     pip = [py, "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off"]
-    return [pip + ["--extra-index-url", TORCH_INDEX, TORCH_REQUIREMENT],
+    # --index-url (not --extra-index-url): torch and its nvidia-*/triton deps come
+    # from the PyTorch index alone, pinned by the constraints file
+    return [pip + ["--index-url", TORCH_INDEX, "-c", TORCH_CONSTRAINTS, TORCH_REQUIREMENT],
             pip + DF_REQUIREMENTS,
             pip + ["--no-deps"] + DF_NODEPS]
 

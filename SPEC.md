@@ -337,3 +337,5 @@ Next:
 149. cynthion, luna
 150. qrp good for this? (answered: yes for the shell; keep hot paths imperative; proposed raw/shallow state, append-friendly lists, scheduler, thunk warnings)
 151. yes: fix the pymp305 issues found (program end marker, frame length wrap, BLE parity, set_output mode switch) and release 0.6.4
+152. make docs for each block, with screenshot and use example; docs/ markdowns, dir per block
+153. reviewer: torch install could pick PyPI's CPU 2.15.0 and resolve unpinned deps across two indexes → torch==2.15.0+cu134, --index-url for that step, constraints file with the exact dependency closure
