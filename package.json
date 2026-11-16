@@ -1,0 +1,35 @@
+{
+  "name": "mailab",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Nemanja Nedeljkovic <nemanjan00@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "express": "^5.3.0",
+    "forever": "^4.0.3",
+    "gridstack": "^14.1.0",
+    "katex": "^0.19.1",
+    "kc9531b": "^0.0.3",
+    "marked": "^18.2.1",
+    "mathjs": "^15.2.0",
+    "node-proxmark3": "^0.0.12",
+    "queue-promised": "^0.0.31",
+    "serialport": "^13.0.0",
+    "uplot": "^1.6.32",
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.1.2",
+    "@babel/eslint-parser": "^8.1.2",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "husky": "^9.1.7",
+    "jest": "^30.5.2",
+    "lint-staged": "^17.6.1",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.2"
+  }
+}
