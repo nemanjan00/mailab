@@ -175,7 +175,7 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. In progress (agents): rfcat, Cynthion (torch 2.15.0+cu134 is in the managed venv)
+1. In progress (agents): rfcat, Cynthion, pymp305 0.6.4 fixes (torch 2.15.0+cu134 is in the managed venv)
 2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
 3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
 4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
@@ -336,3 +336,4 @@ Next:
 148. update screenshot and docs
 149. cynthion, luna
 150. qrp good for this? (answered: yes for the shell; keep hot paths imperative; proposed raw/shallow state, append-friendly lists, scheduler, thunk warnings)
+151. yes: fix the pymp305 issues found (program end marker, frame length wrap, BLE parity, set_output mode switch) and release 0.6.4
