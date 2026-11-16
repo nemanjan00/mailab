@@ -31,7 +31,8 @@ const DRIVERS = [
 	require("./flashrom"),
 	require("./minipro"),
 	require("./cynthion"),
-	require("./vnc")
+	require("./vnc"),
+	require("./nanokvm")
 ];
 
 const devices = {

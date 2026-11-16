@@ -10,7 +10,7 @@
 // it in the chat pane. Default policy: power outputs on, voltage above 5 V,
 // PTT, glitch campaigns, pairing, chip write/erase (flashrom, minipro), MP305
 // mode / USB-PD / program changes, RfCat TX / replay / TX power, Cynthion
-// emulation / gateware / flash.
+// emulation / gateware / flash, NanoKVM power buttons / virtual media mount.
 
 const randomUUID = require("crypto").randomUUID;
 const math = require("../math");
@@ -44,7 +44,9 @@ const DEFAULT_POLICY = [
 	{ driver: "rfcat", command: "power", reason: "changes the RfCat TX power" },
 	{ driver: "cynthion", command: "emulate", reason: "connects an emulated USB device (Facedancer) to the target host; may load the facedancer gateware" },
 	{ driver: "cynthion", command: "gateware", reason: "reconfigures the Cynthion FPGA (facedancer also rewrites the SoC firmware flash region; custom bitstreams run as given)" },
-	{ driver: "cynthion", command: "flash", reason: "overwrites the Cynthion's configuration flash" }
+	{ driver: "cynthion", command: "flash", reason: "overwrites the Cynthion's configuration flash" },
+	{ driver: "nanokvm", command: "power", reason: "presses the target machine's ATX power / reset button (NanoKVM)" },
+	{ driver: "nanokvm", command: "iso_mount", reason: "attaches a disk image to the target machine (NanoKVM virtual media)" }
 ];
 
 const policyKey = (p) => [p.driver || "", p.device || "", p.command, p.when || ""].join("|");

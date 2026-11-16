@@ -90,6 +90,24 @@ const raster = {
 		"-resize", (zoom * 100).toFixed(3) + "%", "png:-"]),
 
 	/**
+	 * Decode an image (PNG, JPEG, ...) to packed 8-bit RGB.
+	 * @param {Buffer} data
+	 * @returns {Promise<{width: number, height: number, channels: number, data: Buffer}>}
+	 */
+	rgb: (data) => {
+		const kind = raster.sniff(data);
+		if (!kind || !kind.width || !kind.height) {
+			return Promise.reject(new Error("unrecognized image"));
+		}
+		return magick([kind.ext + ":-", "-depth", "8", "rgb:-"], data).then((out) => {
+			if (out.length !== kind.width * kind.height * 3) {
+				throw new Error("decoded " + out.length + " bytes, expected " + kind.width + "x" + kind.height + "x3");
+			}
+			return { width: kind.width, height: kind.height, channels: 3, data: out };
+		});
+	},
+
+	/**
 	 * Draw overlay primitives on a PNG.
 	 * @param {Buffer} png
 	 * @param {Array<{stroke: string, fill: string, width: number, draw: string}>} items
