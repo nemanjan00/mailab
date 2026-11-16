@@ -39,10 +39,11 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | markdown panes (+ KaTeX) | 🟡 | done: rendering, editing, AI `note` tool. Planned: live values inside notes (`{{channel}}`, `{{= expr}}`) |
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
 | Kaitai view | ✅ | lab blobs (devices/AI/upload) + server-side Kaitai (compiler in debug mode): field tree with byte ranges + hex dump with highlight; MCP `blob_write`/`blob_read`/`kaitai_parse` |
+| Log classification (reference: diversity-classifier) | ⬜ | github.com/nemanjan00/diversity-classifier as reference: device logs / serial consoles / glitch-target replies → templates; the AI sees only unmatched clusters + aggregates/alarms; also replaces the generic glitch reply classes |
 | Shared terminals (shell-session-mcp) | ⬜ | github.com/nemanjan00/shell-session-mcp: PTY sessions (bash, gdb, openocd, serial consoles) as a `shell` device + terminal pane (xterm.js), driven by both the user and the AI; output pushes like its `notifications/message` events |
 | protokai (.proto → .ksy) in the Kaitai view | ⬜ | github.com/nemanjan00/protokai: kaitai pane/`kaitai_parse` accept `proto` → protokai → .ksy (needs multi-file .ksy imports in the Kaitai loader) → parse protobuf blobs with field names |
 | Readings table for spectrum markers | ✅ | trace pane `markers` (peak / fixed x / Δ to another marker), `peaks: N` auto peaks, shift-click adds, × removes |
-| findus map preview | ⬜ | binned delay × length heatmap of glitch results (success rate per cell), like findus' own web view |
+| findus map preview | ✅ | trace pane `view: "map"` on scatter datasets: delay × length grid, colour = success rate, opacity = attempts, best cell in the legend |
 | audio output | ✅ | audio pane plays lab audio streams (WebAudio); flowgraph `audio` sink |
 | webcam / Linux video input: live stream + snapshot | ✅ | V4L2 (ffmpeg) device: stream into an image/video pane, `snapshot` returns the image to the AI. Also the EVGA XR1 HDMI capture on `lab` |
 | flowgraph editor | ✅ | live rates/errors, add/connect/edit/remove blocks |
@@ -113,7 +114,6 @@ Done so far (in order): core, 21 drivers, flowgraph DSP, batch, multi-instance, 
 Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurements.
 
 Next:
-2. findus map preview (delay × length heatmap)
 3. Markdown live values (`{{channel}}`, `{{= expr}}`)
 4. MHO900 siggen; Soapy TX block with an allow-TX + power gate
 5. Drivers: nRF52840 modem, Bus Pirate, minipro, Glasgow, ChipWhisperer Husky, uhubctl, system monitor (nvtop-like), InfiRay P2 Pro, rtl_power
@@ -192,3 +192,4 @@ Next:
 66. https://github.com/nemanjan00/protokai
 67. https://github.com/nemanjan00/shell-session-mcp
 68. https://github.com/nemanjan00/cw-scope as reference, not direct integration
+69. also reference https://github.com/nemanjan00/diversity-classifier

@@ -143,6 +143,71 @@ export const drawEye = (canvas, tr, color) => {
 	c.g.globalAlpha = 1;
 };
 
+/**
+ * findus-style parameter map of a scatter dataset: delay × length grid,
+ * cell colour = share of `success` attempts, opacity = attempts in the cell.
+ * @param {{bins: number, success: string}} [opts]
+ */
+export const drawMap = (canvas, tr, color, opts) => {
+	const o = opts || {};
+	const c = setup(canvas);
+	const points = tr.series.reduce((acc, s) => {
+		return acc.concat(s.y.map((y, i) => ({ x: s.x[i], y: y, cls: s.label })));
+	}, []);
+	if (!points.length) {
+		return;
+	}
+	const target = o.success || "success";
+	const bins = Number(o.bins) || 40;
+	const rx = extent(points.map((p) => p.x));
+	const ry = extent(points.map((p) => p.y));
+	const box = { l: 56, r: c.w - 100, t: 20, b: c.h - 28 };
+	const m = axes(c.g, box, rx, ry, { x: tr.xUnit, y: tr.yUnit });
+	const rows = Math.max(4, Math.round(bins * (box.b - box.t) / (box.r - box.l)));
+	const cells = {};
+	points.forEach((p) => {
+		const cx = Math.min(bins - 1, Math.floor((p.x - rx[0]) / (rx[1] - rx[0]) * bins));
+		const cy = Math.min(rows - 1, Math.floor((p.y - ry[0]) / (ry[1] - ry[0]) * rows));
+		const key = cx + ":" + cy;
+		const cell = cells[key] || (cells[key] = { n: 0, hit: 0, cx: cx, cy: cy });
+		cell.n++;
+		if (p.cls === target) {
+			cell.hit++;
+		}
+	});
+	const maxN = Object.values(cells).reduce((a, cell) => Math.max(a, cell.n), 1);
+	const cw = (box.r - box.l) / bins;
+	const ch = (box.b - box.t) / rows;
+	const hot = cssVar("--err");
+	const cold = cssVar("--c1");
+	Object.values(cells).forEach((cell) => {
+		const rate = cell.hit / cell.n;
+		c.g.globalAlpha = 0.25 + 0.75 * Math.sqrt(cell.n / maxN);
+		c.g.fillStyle = rate > 0 ? hot : cold;
+		if (rate > 0) {
+			// brighter = higher success rate
+			c.g.globalAlpha = Math.min(1, 0.35 + rate);
+		}
+		c.g.fillRect(box.l + cell.cx * cw, box.b - (cell.cy + 1) * ch, cw - 1, ch - 1);
+	});
+	c.g.globalAlpha = 1;
+	// legend
+	c.g.fillStyle = cssVar("--text");
+	const best = Object.values(cells).filter((cell) => cell.hit).sort((a, b) => b.hit / b.n - a.hit / a.n)[0];
+	c.g.fillText(points.length + " attempts", box.r + 8, box.t + 10);
+	c.g.fillStyle = hot;
+	c.g.fillText(target, box.r + 8, box.t + 28);
+	c.g.fillStyle = cold;
+	c.g.fillText("none", box.r + 8, box.t + 44);
+	if (best) {
+		c.g.fillStyle = cssVar("--muted");
+		c.g.fillText("best " + Math.round(best.hit / best.n * 100) + "%", box.r + 8, box.t + 62);
+		c.g.fillText("x≈" + eng(rx[0] + (best.cx + 0.5) * (rx[1] - rx[0]) / bins, 0), box.r + 8, box.t + 76);
+		c.g.fillText("y≈" + eng(ry[0] + (best.cy + 0.5) * (ry[1] - ry[0]) / rows, 0), box.r + 8, box.t + 90);
+	}
+	return m;
+};
+
 export const CANVAS_MODES = {
 	scatter: drawScatter,
 	constellation: drawConstellation,

@@ -23,7 +23,10 @@ const TYPES = {
 			yMin: "",
 			yMax: "",
 			markers: "[{mode: \"peak\" | \"x\", x, trace, series, ref}] markers with a readings table (ref = index of another marker for Δ); users shift-click to add",
-			peaks: "N: also mark the N highest peaks"
+			peaks: "N: also mark the N highest peaks",
+			view: "\"map\" for scatter traces: findus-style parameter map (grid coloured by success rate)",
+			bins: "map columns (default 40)",
+			success: "class counted as success in the map (default \"success\")"
 		}
 	},
 	waterfall: {

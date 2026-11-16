@@ -3,7 +3,7 @@
 // constellation, eye diagram.
 
 import { axisStyle, eng, frameThrottle } from "./util.js";
-import { CANVAS_MODES } from "./plot2d.js";
+import { CANVAS_MODES, drawMap } from "./plot2d.js";
 import { computeReadings, drawMarkers, measurementsTable, readingsTable } from "./markers.js";
 
 const LEGEND_HEIGHT = 28;
@@ -140,7 +140,10 @@ export default {
 				signature = "";
 				return;
 			}
-			const draw = CANVAS_MODES[trs[0].mode];
+			let draw = CANVAS_MODES[trs[0].mode];
+			if (trs[0].mode === "scatter" && pane.config.view === "map") {
+				draw = drawMap;
+			}
 			// rebuild uPlot only when the series layout changes
 			const sig = JSON.stringify(trs.map((tr) => [tr.name, tr.mode, tr.series.map((s) => s.label)])) + document.documentElement.dataset.theme;
 			if (draw) {
@@ -150,7 +153,7 @@ export default {
 					canvas.className = "full";
 					body.appendChild(canvas);
 				}
-				draw(canvas, trs[0], ctx.color);
+				draw(canvas, trs[0], ctx.color, pane.config);
 				signature = "";
 				return;
 			}
