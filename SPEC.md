@@ -140,7 +140,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | Harogic HTRA spectrum analyzer | 🟡 | `harogic` driver: sweep → `spectrum` trace via vendor `libhtraapi` (ctypes, struct layouts checked against `htra_api.h` with the C compiler). Library from SAStudio4 on `lab` (desktop shortcut → `~/sastudio/SAStudio4_x86_64_4.4.55.50`). Device not on `lab`'s USB at the time; not run yet. Next: IQ streaming (IQS) as a flowgraph source |
 | DeepAce KC901K / KC908V | ⬜ | handheld RF analyzers, same vendor as the KC9531B (try its framing: 0xFE header + sum checksum); sweeps → spectrum trace |
 | ThunderScope | ⬜ | open-source 4-ch 1 GS/s PCIe/Thunderbolt scope; TS.NET SCPI + waveform data socket (as used by ngscopeclient) → traces, scope measurements, triggers |
-| NanoKVM(+) | ⬜ | IP-KVM as an instrument: HDMI screen (MJPEG stream → image pane, snapshot to the AI), USB keyboard/mouse (type text, keys), ATX power/reset; via its HTTP/WebSocket API |
+| NanoKVM / NanoKVM+ (Sipeed) | ⬜ in progress (agent) | IP-KVM as an instrument via its HTTP/WebSocket API: HDMI screen (MJPEG/H.264 → `<id>_screen` images at N fps, snapshot to the AI, vision watches), USB keyboard/mouse (type text, key combos, absolute click/move/drag — same command set as the `vnc` device so the AI drives either the same way), wait-for-screen-change, ATX power/reset/long-press (approval-gated), virtual media / mounted ISO, status (LEDs, resolution); a `kvm` pane (live screen + keyboard/mouse for people) |
 | JTAGulator | ⬜ | serial CLI: JTAG/SWD/UART pin discovery (IDCODE/BYPASS scans) → results as values |
 | J-Link | ⬜ | JLinkExe / pylink: connect, read/write memory, flash, halt/run, RTT → log |
 | OpenOCD | ⬜ | Tcl RPC (port 6666) / telnet: targets, mem read/write (dumps → blobs), flash, reset/halt |
@@ -175,7 +175,7 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. In progress (agents): pymp305 0.6.4 fixes, flowgraph block docs (torch 2.15.0+cu134 is in the managed venv)
+1. In progress (agents): pymp305 0.6.4 fixes, flowgraph block docs, NanoKVM (torch 2.15.0+cu134 is in the managed venv)
 2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
 3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
 4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
@@ -339,3 +339,4 @@ Next:
 151. yes: fix the pymp305 issues found (program end marker, frame length wrap, BLE parity, set_output mode switch) and release 0.6.4
 152. make docs for each block, with screenshot and use example; docs/ markdowns, dir per block
 153. reviewer: torch install could pick PyPI's CPU 2.15.0 and resolve unpinned deps across two indexes → torch==2.15.0+cu134, --index-url for that step, constraints file with the exact dependency closure
+154. nanokvm+ from sipeed
