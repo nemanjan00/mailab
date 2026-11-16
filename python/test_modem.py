@@ -45,24 +45,38 @@ def check(name, value, limit):
     print("ok %-7s BER %.2e" % (name, value))
 
 
-for scheme, snr, bw in LINEAR:
-    rx = awgn(tx(M.LinearModulator(scheme, 8)), snr)
-    sync = dsp.SymbolSync(8, bandwidth=bw)
-    m = dsp.Modem(scheme)
-    bits, _ = M.linear_demod_bits(m, chunks(rx, sync.process)[400:], scheme)
-    check(scheme, ber(bits), 1e-3)
+def test_linear():
+    for scheme, snr, bw in LINEAR:
+        rx = awgn(tx(M.LinearModulator(scheme, 8)), snr)
+        sync = dsp.SymbolSync(8, bandwidth=bw)
+        m = dsp.Modem(scheme)
+        bits, _ = M.linear_demod_bits(m, chunks(rx, sync.process)[400:], scheme)
+        check(scheme, ber(bits), 1e-3)
 
-for scheme, snr, limit in CPFSK:
-    mod = M.CpfskModulator(scheme, 8)
-    rx = awgn(tx(mod), snr)
-    d, g = M.Discriminator(8, mod.h), M.Gardner(8)
-    sym = chunks(rx, lambda c: g.process(d.process(c)))[200:]
-    check(scheme, ber(M.LevelSlicer(4 if scheme == "4fsk" else 2).process(sym)), limit)
 
-rx = awgn(tx(M.LinearModulator("ook", 8)), 20)
-g = M.Gardner(8, 0.005, dc_block=True)
-check("ook", ber(M.LevelSlicer(2).process(chunks(np.abs(rx), g.process)[200:])), 1e-3)
+def test_cpfsk():
+    for scheme, snr, limit in CPFSK:
+        mod = M.CpfskModulator(scheme, 8)
+        rx = awgn(tx(mod), snr)
+        d, g = M.Discriminator(8, mod.h), M.Gardner(8)
+        sym = chunks(rx, lambda c, d=d, g=g: g.process(d.process(c)))[200:]
+        check(scheme, ber(M.LevelSlicer(4 if scheme == "4fsk" else 2).process(sym)), limit)
 
-bits = np.concatenate([rng.integers(0, 2, 100, dtype=np.uint8), M.unpack_bits(b"\x2d\xd4"), M.unpack_bits(b"hi!")])
-assert M.find_sync(bits, M.unpack_bits(b"\x2d\xd4")) == [100]
-print("ok sync")
+
+def test_ook():
+    rx = awgn(tx(M.LinearModulator("ook", 8)), 20)
+    g = M.Gardner(8, 0.005, dc_block=True)
+    check("ook", ber(M.LevelSlicer(2).process(chunks(np.abs(rx), g.process)[200:])), 1e-3)
+
+
+def test_sync():
+    bits = np.concatenate([rng.integers(0, 2, 100, dtype=np.uint8), M.unpack_bits(b"\x2d\xd4"), M.unpack_bits(b"hi!")])
+    assert M.find_sync(bits, M.unpack_bits(b"\x2d\xd4")) == [100]
+    print("ok sync")
+
+
+if __name__ == "__main__":
+    test_linear()
+    test_cpfsk()
+    test_ook()
+    test_sync()

@@ -13,6 +13,7 @@ const EventEmitter = require("events");
 const channelsModule = require("../channels");
 const devices = require("../devices");
 const math = require("../math");
+const plotModule = require("../plot");
 const panesModule = require("../panes");
 const storeModule = require("../store");
 
@@ -541,18 +542,40 @@ const create = (options) => {
 		 * Evaluate an expression; each channel symbol is the vector of its
 		 * last `samples` values, each trace symbol is {x, y} of its first series.
 		 */
-		evaluate: (expression, options) => {
+		/**
+		 * Scope for expressions: each channel symbol is the vector of its last
+		 * `samples` values, each trace symbol is {x, y} of its first series
+		 * (`<name>_x` for x).
+		 */
+		scopeFor: (symbols, options) => {
 			const opts = options || {};
 			const scope = {};
-			math.symbols(expression).forEach((symbol) => {
+			symbols.forEach((symbol) => {
+				const base = symbol.replace(/_x$/, "");
 				if (channels.has(symbol)) {
 					scope[symbol] = channels.read(symbol, { last: opts.samples || 1000, seconds: opts.seconds }).v;
 				} else if (traces[symbol]) {
 					scope[symbol] = traces[symbol].series[0].y;
-					scope[symbol + "_x"] = traces[symbol].x;
+				} else if (traces[base]) {
+					scope[symbol] = traces[base].x;
 				}
 			});
-			return math.evaluate(expression, scope);
+			return scope;
+		},
+
+		evaluate: (expression, options) => {
+			return math.evaluate(expression, lab.scopeFor(math.symbols(expression), options));
+		},
+
+		/**
+		 * Graphing calculator; see src/plot. `name` also stores the result as a trace.
+		 */
+		plot: (spec, name) => {
+			const result = plotModule.plot((symbols) => lab.scopeFor(symbols, { samples: spec.samples }), spec);
+			if (name) {
+				lab.setTrace(name, result, spec.source || "plot");
+			}
+			return result;
 		},
 
 		defineDerived: (name, expression, unit) => {

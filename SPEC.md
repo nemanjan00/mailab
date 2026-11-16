@@ -28,6 +28,14 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
 | HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
 | Collab chat (web UI + MCP) with MCP push notifications | ✅ | chat pane (markdown/KaTeX) + `chat_send`/`chat_read`, persisted; push: stdio channel bridge `bin/channel.js` (`notifications/claude/channel`, verified end to end: push in, reply out); HTTP sessions get `notifications/message`. Claude Code channels are stdio-only research preview |
+| Server-enforced safety rules | ⬜ | rules as math over channels, checked on every sample by the server (so they hold even if the AI is wrong or slow): `mdp_i > 0.5 → mdp output off`, `pg target silent 5 s → uhubctl cycle`. Fills the "lab-wide safety policy" gap. **Priority, pairs with approvals** |
+| Approve-in-UI for risky commands | ⬜ | a third outcome besides refuse/run: the AI asks, an Approve/Deny card appears in the chat pane (output above X V, PTT, arming a glitch, pairing…). Same "owner approval per write" rule as in mdp-p906. **Priority** |
+| Generic sweep & optimize | ⬜ | generalize the glitch campaign: sweep any setpoints (P906 voltage, SoapySDR frequency, a delay) against any measured result → map view + narrowing search. Brown-out profiling = one call (lower V until the target UART stops answering) |
+| One timebase across instruments | ⬜ | samples carry host time, so PSU/scope/logic drift by ms; a sync pulse every instrument sees aligns them (matters for glitching and power analysis) |
+| Record & replay as a device | ⬜ | save a session's channels/traces/logs, play it back as a fake instrument: test panes and AI workflows without the bench, CI on real data, live demos without hardware |
+| Experiment journal with evidence tags | ⬜ | each batch/run stores device options, setpoints and data; AI conclusions in notes link to their data and get tagged [HW] automatically, or [INF] when nothing backs them (the mdp-p906 convention, enforced); export a run to markdown |
+| Binary diff for blobs | ⬜ | two dumps side by side in the Kaitai view (flash before/after a glitch, config before/after pairing), changed ranges mapped to fields; pairs with minipro/flashrom dumps |
+| Test automation for python | ✅ | `python/test_modem.py` is pytest-style (4 tests) and runs from jest (`src/devices/flowgraph/__tests__/modem.test.js`), so the pre-commit hook covers the BER regression; skipped when numpy/liquid-dsp are missing |
 | Run on the lab host `nemanjan00@10.69.1.91` (`lab`) | ⬜ | Feather nRF52840, EVGA XR1 capture, sigrok, minipro and hackrf live there. Options: run mailab there, or add remote device agents. **Needs a decision** |
 
 ## 2. Panes / views
@@ -60,7 +68,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | liquid-dsp | ✅ | ctypes bindings (`python/liquid_dsp.py`): resampler, NCO, FIR, AGC, FM/AM/SSB demod, RRC interp, symbol sync, modem + EVM |
 | Composable components, GNU Radio-like | ✅ | `flowgraph` device: blocks + links, persisted, editable live by the user and the AI |
 | Scriptable blocks | ✅ | `python` block: `work(x, rate)` with numpy/dsp |
-| Modem toolkit, all common modulations (✅ BER-tested: bpsk qpsk psk8 apsk16 qam4/8/16/64/128/256 sqam32/128 2fsk msk gfsk 4fsk ook; ⚠ qam32 open: EVM −18 dB after symbol sync; GMSK needs a Viterbi detector): analog AM/DSB/SSB/FM/PM; digital OOK/ASK, 2/4-FSK, GFSK, MSK, GMSK, BPSK…PSK, QAM up to 256, APSK, DPSK; BER; sync; clock recovery; bit streams | 🟡 | flowgraph blocks: bit sources (PRBS/pattern/text), modulators, AWGN/CFO channel, FSK/OOK demod, clock recovery (Gardner/M&M on real signals; symbol_sync for linear), slicer → bits, sync-word framing, BER meter (PRBS self-sync), bit-stream sinks (value/blob) |
+| Modem toolkit, all common modulations (✅ BER-tested in `yarn test`/husky via jest + pytest: bpsk qpsk psk8 apsk16 qam4/8/16/64/128/256 sqam32/128 2fsk msk gfsk 4fsk ook; ⚠ qam32 open: EVM −18 dB after symbol sync; GMSK needs a Viterbi detector): analog AM/DSB/SSB/FM/PM; digital OOK/ASK, 2/4-FSK, GFSK, MSK, GMSK, BPSK…PSK, QAM up to 256, APSK, DPSK; BER; sync; clock recovery; bit streams | 🟡 | flowgraph blocks: bit sources (PRBS/pattern/text), modulators, AWGN/CFO channel, FSK/OOK demod, clock recovery (Gardner/M&M on real signals; symbol_sync for linear), slicer → bits, sync-word framing, BER meter (PRBS self-sync), bit-stream sinks (value/blob) |
 | OpenCV | ⬜ | image processing on camera/KVM frames: read instrument displays/LEDs, detect, measure; results as channels/values |
 | Analog video decode | ⬜ | PAL/NTSC composite from SDR/scope samples (e.g. FM-demodulated FPV): H/V sync detection, line assembly → image frames in the image pane |
 | libsigrokdecode for external inputs | ⬜ | run sigrok protocol decoders (uart, spi, i2c, manchester, …) on bits/logic from any source (flowgraph bit streams, scope captures, blobs) via `sigrok-cli -I binary` + `-P`; flowgraph `decode` sink + MCP tool; annotations → log/value |
@@ -68,7 +76,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
-| Graphing calculator / matplotlib-like plots | ⬜ | `graph` pane + MCP `plot`: y = f(x) over a range (several functions, mathjs), parametric, and expressions over lab data (`mag(fft(scope_ch1))`, `db(...)`) plotted against x or index; axes/labels/log scales |
+| Graphing calculator / matplotlib-like plots | ✅ | `graph` pane (editable expressions, range, live refresh; edits saved to the pane config) + MCP `plot` → trace (`plot` mode, canvas, matplotlib-style): functions of x, parametric `x(t); y(t)`, data expressions (`db(mag(fft(ch)))`) against index. Next: log scales, axis labels per series, subplots |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
 | TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
 | Scope: triggered display + max/min hold + averaging | ✅ | flowgraph `scope` sink: trigger rising/falling/none, level, auto/normal, pretrigger; traces live/max/min/avg; complex input → real/imag/mag |
@@ -131,15 +139,18 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 ## 6. Order of work from here
 
 Done so far (in order): core, 21 drivers, flowgraph DSP, batch, multi-instance, Dracula, camera, markers/readings,
-Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurements.
+Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurements, Kaitai, findus map, collaboration
+(tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-3. Markdown live values (`{{channel}}`, `{{= expr}}`)
-4. MHO900 siggen; Soapy TX block with an allow-TX + power gate
-5. Drivers: nRF52840 modem, Bus Pirate, minipro, Glasgow, ChipWhisperer Husky, uhubctl, system monitor (nvtop-like), InfiRay P2 Pro, rtl_power
-6. Digital analysis: FSK/GFSK, baud estimation, bit/packet output
-7. Harogic IQ streaming source; MHO900 VXI-11 transport
-8. Optional WebGPU renderers; native hot loops (then VOLK)
+1. Safety rules + approve-in-UI (makes unattended AI-on-the-bench safe)
+2. Blob analysis: entropy, `file`, binwalk, binary diff; then flashrom/minipro/OpenOCD dumps into it
+3. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
+4. Finish the qrp/SDK migration of the remaining panes; markdown live values
+5. MHO900 siggen; Soapy TX block with an allow-TX + power gate
+6. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, uhubctl, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, NanoKVM, ThunderScope, KC901K/KC908V
+7. Shared terminals (shell-session-mcp), protokai, log classification, OpenCV, analog video, journal, timebase
+8. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
 9. Deployment on `lab`: waiting on your decision
 
 ## Appendix: requests in order (this session)
@@ -228,3 +239,6 @@ Next:
 82. all different qam sizes
 83. reviewer: fixes confirmed on a live server; ?token= in URLs leaks into history/proxy logs
 84. matplotlib like feature, graphing calc
+85. reviewer ideas: server-enforced safety rules, approve-in-UI, generic sweep/optimize, one timebase, record/replay device, evidence-tagged journal, binary diff
+86. reviewer: stray `__tests__.tmp` committed; test_modem.py not run by pytest or the pre-commit hook
+87. update spec

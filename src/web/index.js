@@ -136,6 +136,10 @@ const api = (lab) => {
 		return lab.commandDevice(req.params.id, req.body.command, req.body.args || {});
 	}));
 
+	router.post("/plot", route((req) => {
+		return lab.plot(req.body);
+	}));
+
 	router.post("/derived", route((req) => {
 		return lab.defineDerived(req.body.name, req.body.expression, req.body.unit);
 	}));
@@ -251,7 +255,7 @@ const attachSockets = (server, lab, pushIntervalMs, auth) => {
  * @returns {{app: Object, server: http.Server}}
  */
 // REST calls that only read even though they POST
-const READ_POSTS = ["/eval", "/kaitai", "/chat"];
+const READ_POSTS = ["/eval", "/kaitai", "/chat", "/plot"];
 
 const create = (lab, options) => {
 	const app = express();

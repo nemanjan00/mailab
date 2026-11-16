@@ -208,7 +208,78 @@ export const drawMap = (canvas, tr, color, opts) => {
 	return m;
 };
 
+/**
+ * matplotlib-style x/y lines; every series has its own x (functions,
+ * parametric curves, data), nulls break the line.
+ */
+export const drawPlot = (canvas, tr, color) => {
+	const c = setup(canvas);
+	const xs = [];
+	const ys = [];
+	tr.series.forEach((s) => {
+		(s.x || tr.x).forEach((x, i) => {
+			if (x !== null && s.y[i] !== null && Number.isFinite(x) && Number.isFinite(s.y[i])) {
+				xs.push(x);
+				ys.push(s.y[i]);
+			}
+		});
+	});
+	if (!xs.length) {
+		return;
+	}
+	const box = { l: 56, r: c.w - 12, t: 24, b: c.h - 28 };
+	const m = axes(c.g, box, extent(xs), extent(ys), { x: tr.xUnit || "x", y: tr.yUnit || "y" });
+	// zero axes, like a graphing calculator
+	c.g.strokeStyle = cssVar("--muted");
+	c.g.beginPath();
+	const x0 = m.px(0);
+	const y0 = m.py(0);
+	if (x0 >= box.l && x0 <= box.r) {
+		c.g.moveTo(x0, box.t);
+		c.g.lineTo(x0, box.b);
+	}
+	if (y0 >= box.t && y0 <= box.b) {
+		c.g.moveTo(box.l, y0);
+		c.g.lineTo(box.r, y0);
+	}
+	c.g.stroke();
+	c.g.save();
+	c.g.beginPath();
+	c.g.rect(box.l, box.t, box.r - box.l, box.b - box.t);
+	c.g.clip();
+	tr.series.forEach((s, k) => {
+		c.g.strokeStyle = color(k);
+		c.g.lineWidth = 1.6;
+		c.g.beginPath();
+		let pen = false;
+		(s.x || tr.x).forEach((x, i) => {
+			const y = s.y[i];
+			if (x === null || y === null || !Number.isFinite(x) || !Number.isFinite(y)) {
+				pen = false;
+				return;
+			}
+			if (pen) {
+				c.g.lineTo(m.px(x), m.py(y));
+			} else {
+				c.g.moveTo(m.px(x), m.py(y));
+				pen = true;
+			}
+		});
+		c.g.stroke();
+	});
+	c.g.restore();
+	let lx = box.l + 60;
+	tr.series.forEach((s, k) => {
+		c.g.fillStyle = color(k);
+		c.g.fillRect(lx, 8, 10, 3);
+		c.g.fillStyle = cssVar("--text");
+		c.g.fillText(s.label, lx + 14, 13);
+		lx += c.g.measureText(s.label).width + 30;
+	});
+};
+
 export const CANVAS_MODES = {
+	plot: drawPlot,
 	scatter: drawScatter,
 	constellation: drawConstellation,
 	eye: drawEye

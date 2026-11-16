@@ -25,8 +25,9 @@ import json from "./panes/json.js";
 import flowgraph from "./panes/flowgraph.js";
 import kaitai from "./panes/kaitai.js";
 import chat from "./panes/chat.js";
+import graph from "./panes/graph.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;

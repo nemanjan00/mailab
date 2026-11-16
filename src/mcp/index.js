@@ -340,6 +340,23 @@ const create = (lab, context) => {
 		return lab.evaluate(a.expression, { samples: a.samples, seconds: a.seconds });
 	});
 
+	tool("plot", "Graphing calculator: plot mathjs expressions as trace `name` (show it with a trace pane). "
+		+ "\"sin(x)*exp(-x/5)\" over [xmin, xmax]; parametric {x: \"cos(t)\", y: \"sin(2*t)\"} over [tmin, tmax]; "
+		+ "data expressions without x (e.g. \"db(mag(fft(scope_ch1)))\") plot against their index", {
+		name: z.string().describe("trace name for the result"),
+		exprs: z.array(z.union([z.string(), z.object({ x: z.string(), y: z.string(), label: z.string().optional() })])),
+		xmin: z.number().optional(),
+		xmax: z.number().optional(),
+		tmin: z.number().optional(),
+		tmax: z.number().optional(),
+		points: z.number().optional(),
+		xUnit: z.string().optional(),
+		yUnit: z.string().optional()
+	}, (a) => {
+		const result = lab.plot(Object.assign({ source: "ai" }, a), a.name);
+		return { trace: a.name, series: result.series.map((s) => ({ label: s.label, points: s.y.length })) };
+	});
+
 	tool("math_derive", "Define a derived channel computed per sample from latest values of other channels, e.g. psu_v * psu_i", {
 		name: z.string(),
 		expression: z.string(),
