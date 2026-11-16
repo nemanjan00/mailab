@@ -128,7 +128,8 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | MHO900 signal generator | ⬜ | `:SOURce` commands in the mho900 preset |
 | DeepAce KC9531B | 🟡 | |
 | Icom CI-V (ci-v) | 🟡 | cloned to `~/ci-v`, packaged as **icom-ci-v** (npm refused `ci-v` as too similar to `civ`). npm shows the staged `0.0.0-stage`, waiting for publish approval on npmjs.com |
-| tinySA Ultra | 🟡 | protocol from docs |
+| tinySA / tinySA Ultra | 🟡 in progress (agent) | `tinysa` driver (USB serial shell): sweep/scan → `spectrum` trace (dBm), configurable start/stop/points/RBW, markers → readings, calibration/level output, device info; hardened from the actual firmware shell (`scanraw`, `data`, `sweep`, `marker`). Ultra vs basic differences handled. Untested on hardware |
+| NanoVNA (H / H4, shell protocol) | ⬜ in progress (agent) | `nanovna` driver (USB serial shell, distinct from the binary `litevna`): `scan`/`frequencies`/`data 0|1` → S11 & S21, logmag / phase / Smith / VSWR traces, sweep range + points, calibration state read; markers → readings. Covers NanoVNA-H, H4, and shell-compatible clones |
 | LiteVNA 64 | 🟡 | protocol from docs |
 | HackRF / bladeRF | 🟡 | hackrf_sweep, soapy bridge, flowgraph source |
 | Proxmark3 / Proxmark5 (node-proxmark3) | ✅ | runs on the lab's PM5 (AT32F437, Iceman firmware from ~/pm5-og): `PM3_CLIENT` defaults to ~/pm5-og/client/proxmark3 when built; `match` {serial} picks the Proxmark by USB serial; start timeout kills a client that never starts. node-proxmark3 0.0.12 on npm lacks json.lua (ignored via .gitignore) → mailab adds a LUA_PATH shim (dkjson); fixed upstream in node-proxmark3 8a33621 (0.0.13, not yet published to npm) |
@@ -177,7 +178,7 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. In progress (agents): flowgraph block docs, NanoKVM, SDR TX (torch 2.15.0+cu134 is in the managed venv)
+1. In progress (agents): flowgraph block docs, SDR TX, OFDM, NanoVNA/tinySA (torch 2.15.0+cu134 is in the managed venv)
 2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
 3. MHO900 siggen
 4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
@@ -348,3 +349,4 @@ Next:
 158. commit that demo
 159. oh, use real wifi modulation (OFDM, not single-carrier QAM256)
 160. all-safety-bypass mode for a non-persistent env in an RF chamber
+161. nanovna, tinysa
