@@ -81,6 +81,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | OpenCV (vision on lab images / camera streams) | ⬜ in progress (agent) | `vision` service on any lab image or camera/KVM/browser/VNC frame stream: read instrument displays (7-segment / LCD digits, OCR via tesseract), LED state/blink → channels, regions of interest with thresholds → channels + events (watch a status LED, a needle, a screen region), change/motion detection triggers, template matching (find a button/icon on a VNC screen), contours/measure in px or mm (calibration card / ArUco), perspective warp & align (PCB photos onto a PDF for the tracing tool), color picking, annotate overlays. MCP tools + a ROI editor pane; opencv-python-headless pinned in the managed venv |
 | Realtime audio DSP + AI denoise | ⬜ in progress (agent) | flowgraph audio blocks usable live (mic, SDR demod, audio files): notch (fixed, multi-harmonic hum 50/60 Hz, auto-tracking tone notch), biquad filters (LP/HP/BP/shelf/peaking EQ), noise gate, compressor/limiter/AGC, spectral-subtraction noise reduction, de-click; neural denoise: DeepFilterNet on CUDA (RTX 5080) with RNNoise CPU fallback; NVIDIA Maxine Audio Effects as an optional backend when its SDK is installed (proprietary, not bundled). Latency budget per block, live parameter changes, before/after spectrum |
 | RfCat (YARD Stick One, CC1111 dongles) | ⬜ | `rfcat` driver via the rfcat python lib: sub-GHz (300-348 / 391-464 / 782-928 MHz) TX/RX with modulation (2FSK/GFSK/ASK-OOK/MSK), data rate, deviation, sync word, packet length / variable / CRC / Manchester, power; RX packets → lab events + value table + blob, RSSI → channel; spectrum sweep (specan) → spectrum trace; replay a captured packet; TX behind the approval policy + frequency allow-list (licensed bands) |
+| Cynthion (Great Scott Gadgets) + LUNA | ⬜ | USB 2.0 analyzer / emulator on LUNA gateware: `cynthion` driver for capture (Packetry-compatible pcap of target USB traffic → blob, live transactions → log/value table, decoded descriptors/requests; AI asks "what did the device enumerate as / which control transfers"), Facedancer device emulation (act as a USB device: HID keyboard, mass storage, fuzzing descriptors) with approval, USB-PD sniff (Cynthion's Type-C), and custom LUNA gateware build/flash for experiments; ties into the USB tree (which port the target sits on) |
 | Analog video decode | ⬜ | PAL/NTSC composite from SDR/scope samples (e.g. FM-demodulated FPV): H/V sync detection, line assembly → image frames in the image pane |
 | ngscopeclient decoders & blocks | ⬜ | reference/reuse libscopehal's filter catalog: CDR/PLL, TIE & jitter, eye masks, 8b/10b, Manchester, UART/SPI/I2C/CAN/USB/Ethernet, math filters; port key ones as flowgraph blocks or run libscopehal headless as a bridge |
 | MCP connection help in the UI | ✅ | the header's MCP address opens a modal: `claude mcp add` with this lab's URL, JSON config for other clients, token hint when auth is on, channel-bridge config, copy buttons |
@@ -174,7 +175,7 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. In progress (agents): MP305 → pymp305 0.6.3, OpenCV vision, audio DSP/denoise; torch (CUDA 13.4) into the managed venv
+1. In progress (agents): MP305 → pymp305 0.6.3, rfcat, Cynthion, OpenCV vision, audio DSP/denoise; torch (CUDA 13.4) into the managed venv
 2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
 3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
 4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
@@ -332,3 +333,5 @@ Next:
 145. reviewer: SSRF fix holds (every internal spelling blocked); gap: 6to4 2002::/16 embedding 127.0.0.1 counted as public → embedded IPv4 checked
 146. yes to both (publish pymp305 0.6.3 to PyPI, node-proxmark3 0.0.13 to npm)
 147. rfcat
+148. update screenshot and docs
+149. cynthion, luna

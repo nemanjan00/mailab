@@ -8,14 +8,22 @@ plus a live web UI where you watch, steer and collaborate with it.
 
 ## What's in it
 
-**Instruments** (21 drivers; any instrument can run as several instances):
-power supplies (Miniware MDP-P906, ISDT MP305), Rigol DM858E and MHO900 over
-SCPI, sigrok logic analyzers (Sipeed SLogic), RF (KC9531B power meter, tinySA
-Ultra, LiteVNA, Harogic HTRA), SDRs (HackRF, bladeRF, RTL-SDR via SoapySDR),
-Icom radios over CI-V, Proxmark3, PicoGlitcher (findus), webcams/V4L2 capture,
-serial gadgets, and any program that speaks JSON lines. A browser can be an
-instrument too: the capture pane streams a laptop's or phone's microphone and
-camera into the lab (see below).
+**Instruments** (28 drivers; any instrument can run as several instances):
+- **Power and meters:** Miniware MDP-P906, ISDT MP305, Rigol DM858E and
+  MHO900 over SCPI.
+- **Logic and RF:** sigrok logic analyzers (Sipeed SLogic), KC9531B power
+  meter, tinySA Ultra, LiteVNA, Harogic HTRA, `rtl_power` sweeps.
+- **SDRs and radios:** HackRF, bladeRF, RTL-SDR via SoapySDR; Icom radios over
+  CI-V.
+- **Security tools:** Proxmark3 / Proxmark5 (Iceman client), PicoGlitcher
+  (findus), flashrom and XGecu (minipro) programmers.
+- **Consoles:** USB-UART adapters (ttyUSB / ttyACM, Tigard, CP210x, CH340)
+  with a colored web terminal, and line-based serial gadgets.
+- **Screens and cameras:** webcams / V4L2, VNC remote desktops, the browser's
+  own mic and camera.
+- **Everything else:** a system monitor (CPU, memory, temperatures, GPU), a
+  replay device for recorded sessions, and any program that speaks JSON lines.
+
 [HW.md](HW.md) tracks what has been verified on hardware.
 
 **DSP flowgraph**: GNU Radio-style blocks (numpy + liquid-dsp) that you or
@@ -29,9 +37,15 @@ the AI wire up live:
   triggered scope with measurements (Vpp, RMS, frequency, duty…),
   constellation, eye diagram, level trigger, audio out, audio in (any lab
   audio stream, e.g. a browser mic), IQ over TCP/UDP.
+- **Decoders:** UART, SPI, I2C, Manchester built in, and any installed
+  libsigrokdecode decoder (stackable, e.g. spi + spiflash) on flowgraph bits,
+  captures or blobs.
+- **Audio files:** an `audio_file` source reads WAV/FLAC/MP3/… (ffmpeg).
 - **Scripting:** a `python` block for your own DSP.
 
-**Views**: configurable panes that you and the AI share:
+**Views**: configurable panes that you and the AI share, organized in
+dashboard tabs (rename, reorder, `#tab=` links), collapsible to their title
+bar or maximized to the window:
 - **Plots:** live charts, traces with spectrum markers and readings, waterfall,
   constellation, eye diagram, glitch scatter and findus-style parameter map.
 - **Math:** graphing calculator, live math (KaTeX), value readouts.
@@ -39,6 +53,16 @@ the AI wire up live:
   values), JSON view, Kaitai Struct view (parse binary blobs:
   field tree + hex).
 - **Lab:** flowgraph editor, audio, camera, device consoles, AI activity, lab chat.
+- **Hardware:** USB tree with per-port hub power (uhubctl) and in-app "udev
+  rules" that notify on matching devices; xterm.js serial terminal (Dracula
+  colors, raw keystrokes or line mode).
+- **Binary:** hex editor (jump expressions, poke / insert / delete with undo,
+  search & replace with `??` wildcards, data inspector, CRCs and hashes,
+  side-by-side diff), blob analysis (entropy, binwalk, `file`).
+- **Boards:** trace PCB copper over PDF pages and photos; nets, a schematic
+  graph and netlists come from the drawing.
+- **Tables** everywhere sort by value (engineering notation aware), filter and
+  export CSV / JSON; numeric setpoints open a tablet keypad with unit buttons.
 - **Remote desktops:** a `vnc` device + pane (noVNC) for legacy GUIs in
   emulators and VMs (e.g. a Windows 3.1 dealer programmer): you drive it in the
   pane, the AI uses screenshot / type / key / click / wait_change.
@@ -52,6 +76,15 @@ as internal photos and block diagrams, downloaded into the lab as blobs and
 page images) and a local datasheet DB (find PDFs online, full-text search with
 page numbers, rendered pages for pinouts and register maps), with a
 `datasheets` pane. Needs poppler (`pdftotext`, `pdftoppm`).
+
+**Media**: ffmpeg/sox decode and encode: audio files to raw PCM and back
+(wav/flac/mp3/ogg/opus), video to frames and frames to mp4/webm/gif.
+
+**Safety**: server-enforced rules on channels, an approval policy for risky
+commands (power on, TX, glitching, flashing, USB port power, profile
+overwrite), and an SSRF guard so web lookups only reach public addresses.
+
+![bench tab: USB-UART console, hex editor, USB tree](docs/screenshot-bench.png)
 
 **Collaboration**: several people and AIs on one lab. Optional
 read-write/read-only tokens, every AI call attributed in the activity feed, a
@@ -114,7 +147,10 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | `DATA_DIR` | `./data` | `lab.json`: devices, derived channels, panes, chat |
 | `CHANNEL_CAPACITY` | `200000` | samples kept per channel |
 | `MDP_HOST_PATH` / `CIV_PATH` | `~/mdp-p906/host` / `~/ci-v` | libraries loaded from checkouts |
-| `SIGROK_CLI` / `PM3_CLIENT` / `PYTHON` | `sigrok-cli` / `proxmark3` / `python3` | external tools |
+| `SIGROK_CLI` / `PM3_CLIENT` / `PYTHON` | `sigrok-cli` / `~/pm5-og/client/proxmark3` if built, else `proxmark3` / `python3` | external tools |
+| `MAILAB_MANAGE_PYTHON` | `1` | `0` = don't manage a venv |
+| `MAILAB_MEDIA_DIRS` | – | extra dirs media tools and flowgraph file blocks may read/write (`DATA_DIR/media` always) |
+| `MAILAB_HTTP_ALLOW` | – | local mirrors web lookups may reach (hosts, CIDRs); everything else must be a public address |
 | `FCCID_MAX_BYTES` / `DATASHEET_MAX_BYTES` | 30 MB / 50 MB | download caps |
 | `MOUSER_API_KEY`, `NEXAR_CLIENT_ID`+`NEXAR_CLIENT_SECRET`, `DIGIKEY_CLIENT_ID`+`DIGIKEY_CLIENT_SECRET`, `SEARXNG_URL` | – | optional datasheet search providers (off while unset) |
 
@@ -175,13 +211,21 @@ laptop), a phone needs https (e.g. a reverse proxy with a certificate).
 | Tool | |
 |---|---|
 | `lab_overview`, `lab_drivers` | what's in the lab, what can be added |
+| `lab_profiles`, `lab_save`, `lab_load` | save / load the whole setup; overwriting or loading waits for approval with a diff |
+| `safety_overview`, `rule_add`, `rule_remove` | server-side safety rules (conditions on channels → actions) and the approval policy |
 | `device_add/remove/start/stop`, `device_command`, `device_log` | instruments, including the flowgraph (`device_command fg blocks` lists its block catalog) |
 | `channel_read`, `channel_write` | time series (stats + downsampled data) |
 | `trace_read`, `trace_write`, `image_get` | captures, spectra, screenshots |
 | `math_eval`, `math_derive`, `math_remove`, `plot` | analysis and the graphing calculator |
-| `value_read`, `value_write`, `blob_write`, `blob_read`, `kaitai_parse` | JSON values, binary blobs, Kaitai parsing |
+| `value_read`, `value_write`, `blob_write`, `blob_read`, `blob_analyze`, `kaitai_parse` | JSON values, binary blobs, analysis, Kaitai parsing |
 | `blob_peek`, `blob_poke`, `blob_patch`, `blob_search`, `blob_replace`, `blob_checksum`, `blob_slice`, `blob_diff` | hex editing: typed reads / writes (u8…u64, f32/f64, LE/BE), poke / insert / delete / fill with undo ops, search & replace (hex `??` wildcards, text, regex), CRC-8/16/32 variants, sums, hashes, entropy; the `hex` pane is the same for people |
-| `pane_types`, `pane_add`, `pane_update`, `pane_remove`, `note` | the shared UI |
+| `pane_types`, `pane_add`, `pane_update`, `pane_tabs`, `pane_remove`, `note` | the shared UI (panes carry `tab` and `collapsed`) |
+| `usb_tree`, `usb_power`, `uart_ports` | USB tree (controllers, hubs, ports, drivers, /dev nodes, lab users), hub port power (approval), serial adapters with stable identities |
+| `udev_rules`, `udev_rule_add`, `udev_rule_remove` | in-app rules: get notified when a matching USB device appears, disappears or changes |
+| `subscribe`, `unsubscribe`, `subscriptions`, `notifications_read` | push lab events (rules, approvals, triggers, classifier clusters/matches, udev) into the MCP session |
+| `classifier_status`, `classifier_add`, `classifier_remove` | log line clustering and templates (counts and numbers become channels) |
+| `trend_read`, `trend_record` | long-term min/max/mean history (1 s … 1 h buckets, up to 2 years) |
+| `media_probe`, `audio_to_pcm`, `audio_encode`, `video_frames`, `video_encode` | ffmpeg/sox media decode and encode |
 | `chat_send`, `chat_read` | lab chat |
 | `batch` | many calls in one request, ~1 ms timing, loops, result references |
 | `sweep`, `optimize` | step 1-2 command parameters (linear/log/list) and tabulate channel readings; golden-section / hill-climb search for a min/max. One approval per plan when the policy matches |

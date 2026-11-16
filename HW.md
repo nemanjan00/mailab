@@ -1,9 +1,11 @@
 # Hardware TODO
 
-Status of every instrument mailab knows about. **Nothing here has been run
-against real hardware yet**, except the sigrok `demo` driver and the
-`process` driver with a fake helper. Drivers marked *protocol from docs* were
-written from documentation or memory; expect fixes on first contact.
+Status of every instrument mailab knows about. Run on real hardware so far:
+the **Proxmark5** (on this PC's USB), the **system monitor** (CPU, hwmon,
+NVIDIA GPU), the USB tree, webcams through the browser capture pane, and VNC
+against QEMU. Everything else is tested with fakes, emulators or dummy
+programmers only. Drivers marked *protocol from docs* were written from
+documentation or memory; expect fixes on first contact.
 
 Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · ⚠️ known gap
 
@@ -23,7 +25,17 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | LiteVNA 64 | `litevna` | NanoVNA-V2 binary protocol | V2 protocol docs | 🧪 *protocol from docs* |
 | HackRF One | `hackrf` | `hackrf_sweep` | – | 🧪 |
 | bladeRF / HackRF / RTL-SDR | `soapy` | SoapySDR + liquid-dsp | `python/soapy_bridge.py` | 🧪 (DSP ✅ on synthetic IQ) |
-| Proxmark3 | `proxmark3` | RRG client | `node-proxmark3` | 🧪 |
+| Proxmark3 / Proxmark5 | `proxmark3` | Iceman client (`~/pm5-og` build) | `node-proxmark3` ≥ 0.0.13 | ✅ PM5 (`hw version`, `hw status` over MCP; picked by USB serial) |
+| USB-UART adapters (Tigard port A, CP210x, CH340, FTDI, CDC-ACM) | `uart` | tty by stable identity | – | 🧪 (socat pty ✅) |
+| USB hubs (port power) | USB tree + `usb_power` | uhubctl | proxyslave inventory logic | 🧪 tree ✅ on this PC; no ppps hub / uhubctl here |
+| Web browser mic + camera | `browser` | getUserMedia over the UI WebSocket | – | ✅ headless Chrome fake media; 📝 real phone over https |
+| VNC desktops (emulators, VMs, KVMs) | `vnc` | RFB 3.3–3.8 | in-house client + noVNC | ✅ QEMU VNC with password; 📝 Win 3.1 DPGM session |
+| System monitor | `sysmon` | /proc, hwmon, nvidia-smi, amdgpu sysfs | – | ✅ CPU/mem/hwmon/NVIDIA; AMD GPU fixtures only |
+| RTL-SDR wideband sweeps | `rtl_power` | rtl_power / soapy_power | – | 🧪 (no dongle) |
+| SPI flash programmers | `flashrom` | flashrom CLI | – | ✅ flashrom dummy programmer (emulated W25Q128) |
+| XGecu T48/TL866 | `minipro` | minipro CLI | – | 🧪 info/search/presence run; programmer is on `lab` |
+| YARD Stick One / CC1111 | `rfcat` | rflib | – | 📝 in progress |
+| Cynthion (USB analyzer / Facedancer) | `cynthion` | LUNA gateware, cynthion / facedancer | – | 📝 in progress |
 | PicoGlitcher | `picoglitcher` | findus | `findus` (pip) | 🧪 |
 | Bus Pirate 5/6 | – | BPIO2 | buspirate skill | 📝 |
 | Harogic HTRA (SAE/SAM/SAN) | `harogic` | USB, vendor libhtraapi | `htra_api.h` (SDK 0.55.x) | 🧪 |
@@ -41,7 +53,8 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 - [ ] Multiple modules: one device per module address
 
 ### mp305
-- [ ] `pip install pymp305`, udev rule for the HID device
+- [x] pymp305 0.6.3 on PyPI (0xC2 state poll, USB-PD, programmable, BLE); driver update in progress
+- [ ] udev rule for the HID device
 - [ ] Check `read_state()` field names match `python/mp305_bridge.py` (voltage/current/power/temperature)
 - [ ] BLE variant (`MP305BLE`) as an option
 
