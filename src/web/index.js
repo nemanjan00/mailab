@@ -235,12 +235,18 @@ const attachSockets = (server, lab, pushIntervalMs, auth) => {
 		broadcast({ type: "activity", entry: entry });
 	});
 
-	setInterval(() => {
+	// unref: the push loop alone shouldn't keep the process (or a test worker) alive
+	const pusher = setInterval(() => {
 		const samples = lab.drainPending();
 		if (Object.keys(samples).length && wss.clients.size) {
 			broadcast({ type: "samples", samples: samples });
 		}
 	}, pushIntervalMs);
+	pusher.unref();
+	server.on("close", () => {
+		clearInterval(pusher);
+		wss.close();
+	});
 
 	wss.on("connection", (socket) => {
 		socket.send(JSON.stringify({ type: "state", state: lab.state() }));
