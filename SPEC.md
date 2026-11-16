@@ -272,3 +272,4 @@ Next:
 102. boardview like interface for pcb analysis, where something like pdf can be imported and drawn on, to trace schematics
 103. use ~/rib/docs PCB schematics as the sample for schematic and boardview reconstruction
 104. tigard
+105. update spec
