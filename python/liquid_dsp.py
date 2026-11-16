@@ -39,6 +39,10 @@ _freqdem_destroy = _sig("freqdem_destroy", _i, _p)
 _ampmodem_create = _sig("ampmodem_create", _p, _f, _i, _i)
 _ampmodem_block = _sig("ampmodem_demodulate_block", _i, _p, _p, _u, _p)
 _ampmodem_destroy = _sig("ampmodem_destroy", _i, _p)
+_ampmodem_mod_block = _sig("ampmodem_modulate_block", _i, _p, _p, _u, _p)
+_freqmod_create = _sig("freqmod_create", _p, _f)
+_freqmod_block = _sig("freqmod_modulate_block", _i, _p, _p, _u, _p)
+_freqmod_destroy = _sig("freqmod_destroy", _i, _p)
 _firfilt_create = _sig("firfilt_crcf_create_kaiser", _p, _u, _f, _f, _f)
 _firfilt_block = _sig("firfilt_crcf_execute_block", _i, _p, _p, _u, _p)
 _firfilt_destroy = _sig("firfilt_crcf_destroy", _i, _p)
@@ -171,6 +175,34 @@ class AmDemod(_Handle):
         x = _c64(x)
         y = np.empty(len(x), dtype=np.float32)
         _ampmodem_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
+        return y
+
+
+class AmMod(_Handle):
+    """Real audio -> AM/DSB/USB/LSB baseband."""
+    _destroy = staticmethod(_ampmodem_destroy)
+
+    def __init__(self, kind=AM_DSB, mod_index=0.8, suppressed_carrier=False):
+        self._q = _ampmodem_create(mod_index, kind, 1 if suppressed_carrier else 0)
+
+    def process(self, m):
+        m = np.ascontiguousarray(m, dtype=np.float32)
+        y = np.empty(len(m), dtype=np.complex64)
+        _ampmodem_mod_block(self._q, m.ctypes.data, len(m), y.ctypes.data)
+        return y
+
+
+class FmMod(_Handle):
+    """Real audio -> FM baseband with `deviation` Hz for |m| = 1."""
+    _destroy = staticmethod(_freqmod_destroy)
+
+    def __init__(self, deviation, rate):
+        self._q = _freqmod_create(deviation / rate)
+
+    def process(self, m):
+        m = np.ascontiguousarray(m, dtype=np.float32)
+        y = np.empty(len(m), dtype=np.complex64)
+        _freqmod_block(self._q, m.ctypes.data, len(m), y.ctypes.data)
         return y
 
 

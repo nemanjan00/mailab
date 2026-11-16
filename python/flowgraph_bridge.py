@@ -20,6 +20,7 @@ import numpy as np
 
 import liquid_dsp as dsp
 import mailab_bridge as lab
+import modem
 
 TICK = 0.02
 
@@ -313,6 +314,238 @@ class Decimate(Block):
     def work(self, x, rate):
         n = int(self.p["n"])
         return x[::n], rate / n
+
+
+# modem: bits, modulation, channel, recovery, bits out ------------------------
+
+def _pattern_bits(pattern):
+    """'hex:2dd4…' / 'text:hello' / 'bits:0110' -> one period of bits"""
+    kind, _, body = pattern.partition(":")
+    if kind == "hex":
+        return modem.unpack_bits(bytes.fromhex(body))
+    if kind == "text":
+        return modem.unpack_bits(body.encode())
+    if kind == "bits":
+        return np.array([int(c) for c in body if c in "01"], dtype=np.uint8)
+    raise ValueError("pattern must be prbsN, hex:…, text:… or bits:…")
+
+
+class BitSource(Block):
+    kind = "source"
+    doc = "bits at `bitrate`: prbs7/9/15/23/31, or a repeated pattern (hex:… text:… bits:…), optionally behind a sync word"
+    params = {"pattern": ("prbs9", "prbsN | hex:… | text:… | bits:…"), "bitrate": (9600, "bits per second"),
+              "sync": ("", "hex sync word sent before each pattern period (framed mode)"), "preamble": ("", "hex preamble before the sync word")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        pattern = str(self.p["pattern"])
+        self.prbs = modem.Prbs(int(pattern[4:])) if pattern.startswith("prbs") else None
+        if not self.prbs:
+            frame = _pattern_bits(pattern)
+            head = np.zeros(0, dtype=np.uint8)
+            for part in ("preamble", "sync"):
+                if self.p[part]:
+                    head = np.concatenate([head, modem.unpack_bits(bytes.fromhex(self.p[part]))])
+            self.period = np.concatenate([head, frame])
+            self.pos = 0
+        self.t = time.monotonic()
+
+    def produce(self):
+        now = time.monotonic()
+        rate = float(self.p["bitrate"])
+        n = int((now - self.t) * rate)
+        if n <= 0:
+            return None
+        self.t += n / rate
+        if self.prbs:
+            return self.prbs.bits(n), rate
+        idx = (self.pos + np.arange(n)) % len(self.period)
+        self.pos = int((self.pos + n) % len(self.period))
+        return self.period[idx], rate
+
+
+class Modulate(Block):
+    doc = ("bits -> baseband IQ. Linear (liquid): bpsk qpsk psk8..256 dpsk* ask* qam4..256 apsk* ook pi4dqpsk V29 …; "
+           "CPFSK: 2fsk 4fsk msk gfsk gmsk. Output rate = bitrate / bits-per-symbol * sps")
+    params = {"scheme": ("qpsk", "modulation"), "sps": (8, "samples per symbol"), "beta": (0.35, "RRC roll-off (linear)"),
+              "h": (None, "modulation index (CPFSK; default per scheme)"), "bt": (None, "Gaussian BT (gfsk/gmsk)")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        scheme = self.p["scheme"]
+        if scheme in modem.CPFSK:
+            self.mod = modem.CpfskModulator(scheme, int(self.p["sps"]), self.p["h"], self.p["bt"])
+        else:
+            self.mod = modem.LinearModulator(scheme, int(self.p["sps"]), float(self.p["beta"]))
+
+    def work(self, x, rate):
+        return self.mod.process(np.asarray(x, dtype=np.uint8)), rate / self.mod.bps * int(self.p["sps"])
+
+
+class AnalogMod(Stateful):
+    doc = "real audio -> AM / DSB / USB / LSB / FM / PM baseband"
+    params = {"mode": ("fm", "am|dsb|usb|lsb|fm|pm"), "deviation": (5e3, "FM Hz"), "index": (0.8, "AM index / PM radians")}
+
+    def make(self, rate):
+        mode = self.p["mode"]
+        if mode == "fm":
+            return dsp.FmMod(float(self.p["deviation"]), rate)
+        if mode == "pm":
+            k = float(self.p["index"])
+            return type("Pm", (), {"process": staticmethod(lambda m: np.exp(1j * k * np.asarray(m)).astype(np.complex64))})()
+        kind = {"am": dsp.AM_DSB, "dsb": dsp.AM_DSB, "usb": dsp.AM_USB, "lsb": dsp.AM_LSB}[mode]
+        return dsp.AmMod(kind, float(self.p["index"]), suppressed_carrier=mode != "am")
+
+    def work(self, x, rate):
+        return super().work(np.real(x), rate)
+
+
+class Channel(Block):
+    doc = "test channel: AWGN at snr_db (relative to signal power), carrier offset, phase, gain"
+    params = {"snr_db": (20.0, ""), "cfo": (0.0, "Hz"), "phase": (0.0, "degrees"), "gain": (1.0, "")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.n = 0
+        self.rng = np.random.default_rng()
+
+    def work(self, x, rate):
+        x = np.asarray(x, dtype=np.complex64) * float(self.p["gain"])
+        k = np.arange(self.n, self.n + len(x))
+        self.n += len(x)
+        x = x * np.exp(1j * (2 * np.pi * float(self.p["cfo"]) / rate * k + np.radians(float(self.p["phase"]))))
+        power = np.mean(np.abs(x) ** 2) or 1.0
+        sigma = np.sqrt(power / 10 ** (float(self.p["snr_db"]) / 10) / 2)
+        return (x + sigma * (self.rng.standard_normal(len(x)) + 1j * self.rng.standard_normal(len(x)))).astype(np.complex64), rate
+
+
+class Discriminator(Block):
+    doc = "FSK/FM discriminator -> real, scaled so CPFSK symbols are ±1 (±1/±3 for 4fsk)"
+    params = {"sps": (8, "samples per symbol"), "h": (1.0, "modulation index of the signal")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.d = modem.Discriminator(int(self.p["sps"]), float(self.p["h"]))
+
+    def work(self, x, rate):
+        return self.d.process(x), rate
+
+
+class ClockRecovery(Block):
+    doc = "Gardner timing recovery for real or complex input (FSK after discriminator, OOK magnitude): one sample per symbol out"
+    params = {"sps": (8, "samples per symbol"), "bandwidth": (0.005, "loop gain"), "dc_block": (False, "remove the mean first (OOK)")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.g = modem.Gardner(float(self.p["sps"]), float(self.p["bandwidth"]), bool(self.p["dc_block"]))
+
+    def work(self, x, rate):
+        return self.g.process(x), rate / float(self.p["sps"])
+
+
+class Slicer(Throttled):
+    kind = "dsp"
+    doc = ("symbols -> bits. Complex input: liquid demod of `scheme` (+ EVM -> channel <device>_<id>_evm). "
+           "Real input: `levels` 2 (adaptive threshold) or 4 (4fsk gray)")
+    params = {"scheme": ("qpsk", "linear scheme for complex input"), "levels": (2, "2|4 for real input"), "fps": (5, "EVM updates/s")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.modem = None
+        self.levels = modem.LevelSlicer(int(self.p["levels"]))
+
+    def work(self, x, rate):
+        if np.iscomplexobj(x):
+            if self.modem is None:
+                self.modem = dsp.Modem(self.p["scheme"])
+            bits, evm = modem.linear_demod_bits(self.modem, x, self.p["scheme"])
+            if len(x) and self.due():
+                lab.sample(self.id + "_evm", round(evm, 2), "dB")
+            return bits, rate * self.modem.bps
+        bits = self.levels.process(x)
+        return bits, rate * (2 if int(self.p["levels"]) == 4 else 1)
+
+
+class Ber(Throttled):
+    kind = "sink"
+    doc = "bit error rate against a PRBS (self-synchronizing, no alignment) -> channels <device>_<id> (BER) and _errors"
+    params = {"prbs": (9, "PRBS order sent by the transmitter"), "window": (100000, "bits per BER estimate"), "fps": (2, "")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.check = modem.BerChecker(int(self.p["prbs"]))
+        self.total_errors = 0.0
+
+    def work(self, x, rate):
+        self.check.feed(np.asarray(x, dtype=np.uint8))
+        if self.check.checked >= int(self.p["window"]) or self.due():
+            if self.check.checked:
+                self.total_errors += self.check.errors / 3.0
+                lab.sample(self.id, self.check.ber, "")
+                lab.sample(self.id + "_errors", round(self.total_errors), "")
+            self.check.reset()
+        return None
+
+
+class Framer(Block):
+    kind = "sink"
+    doc = "find a sync word in a bit stream, cut frames: value <device>_<id> (last frames: hex/ascii), blob of payloads, count channel"
+    params = {"sync": ("2dd4", "sync word (hex)"), "max_errors": (0, "allowed bit errors in the sync word"),
+              "frame_bytes": (16, "payload bytes after the sync word"), "keep": (20, "frames kept in the value")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.word = modem.unpack_bits(bytes.fromhex(self.p["sync"]))
+        self.buf = np.zeros(0, dtype=np.uint8)
+        self.frames = []
+        self.count = 0
+        self.payloads = b""
+
+    def work(self, x, rate):
+        self.buf = np.concatenate([self.buf, np.asarray(x, dtype=np.uint8)])
+        need = len(self.word) + 8 * int(self.p["frame_bytes"])
+        hits = [i for i in modem.find_sync(self.buf, self.word, int(self.p["max_errors"])) if i + need <= len(self.buf)]
+        consumed = 0
+        for i in hits:
+            if i < consumed:
+                continue
+            payload = modem.pack_bits(self.buf[i + len(self.word):i + need])
+            self.count += 1
+            self.frames.append({"n": self.count, "t": time.time(), "hex": payload.hex(),
+                                "ascii": "".join(chr(c) if 32 <= c < 127 else "." for c in payload)})
+            self.payloads = (self.payloads + payload)[-65536:]
+            consumed = i + need
+        if hits:
+            self.frames = self.frames[-int(self.p["keep"]):]
+            lab.value(self.id, self.frames)
+            lab.blob(self.id, self.payloads)
+            lab.sample(self.id + "_count", self.count, "")
+        # keep a tail long enough to hold a frame that straddles chunks
+        self.buf = self.buf[max(consumed, len(self.buf) - need):]
+        return None
+
+
+class BitView(Throttled):
+    kind = "sink"
+    doc = "show a bit stream: value <device>_<id> with the last bits (binary + hex) and a running blob"
+    params = {"bits": (256, "bits shown"), "fps": (4, "")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.buf = np.zeros(0, dtype=np.uint8)
+        self.stream = b""
+
+    def work(self, x, rate):
+        self.buf = np.concatenate([self.buf, np.asarray(x, dtype=np.uint8)])
+        if not self.due():
+            return None
+        whole = len(self.buf) - len(self.buf) % 8
+        self.stream = (self.stream + modem.pack_bits(self.buf[:whole]))[-65536:]
+        tail = self.buf[:whole][-int(self.p["bits"]):]
+        self.buf = self.buf[whole:]
+        lab.value(self.id, {"bitrate": rate, "bits": "".join(str(int(b)) for b in tail), "hex": modem.pack_bits(tail).hex()})
+        lab.blob(self.id, self.stream)
+        return None
 
 
 class Python(Block):
@@ -765,6 +998,8 @@ BLOCKS = {
     "python": Python,
     "spectrum": Spectrum, "constellation": Constellation, "eye": Eye, "scope": Scope, "measure": Measure,
     "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
+    "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
+    "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,
 }
 
 

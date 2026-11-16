@@ -44,7 +44,9 @@ docker run --privileged --network host -v /dev:/dev -v mailab-data:/data \
 
 The container listens on all interfaces, so it requires `MAILAB_TOKENS`
 (it refuses to start without them; `MAILAB_ALLOW_OPEN=1` overrides that on a
-trusted network). Open the UI as `http://host:3000/?token=<token>` once.
+trusted network). Open the UI once as `http://host:3000/?token=<token>`: the
+server swaps it for an HttpOnly cookie and redirects to the clean URL. Tokens in
+URLs are not accepted anywhere else; API/MCP clients use `Authorization: Bearer`.
 
 The image includes sigrok-cli, liquid-dsp, SoapySDR (HackRF/bladeRF/RTL-SDR),
 hackrf tools, ffmpeg/v4l-utils, uhubctl, pymp305 and findus. Not included:
@@ -72,8 +74,8 @@ and `libliquid` for demodulation.
 Several people and AIs can share one lab:
 
 - `MAILAB_TOKENS="alice:secret:rw,bob:secret2:rw,viewer:secret3:ro"` turns on
-  auth for the UI, REST, WebSocket and MCP (Bearer token, `?token=`, or the
-  UI's cookie). `ro` tokens can look and chat but can't change the lab.
+  auth for the UI, REST, WebSocket and MCP (Bearer token, or the UI's
+  HttpOnly cookie from a one-time `/?token=` login link). `ro` tokens can look and chat but can't change the lab.
   Set `HOST=0.0.0.0` to accept remote collaborators. A non-loopback `HOST`
   without tokens is refused at startup.
 - Without tokens (local use) only loopback `Host` headers (plus

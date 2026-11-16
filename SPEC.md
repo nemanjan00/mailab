@@ -24,7 +24,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
 | Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | app store is qrp `state()` (lab state, activity/chat feeds, live values at 4 Hz in `batch`); 4 panes migrated via the SDK; imperative panes still work against the same store |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
-| Auth hardening (reviewer feedback, round 2) | ✅ | token table is a `Map` (inherited keys like `constructor`/`__proto__` were accepted as tokens: fixed); writes need role `rw` exactly (REST + MCP); non-loopback `HOST` without tokens refuses to start (`MAILAB_ALLOW_OPEN=1` overrides; Docker README uses tokens); open mode accepts only loopback/`MAILAB_ALLOWED_HOSTS` Host headers and same-origin requests, which blocks DNS rebinding (REST, MCP, WS). Verified against a live server |
+| Auth hardening (reviewer feedback, rounds 2–3) | ✅ | `?token=` only as a login link (→ HttpOnly SameSite=Strict cookie + redirect), never accepted on API/MCP/WS; token table is a `Map` (inherited keys like `constructor`/`__proto__` were accepted as tokens: fixed); writes need role `rw` exactly (REST + MCP); non-loopback `HOST` without tokens refuses to start (`MAILAB_ALLOW_OPEN=1` overrides; Docker README uses tokens); open mode accepts only loopback/`MAILAB_ALLOWED_HOSTS` Host headers and same-origin requests, which blocks DNS rebinding (REST, MCP, WS). Verified against a live server |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
 | HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
 | Collab chat (web UI + MCP) with MCP push notifications | ✅ | chat pane (markdown/KaTeX) + `chat_send`/`chat_read`, persisted; push: stdio channel bridge `bin/channel.js` (`notifications/claude/channel`, verified end to end: push in, reply out); HTTP sessions get `notifications/message`. Claude Code channels are stdio-only research preview |
@@ -60,11 +60,15 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | liquid-dsp | ✅ | ctypes bindings (`python/liquid_dsp.py`): resampler, NCO, FIR, AGC, FM/AM/SSB demod, RRC interp, symbol sync, modem + EVM |
 | Composable components, GNU Radio-like | ✅ | `flowgraph` device: blocks + links, persisted, editable live by the user and the AI |
 | Scriptable blocks | ✅ | `python` block: `work(x, rate)` with numpy/dsp |
-| Modem toolkit: mod/demod 2FSK/4FSK, OOK, PSK/QAM up to QAM64; BER; sync; clock recovery; bit streams | 🟡 | flowgraph blocks: bit sources (PRBS/pattern/text), modulators, AWGN/CFO channel, FSK/OOK demod, clock recovery (Gardner/M&M on real signals; symbol_sync for linear), slicer → bits, sync-word framing, BER meter (PRBS self-sync), bit-stream sinks (value/blob) |
+| Modem toolkit, all common modulations (✅ BER-tested: bpsk qpsk psk8 apsk16 qam4/8/16/64/128/256 sqam32/128 2fsk msk gfsk 4fsk ook; ⚠ qam32 open: EVM −18 dB after symbol sync; GMSK needs a Viterbi detector): analog AM/DSB/SSB/FM/PM; digital OOK/ASK, 2/4-FSK, GFSK, MSK, GMSK, BPSK…PSK, QAM up to 256, APSK, DPSK; BER; sync; clock recovery; bit streams | 🟡 | flowgraph blocks: bit sources (PRBS/pattern/text), modulators, AWGN/CFO channel, FSK/OOK demod, clock recovery (Gardner/M&M on real signals; symbol_sync for linear), slicer → bits, sync-word framing, BER meter (PRBS self-sync), bit-stream sinks (value/blob) |
+| OpenCV | ⬜ | image processing on camera/KVM frames: read instrument displays/LEDs, detect, measure; results as channels/values |
+| Analog video decode | ⬜ | PAL/NTSC composite from SDR/scope samples (e.g. FM-demodulated FPV): H/V sync detection, line assembly → image frames in the image pane |
+| libsigrokdecode for external inputs | ⬜ | run sigrok protocol decoders (uart, spi, i2c, manchester, …) on bits/logic from any source (flowgraph bit streams, scope captures, blobs) via `sigrok-cli -I binary` + `-P`; flowgraph `decode` sink + MCP tool; annotations → log/value |
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
+| Graphing calculator / matplotlib-like plots | ⬜ | `graph` pane + MCP `plot`: y = f(x) over a range (several functions, mathjs), parametric, and expressions over lab data (`mag(fft(scope_ch1))`, `db(...)`) plotted against x or index; axes/labels/log scales |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
 | TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
 | Scope: triggered display + max/min hold + averaging | ✅ | flowgraph `scope` sink: trigger rising/falling/none, level, auto/normal, pretrigger; traces live/max/min/avg; complex input → real/imag/mag |
@@ -101,6 +105,15 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | DeepAce KC901K / KC908V | ⬜ | handheld RF analyzers, same vendor as the KC9531B (try its framing: 0xFE header + sum checksum); sweeps → spectrum trace |
 | ThunderScope | ⬜ | open-source 4-ch 1 GS/s PCIe/Thunderbolt scope; TS.NET SCPI + waveform data socket (as used by ngscopeclient) → traces, scope measurements, triggers |
 | NanoKVM(+) | ⬜ | IP-KVM as an instrument: HDMI screen (MJPEG stream → image pane, snapshot to the AI), USB keyboard/mouse (type text, keys), ATX power/reset; via its HTTP/WebSocket API |
+| JTAGulator | ⬜ | serial CLI: JTAG/SWD/UART pin discovery (IDCODE/BYPASS scans) → results as values |
+| J-Link | ⬜ | JLinkExe / pylink: connect, read/write memory, flash, halt/run, RTT → log |
+| OpenOCD | ⬜ | Tcl RPC (port 6666) / telnet: targets, mem read/write (dumps → blobs), flash, reset/halt |
+| Black Magic Probe | ⬜ | gdb remote over its serial port (`monitor swdp_scan`, attach, load, mem dump) + its UART |
+| flashrom | ⬜ | SPI flash probe/read/write/verify (ch341a, buspirate, linux_spi…) → dumps as blobs |
+| XGecu (minipro) | ⬜ | (also listed above) chip identify/read/write/verify → blobs |
+| binwalk | ⬜ | signature scan of blobs → table of offsets/types (value) + extract; ties into the Kaitai view |
+| `file` (libmagic) | ⬜ | identify blobs/files |
+| File & bitstream entropy | ⬜ | sliding-window Shannon entropy of blobs and flowgraph bit streams → trace (spot compressed/encrypted regions, keys) |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
@@ -208,3 +221,10 @@ Next:
 75. gui sdk, for more readable individual components?
 76. reviewer: auth bypass via inherited object keys (constructor/__proto__/toString), role check should require rw, Docker HOST=0.0.0.0 open by default, no Origin check (DNS rebinding)
 77. build different mod, demod tools 2fsk, qam64, ook... ber, constellation, sync, clock recovery, bit stream...
+78. support all common modulations
+79. libsigrokdecode for external inputs
+80. opencv, analog video decode
+81. jtagulator, jlink, openocd, blackmagicprove, flashrom, minipro, binwalk, file and bitstream entropy
+82. all different qam sizes
+83. reviewer: fixes confirmed on a live server; ?token= in URLs leaks into history/proxy logs
+84. matplotlib like feature, graphing calc

@@ -1,7 +1,9 @@
 // Access control. Tokens come from MAILAB_TOKENS:
 //   "alice:s3cret:rw,claude-bob:t0ken:rw,viewer:abc:ro"
-// A token is accepted as "Authorization: Bearer <token>", ?token=<token>,
-// or the mailab_token cookie (set by the web UI).
+// A token is accepted as "Authorization: Bearer <token>" or the mailab_token
+// cookie. `/?token=` is only a login link: the page handler swaps it for an
+// HttpOnly cookie and redirects, so tokens don't linger in URLs (history,
+// proxy logs) and aren't accepted there anywhere else.
 //
 // Without tokens the lab is open, which is only safe on loopback: the server
 // refuses a non-loopback HOST without tokens (see checkExposure), and open
@@ -97,6 +99,24 @@ const create = (tokens, options) => {
 		enabled: enabled,
 
 		/**
+		 * Express handler for login links (`/?token=…`): valid token -> HttpOnly
+		 * cookie + redirect to the clean URL; anything else falls through.
+		 */
+		login: (req, res, next) => {
+			const token = req.query && req.query.token;
+			if (!enabled || typeof token !== "string") {
+				next();
+				return;
+			}
+			if (!table.has(token)) {
+				res.status(401).send("invalid token");
+				return;
+			}
+			res.cookie("mailab_token", token, { httpOnly: true, sameSite: "strict", path: "/" });
+			res.redirect(302, req.path);
+		},
+
+		/**
 		 * Identity for a request (express req or a ws upgrade request), or null.
 		 */
 		identify: (req) => {
@@ -107,8 +127,6 @@ const create = (tokens, options) => {
 			let token;
 			if (header.startsWith("Bearer ")) {
 				token = header.slice(7).trim();
-			} else if (req.url && req.url.indexOf("token=") !== -1) {
-				token = new URL(req.url, "http://x").searchParams.get("token");
 			} else {
 				token = cookieToken(req.headers.cookie);
 			}

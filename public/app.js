@@ -62,8 +62,8 @@ const askToken = () => {
 	asked = true;
 	const token = prompt("This lab needs an access token:");
 	if (token) {
-		document.cookie = "mailab_token=" + encodeURIComponent(token) + "; path=/; SameSite=Strict";
-		location.reload();
+		// the server swaps it for an HttpOnly cookie and redirects to the clean URL
+		location.href = "/?token=" + encodeURIComponent(token);
 	}
 };
 

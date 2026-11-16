@@ -272,6 +272,7 @@ const create = (lab, options) => {
 	app.use("/api", auth.middleware((req) => {
 		return req.method === "GET" || READ_POSTS.indexOf(req.path) !== -1;
 	}), api(lab));
+	app.get("/", auth.login);
 	app.use(express.static(path.join(ROOT, "public")));
 
 	const server = http.createServer(app);

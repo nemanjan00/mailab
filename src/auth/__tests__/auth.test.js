@@ -68,3 +68,20 @@ describe("exposure check", () => {
 		expect(() => authModule.checkExposure({ host: "127.0.0.1", tokens: new Map() })).not.toThrow();
 	});
 });
+
+describe("tokens in URLs", () => {
+	const auth = authModule.create(authModule.parseTokens("alice:a-token:rw"));
+
+	test("are not accepted on API requests", () => {
+		expect(auth.identify({ headers: { host: "127.0.0.1:3000" }, url: "/api/state?token=a-token" })).toBeNull();
+	});
+
+	test("the login link becomes an HttpOnly cookie and a clean redirect", () => {
+		const res = { cookies: [], cookie: (n, v, o) => res.cookies.push([n, v, o]), redirect: (code, to) => {
+			res.redirected = [code, to];
+		} };
+		auth.login({ query: { token: "a-token" }, path: "/" }, res, () => {});
+		expect(res.cookies[0][2]).toMatchObject({ httpOnly: true, sameSite: "strict" });
+		expect(res.redirected).toEqual([302, "/"]);
+	});
+});
