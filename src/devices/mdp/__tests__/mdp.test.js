@@ -116,3 +116,85 @@ describe("mdp driver safety", () => {
 		});
 	});
 });
+
+describe("mdp chamber/unsafe bypass (env-only)", () => {
+	const ENV = ["MAILAB_RF_CHAMBER", "MAILAB_UNSAFE", "MAILAB_UNSAFE_PSU"];
+	let hostPath;
+	let sent;
+	let saved;
+
+	beforeAll(() => {
+		hostPath = makeHost();
+		sent = require(path.join(hostPath, "src", "psu")).sent;
+	});
+
+	beforeEach(() => {
+		sent.length = 0;
+		saved = {};
+		ENV.forEach((key) => {
+			saved[key] = process.env[key];
+			delete process.env[key];
+		});
+	});
+
+	afterEach(() => {
+		ENV.forEach((key) => {
+			if (saved[key] === undefined) {
+				delete process.env[key];
+			} else {
+				process.env[key] = saved[key];
+			}
+		});
+	});
+
+	const started = (options) => {
+		const dev = mdp.create(Object.assign({ hostPath: hostPath, id: "1a2b3c4d", pollMs: 60000 }, options), io());
+		return dev.start().then(() => {
+			return dev;
+		});
+	};
+
+	test("bypass lifts the per-device limit but keeps the hardware cap", () => {
+		process.env.MAILAB_UNSAFE = "1";
+		const sink = io();
+		const dev = mdp.create({ hostPath: hostPath, id: "1a2b3c4d", maxVolts: 12, pollMs: 60000 }, sink);
+		return dev.start().then(() => {
+			return expect(dev.command("set_voltage", { volts: 45 })).rejects.toThrow(/above the limit 30 V/)
+				.then(() => {
+					return dev.command("set_voltage", { volts: 20 });
+				})
+				.then(() => {
+					expect(sent).toEqual([["setVoltage", 20000]]);
+					expect(sink.log).toHaveBeenCalledWith(expect.stringMatching(/SAFETY BYPASSED/), "warn");
+					return dev.stop();
+				});
+		});
+	});
+
+	test("bypass: maxVolts above the hardware rating no longer refuses create (cap stays)", () => {
+		process.env.MAILAB_RF_CHAMBER = "1";
+		expect(() => {
+			mdp.create({ hostPath: hostPath, id: "1a2b3c4d", maxVolts: 45 }, io());
+		}).not.toThrow();
+	});
+
+	test("MAILAB_UNSAFE_PSU lifts the hardware cap too, allowing anything", () => {
+		process.env.MAILAB_UNSAFE = "1";
+		process.env.MAILAB_UNSAFE_PSU = "1";
+		return started().then((dev) => {
+			return dev.command("set_voltage", { volts: 45 }).then(() => {
+				expect(sent).toEqual([["setVoltage", 45000]]);
+				return dev.stop();
+			});
+		});
+	});
+
+	test("without the env flags the per-device limit applies as before", () => {
+		return started({ maxVolts: 12 }).then((dev) => {
+			return expect(dev.command("set_voltage", { volts: 20 })).rejects.toThrow(/above the limit 12 V/)
+				.then(() => {
+					return dev.stop();
+				});
+		});
+	});
+});

@@ -3,6 +3,11 @@
 // for power-on, mode, USB-PD and program runs are in src/safety DEFAULT_POLICY.
 
 const processDriver = require("../process");
+const bypass = require("../../utils/bypass");
+
+// hardware ratings the bridge enforces when the per-device limit is lifted
+const HW_MAX_VOLTS = 30;
+const HW_MAX_AMPS = 5;
 
 // pymp305 0.6.3: 0xC2 state poll (no 2 s 0xBD stall), modes, USB-PD, programs.
 // upgrade: venvs that installed 0.5.3 earlier get it replaced (src/services/pyenv)
@@ -52,6 +57,18 @@ module.exports = processDriver.pythonPreset({
 		charge_state: "battery-charge telemetry (read-only)"
 	},
 	args: (options) => {
-		return processDriver.toFlags(options, ["poll", "transport", "serial", "path", "address", "maxVolts", "maxAmps", "panel"]);
+		// chamber / unsafe bypass (env-only, src/utils/bypass): lift the
+		// per-device limit by passing the hardware caps instead; the bridge
+		// still enforces those. MAILAB_UNSAFE_PSU (independent opt-out on top
+		// of the bypass) tells the bridge to lift the hardware caps too.
+		const opts = Object.assign({}, options);
+		if (bypass.active()) {
+			opts.maxVolts = HW_MAX_VOLTS;
+			opts.maxAmps = HW_MAX_AMPS;
+		}
+		if (bypass.psuUnsafe()) {
+			opts.unsafePsu = true;
+		}
+		return processDriver.toFlags(opts, ["poll", "transport", "serial", "path", "address", "maxVolts", "maxAmps", "panel", "unsafePsu"]);
 	}
 });

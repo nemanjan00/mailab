@@ -14,6 +14,7 @@
 
 const randomUUID = require("crypto").randomUUID;
 const math = require("../math");
+const bypass = require("../utils/bypass");
 
 const TICK_MS = 250;
 const APPROVAL_TIMEOUT_MS = 120000;
@@ -299,9 +300,20 @@ const create = (lab, saved) => {
 
 		/**
 		 * Ask the people in the lab; resolves on approve, rejects on deny/timeout.
+		 * Chamber / unsafe bypass (env-only, src/utils/bypass): no human is asked;
+		 * the command is auto-granted, but the would-be approval is still posted
+		 * to the chat and recorded in the activity log (stamped `bypass`), so a
+		 * bypassed bench keeps a full audit trail of what ran without a person.
 		 */
 		requestApproval: (request) => {
 			const id = "a" + nextApproval++;
+			if (bypass.active()) {
+				const entry = Object.assign({ id: id, t: Date.now(), status: "bypassed" }, request);
+				lab.recordActivity({ who: request.who, tool: "command", args: request.device + "." + request.command + " " + JSON.stringify(request.args || {}), ok: true, bypass: true });
+				lab.postChat({ from: "approval", kind: "safety", text: "🔓 auto-granted — SAFETY BYPASSED: `" + request.device + "." + request.command + " " + JSON.stringify(request.args || {}) + "` (" + request.who + ": " + request.reason + ")" });
+				lab.notify({ type: "bypass", approval: entry.id, who: request.who, device: request.device, command: request.command, reason: request.reason });
+				return Promise.resolve(entry);
+			}
 			const entry = Object.assign({ id: id, t: Date.now(), status: "pending" }, request);
 			return new Promise((resolve, reject) => {
 				const timer = setTimeout(() => {
@@ -338,6 +350,11 @@ const create = (lab, saved) => {
 		},
 
 		listPending: () => Object.keys(pending).map((id) => pending[id].entry),
+
+		/**
+		 * Bypass state (env-only) for safety_overview and the UI banner.
+		 */
+		bypassInfo: () => bypass.info(),
 
 		/**
 		 * Command runner for multi-step AI work (sweep, optimize). Every command

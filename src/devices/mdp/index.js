@@ -7,6 +7,7 @@ const path = require("path");
 const serialize = require("../../utils/mutex").serialize;
 const config = require("../../config");
 const args = require("../../utils/args");
+const bypass = require("../../utils/bypass");
 
 const DEFAULT_PORT = "/dev/ttyACM0";
 const DEFAULT_POLL_MS = 300;
@@ -87,10 +88,28 @@ const limit = (value, hardware, name) => {
 	return args.parseNumber(value, name, { min: 0, max: hardware });
 };
 
+/**
+ * Effective V/I cap for this device. Chamber / unsafe bypass (env-only,
+ * src/utils/bypass) lifts the per-device limit; the hardware cap stays unless
+ * the independent MAILAB_UNSAFE_PSU opt-out is set too (a typo can then fry
+ * a board — that flag is for throwaway benches only).
+ */
+const deviceLimit = (options, name, hardware, io) => {
+	if (!bypass.active()) {
+		return limit(options[name], hardware, name);
+	}
+	if (bypass.psuUnsafe()) {
+		io.log("SAFETY BYPASSED (" + (config.get("MAILAB_UNSAFE") ? "MAILAB_UNSAFE" : "MAILAB_RF_CHAMBER") + " + MAILAB_UNSAFE_PSU): " + name + " hardware cap lifted", "warn");
+		return Infinity;
+	}
+	io.log("SAFETY BYPASSED: " + name + " device limit lifted, hardware cap " + hardware + " kept", "warn");
+	return hardware;
+};
+
 const create = (options, io) => {
 	const host = loadHost(options.hostPath);
-	const maxVolts = limit(options.maxVolts, HW_MAX_VOLTS, "maxVolts");
-	const maxAmps = limit(options.maxAmps, HW_MAX_AMPS, "maxAmps");
+	const maxVolts = deviceLimit(options, "maxVolts", HW_MAX_VOLTS, io);
+	const maxAmps = deviceLimit(options, "maxAmps", HW_MAX_AMPS, io);
 	const link = {
 		channel: options.channel || host.psu.DEFAULT_CHANNEL,
 		address: parseHex(options.address, host.psu.DEFAULT_ADDRESS),

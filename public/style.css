@@ -110,6 +110,18 @@ textarea { font-family: var(--mono); font-size: 12px; min-height: 160px; resize:
 code, .mono { font-family: var(--mono); font-size: 12px; }
 
 /* top bar */
+.bypass-banner {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	padding: 6px 14px;
+	font-weight: bold;
+	text-align: center;
+	color: #fff;
+	background: repeating-linear-gradient(45deg, #b00020, #b00020 14px, #1a1a1a 14px, #1a1a1a 28px);
+	border-bottom: 2px solid #ff5252;
+}
+
 .bar {
 	position: sticky;
 	top: 0;

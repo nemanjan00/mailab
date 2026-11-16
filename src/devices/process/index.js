@@ -203,6 +203,8 @@ const pythonPreset = (spec) => {
 		options: spec.options,
 		commands: spec.commands,
 		requires: spec.requires || [],
+		// exposed for tests (bypass flag rewriting etc.)
+		args: spec.args,
 		extras: extras,
 		create: (options, io) => {
 			let inner = null;

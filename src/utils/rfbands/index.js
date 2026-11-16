@@ -11,6 +11,8 @@
 // of the rfcat driver's region bands (src/devices/rfcat) but cover the wider
 // range a broadband siggen (e.g. Morfeus, 23.5 MHz-6 GHz) can reach.
 
+const bypass = require("../bypass");
+
 const MHZ = 1e6;
 
 // [lo, hi] in Hz. Licence-free ISM / SRD bands.
@@ -35,18 +37,6 @@ const BANDS = {
 	],
 	// no region configured: nothing is allowed on the air (chamber/bypass only)
 	none: []
-};
-
-const TRUTHY = ["1", "true", "yes", "on"];
-
-const isTruthy = (value) => {
-	if (value === true) {
-		return true;
-	}
-	if (value === undefined || value === null) {
-		return false;
-	}
-	return TRUTHY.indexOf(String(value).trim().toLowerCase()) !== -1;
 };
 
 /**
@@ -117,7 +107,7 @@ const check = (hz, env) => {
 const fromConfig = (config) => {
 	return {
 		region: config.get("MAILAB_RF_REGION") || "none",
-		chamber: isTruthy(config.get("MAILAB_RF_CHAMBER")) || isTruthy(config.get("MAILAB_UNSAFE"))
+		chamber: bypass.active()
 	};
 };
 
@@ -127,5 +117,5 @@ module.exports = {
 	describe: describeBands,
 	check: check,
 	fromConfig: fromConfig,
-	isTruthy: isTruthy
+	isTruthy: bypass.isTruthy
 };

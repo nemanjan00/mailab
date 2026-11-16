@@ -239,6 +239,7 @@ const connect = () => {
 					ctx.state[key] = msg.state[key];
 				});
 			});
+			syncBypassBanner(msg.state.bypass);
 			renderTabs();
 			syncPanes(msg.state.panes);
 			emit("state", msg.state);
@@ -747,6 +748,24 @@ document.getElementById("add-device").addEventListener("click", () => {
 		});
 	});
 });
+
+// ---- safety bypass banner ---------------------------------------------------
+// chamber / unsafe bypass (env-only, fixed at server start): a loud,
+// persistent strip at the top of every page so a bypassed bench can't be
+// mistaken for a fully-protected one (src/utils/bypass)
+const bypassBanner = document.createElement("div");
+bypassBanner.className = "bypass-banner";
+bypassBanner.hidden = true;
+document.body.prepend(bypassBanner);
+
+const syncBypassBanner = (bypass) => {
+	const on = Boolean(bypass && bypass.active);
+	bypassBanner.hidden = !on;
+	document.body.classList.toggle("has-bypass-banner", on);
+	if (on) {
+		bypassBanner.textContent = (bypass.text || "⚠ SAFETY BYPASSED — chamber mode") + " — every action is still logged";
+	}
+};
 
 const themeButton = document.getElementById("theme");
 const applyTheme = (theme) => {

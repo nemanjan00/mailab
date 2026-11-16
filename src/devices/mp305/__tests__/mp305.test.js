@@ -31,6 +31,37 @@ describe("mp305 driver", () => {
 		expect(flags).toEqual(["--transport", "ble", "--address", "AA:BB", "--max-volts", "12", "--max-amps", "1.5"]);
 	});
 
+	test("chamber/unsafe bypass rewrites the limit flags (env-only)", () => {
+		const ENV = ["MAILAB_RF_CHAMBER", "MAILAB_UNSAFE", "MAILAB_UNSAFE_PSU"];
+		const saved = {};
+		ENV.forEach((key) => {
+			saved[key] = process.env[key];
+			delete process.env[key];
+		});
+		try {
+			// normal: the device's own limits go through as given
+			expect(mp305.args({ maxVolts: 12, maxAmps: 1.5 })).toEqual(["--max-volts", "12", "--max-amps", "1.5"]);
+			// bypass: per-device limit lifted, hardware caps passed instead
+			process.env.MAILAB_UNSAFE = "1";
+			expect(mp305.args({ maxVolts: 12, maxAmps: 1.5 })).toEqual(["--max-volts", "30", "--max-amps", "5"]);
+			// independent opt-out: the bridge lifts the hardware caps too
+			process.env.MAILAB_UNSAFE_PSU = "1";
+			expect(mp305.args({ maxVolts: 12 })).toEqual(["--max-volts", "30", "--max-amps", "5", "--unsafe-psu", "true"]);
+			// MAILAB_UNSAFE_PSU alone widens nothing
+			delete process.env.MAILAB_UNSAFE;
+			delete process.env.MAILAB_UNSAFE_PSU;
+			expect(mp305.args({ maxVolts: 12 })).toEqual(["--max-volts", "12"]);
+		} finally {
+			ENV.forEach((key) => {
+				if (saved[key] === undefined) {
+					delete process.env[key];
+				} else {
+					process.env[key] = saved[key];
+				}
+			});
+		}
+	});
+
 	test("power-on, mode, USB-PD and program commands need a person's approval", () => {
 		const s = safety.create({}, {});
 		const ask = (command, args) => s.needsApproval("psu", "mp305", command, args);

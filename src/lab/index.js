@@ -407,6 +407,11 @@ const create = (options) => {
 		recordActivity: (entry) => {
 			activityId++;
 			const full = Object.assign({ id: activityId, t: Date.now() }, entry);
+			// chamber / unsafe bypass (env-only): mark every log line so a
+			// bypassed bench can't be mistaken for a fully-protected one
+			if (lab.safety && lab.safety.bypassInfo().active) {
+				full.bypass = true;
+			}
 			ring(activity, full, ACTIVITY_SIZE);
 			events.emit("activity", full);
 		},
@@ -805,7 +810,8 @@ const create = (options) => {
 				derived: lab.listDerived(),
 				panes: panes.list(),
 				tabs: panes.tabs(),
-				paneTypes: panesModule.TYPES
+				paneTypes: panesModule.TYPES,
+				bypass: lab.safety.bypassInfo()
 			};
 		},
 

@@ -15,6 +15,7 @@ Approval for power-on, mode changes, PD and program runs is the lab's policy
 
 import argparse
 import asyncio
+import math
 import os
 import threading
 
@@ -219,11 +220,20 @@ def main():
     parser.add_argument("--address", default=None, help="BLE address (default: first MP305 found)")
     parser.add_argument("--max-volts", default=None, help="voltage limit, <= 30")
     parser.add_argument("--max-amps", default=None, help="current limit, <= 5")
+    # independent opt-out on top of the env-only bypass (MAILAB_UNSAFE_PSU):
+    # lift the hardware V/I caps too. The JS side only sends this when the
+    # bypass is active; a typo can fry a board with this on.
+    parser.add_argument("--unsafe-psu", default="off", help="lift the hardware V/I caps too (chamber bypass only)")
     parser.add_argument("--panel", default="on", help="publish the control pane (on/off)")
     opts = parser.parse_args()
 
-    max_volts = limit(opts.max_volts, HW_MAX_VOLTS, "maxVolts")
-    max_amps = limit(opts.max_amps, HW_MAX_AMPS, "maxAmps")
+    if lab.parse_switch(opts.unsafe_psu, "unsafe-psu"):
+        max_volts = float("inf")
+        max_amps = float("inf")
+        lab.log("SAFETY BYPASSED: hardware V/I caps lifted (unsafe-psu)", "warn")
+    else:
+        max_volts = limit(opts.max_volts, HW_MAX_VOLTS, "maxVolts")
+        max_amps = limit(opts.max_amps, HW_MAX_AMPS, "maxAmps")
     bridge = lab.Bridge()
     psu = open_psu(opts)
     drv = Driver(psu, "ble" if opts.transport == "ble" and not os.environ.get("MAILAB_MP305_FAKE") else "usb", max_volts, max_amps)
@@ -263,7 +273,11 @@ def main():
         doc["mode_name"] = MODE_NAMES.get(st.model, str(st.model))
         doc["regulation"] = "CC" if st.out_state == 2 else "CV"
         doc["ocp"] = bool(st.current_over)
-        doc["limits"] = {"maxVolts": max_volts, "maxAmps": max_amps}
+        # inf caps mean "uncapped" (unsafe-psu); JSON has no inf, publish null
+        doc["limits"] = {
+            "maxVolts": None if math.isinf(max_volts) else max_volts,
+            "maxAmps": None if math.isinf(max_amps) else max_amps,
+        }
         return doc
 
     @bridge.command("list", "connected units: USB (path, serial) or, with transport ble, a BLE scan")

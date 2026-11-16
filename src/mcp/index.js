@@ -224,7 +224,7 @@ const create = (lab, context) => {
 	});
 
 	tool("safety_overview", "Safety rules (server-enforced), the approval policy, pending approvals and recent rule firings", {}, () => {
-		return { rules: lab.safety.listRules(), policy: lab.safety.getPolicy(), pending: lab.safety.listPending(), fired: lab.safety.firedLog().slice(-20) };
+		return { rules: lab.safety.listRules(), policy: lab.safety.getPolicy(), pending: lab.safety.listPending(), fired: lab.safety.firedLog().slice(-20), bypass: lab.safety.bypassInfo() };
 	});
 
 	tool("rule_add", "Add a server-enforced safety rule: when (mathjs over latest channel values; <channel>_age = seconds since its last sample) "

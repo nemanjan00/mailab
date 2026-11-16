@@ -201,6 +201,95 @@ describe("safety bypasses (review round 5)", () => {
 	});
 });
 
+describe("chamber / unsafe env bypass", () => {
+	const ENV = ["MAILAB_RF_CHAMBER", "MAILAB_UNSAFE", "MAILAB_UNSAFE_PSU"];
+	let lab;
+	let app;
+	let server;
+	let saved;
+
+	const call = (name, args) => request(app).post("/mcp").set(MCP).send({
+		jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: name, arguments: args || {} }
+	});
+
+	beforeAll(() => {
+		lab = labModule.create({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "mailab-safety3-")), channelCapacity: 200 });
+		const created = web.create(lab, { pushIntervalMs: 50 });
+		app = created.app;
+		server = created.server;
+		return lab.restore().then(() => lab.addDevice("sim", "sim", {
+			rateHz: 100,
+			signals: [{ name: "v", shape: "sine", freq: 3, amp: 1, offset: 0 }]
+		}));
+	});
+
+	beforeEach(() => {
+		saved = {};
+		ENV.forEach((key) => {
+			saved[key] = process.env[key];
+			delete process.env[key];
+		});
+	});
+
+	afterEach(() => {
+		ENV.forEach((key) => {
+			if (saved[key] === undefined) {
+				delete process.env[key];
+			} else {
+				process.env[key] = saved[key];
+			}
+		});
+		lab.safety.setPolicy([]);
+	});
+
+	afterAll(() => {
+		server.close();
+		return lab.shutdown();
+	});
+
+	test("a risky AI command is auto-granted without a person, and everything is marked", () => {
+		process.env.MAILAB_UNSAFE = "1";
+		lab.safety.setPolicy([{ command: "set", when: "value > 5", reason: "big amplitude" }]);
+		return call("device_command", { id: "sim", command: "set", args: { signal: "v", key: "amp", value: 7 } }).then((res) => {
+			expect(res.body.result.isError).toBeFalsy();
+			expect(lab.safety.listPending().length).toBe(0);
+			return lab.commandDevice("sim", "signals");
+		}).then((signals) => {
+			expect(signals[0].amp).toBe(7);
+			// the auto-grant left an activity line stamped bypass...
+			expect(lab.getActivity().some((a) => a.bypass === true && /auto-granted|sim\.set/.test((a.args || "") + " "))).toBe(true);
+			// ...a chat line, and the state / safety_overview carry the bypass
+			expect(lab.getChat({}).some((m) => /SAFETY BYPASSED/.test(m.text))).toBe(true);
+			expect(lab.state().bypass.active).toBe(true);
+			return call("safety_overview");
+		}).then((res) => {
+			const overview = JSON.parse(res.body.result.content[0].text);
+			expect(overview.bypass.active).toBe(true);
+			expect(overview.bypass.psuUnsafe).toBe(false);
+			expect(overview.pending.length).toBe(0);
+		});
+	});
+
+	test("safety rules still fire under the bypass (only approvals/limits are lifted)", () => {
+		process.env.MAILAB_RF_CHAMBER = "1";
+		lab.safety.addRule({ id: "hi-bypass", name: "too high bypass", when: "sim_v > 0.9", action: { device: "sim", command: "set", args: { signal: "v", key: "amp", value: 0.1 } } });
+		return wait(400).then(() => {
+			expect(lab.safety.firedLog().some((f) => f.rule === "too high bypass")).toBe(true);
+			lab.safety.removeRule("hi-bypass", true);
+		});
+	});
+
+	test("without the env flag a risky command waits for a person again", () => {
+		lab.safety.setPolicy([{ command: "set", when: "value > 5", reason: "big amplitude" }]);
+		const pendingCall = call("device_command", { id: "sim", command: "set", args: { signal: "v", key: "amp", value: 8 } });
+		const decided = wait(150).then(() => {
+			expect(lab.safety.listPending().length).toBe(1);
+			return request(app).post("/api/approvals/" + lab.safety.listPending()[0].id).send({ approve: true }).expect(200);
+		});
+		return Promise.all([pendingCall, decided]);
+	});
+});
+
 describe("policy upgrades", () => {
 	const safetyModule = require("..");
 	const keyOf = (p) => [p.driver || "", p.command].join(":");

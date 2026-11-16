@@ -44,7 +44,15 @@ const DEFAULTS = {
 	// web lookups (datasheets, FCC ID) only reach public addresses; local mirrors allowed here: "host,10.0.5.0/24"
 	MAILAB_HTTP_ALLOW: "",
 	// where the bench is, for radio TX allow-lists (rfcat): eu | us | none
-	MAILAB_RF_REGION: "eu"
+	MAILAB_RF_REGION: "eu",
+	// safety bypass for an isolated bench (shielded RF chamber / throwaway
+	// non-persistent image): lifts the RF TX band allow-list, per-TX approvals
+	// and device limits. ENV-ONLY, never a device option (src/utils/bypass).
+	MAILAB_RF_CHAMBER: "",
+	MAILAB_UNSAFE: "",
+	// independent opt-out on top of the bypass: also lift the PSU
+	// hardware-damage caps (max V/I). A typo can fry a board with this on.
+	MAILAB_UNSAFE_PSU: ""
 };
 
 // a DATA_DIR with control characters (e.g. ANSI colour codes from a
