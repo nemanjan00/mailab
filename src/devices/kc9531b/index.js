@@ -1,0 +1,101 @@
+// DeepAce KC9531B RF power meter (nemanjan00/kc9531b). Channels: dbm, mw.
+
+const kc9531b = require("kc9531b");
+const tty = require("../../services/tty");
+
+const DEFAULT_POLL_MS = 200;
+
+const create = (options, io) => {
+	let port = null;
+	let device = null;
+	let timer = null;
+	let stopped = false;
+
+	const poll = () => {
+		if (stopped) {
+			return;
+		}
+		const t = Date.now();
+		device.getPowerdBm()
+			.then((dbm) => {
+				io.sample("dbm", dbm, { unit: "dBm", t: t });
+				io.sample("mw", Math.pow(10, dbm / 10), { unit: "mW", t: t });
+			})
+			.catch((err) => {
+				io.log("poll failed: " + err, "warn");
+			})
+			.then(() => {
+				timer = setTimeout(poll, options.pollMs || DEFAULT_POLL_MS);
+			});
+	};
+
+	return {
+		start: () => {
+			port = tty.open(options.path, { baud: options.baud || 115200 });
+			device = kc9531b(port);
+			const ready = options.frequency ? device.setFrequency(Number(options.frequency)) : Promise.resolve();
+			return ready
+				.then(() => {
+					return device.getDeviceModel();
+				})
+				.then((model) => {
+					io.log("connected: " + model);
+					poll();
+				});
+		},
+
+		stop: () => {
+			stopped = true;
+			clearTimeout(timer);
+			if (device) {
+				device.close();
+			}
+			if (!port) {
+				return Promise.resolve();
+			}
+			return port.close();
+		},
+
+		command: (name, args) => {
+			const actions = {
+				info: () => {
+					return Promise.all([
+						device.getDeviceModel(),
+						device.getHardwareVersion(),
+						device.getSoftwareVersion(),
+						device.getFrequency(),
+						device.getTemperature()
+					]).then((r) => {
+						return { model: r[0], hardware: r[1], software: r[2], frequency: r[3], temperature: r[4] };
+					});
+				},
+				set_frequency: () => {
+					// correction frequency, in the unit the meter expects (see kc9531b docs)
+					return device.setFrequency(Number(args.frequency)).then(() => {
+						return { ok: true };
+					});
+				}
+			};
+			if (!actions[name]) {
+				return Promise.reject(new Error("unknown command: " + name));
+			}
+			return actions[name]();
+		}
+	};
+};
+
+module.exports = {
+	name: "kc9531b",
+	description: "DeepAce KC9531B RF power meter. Channels: dbm, mw",
+	options: {
+		path: "serial port (required)",
+		baud: "default 115200",
+		frequency: "correction frequency set on start",
+		pollMs: "default 200"
+	},
+	commands: {
+		info: "model, versions, frequency, temperature",
+		set_frequency: "{frequency} correction frequency"
+	},
+	create: create
+};

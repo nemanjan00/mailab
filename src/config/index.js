@@ -13,7 +13,9 @@ const DEFAULTS = {
 	PUSH_INTERVAL_MS: "50",
 	MDP_HOST_PATH: path.join(os.homedir(), "mdp-p906", "host"),
 	SIGROK_CLI: "sigrok-cli",
-	PYTHON: "python3"
+	PYTHON: "python3",
+	PM3_CLIENT: "proxmark3",
+	CIV_PATH: path.join(os.homedir(), "ci-v")
 };
 
 const config = {
