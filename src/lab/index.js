@@ -96,6 +96,21 @@ const create = (options) => {
 
 	const panes = panesModule.create(saved.panes, changed);
 
+	// /dev node -> lab devices using it (fixed paths and the ports drivers resolved)
+	const devUsers = () => {
+		const users = {};
+		Object.keys(instances).forEach((id) => {
+			const o = instances[id].options || {};
+			const live = instances[id].instance && instances[id].instance.port ? [instances[id].instance.port()] : [];
+			[o.path, o.port, o.device, o.conn].concat(live).filter((v) => typeof v === "string" && v.startsWith("/dev/")).forEach((dev) => {
+				if ((users[dev] = users[dev] || []).indexOf(id) === -1) {
+					users[dev].push(id);
+				}
+			});
+		});
+		return users;
+	};
+
 	const queue = (name, t, v) => {
 		if (!pending[name]) {
 			pending[name] = { t: [], v: [] };
@@ -739,17 +754,19 @@ const create = (options) => {
 		// ---- USB ------------------------------------------------------------
 
 		/**
+		 * USB serial ports with their adapter identity and the lab devices on them.
+		 */
+		uartPorts: () => {
+			const users = devUsers();
+			return usbService.serialPorts(usbService.inventory().buses).map((p) => Object.assign(p, { labDevices: users[p.node] || [] }));
+		},
+
+		/**
 		 * USB tree with power status and which lab device uses which /dev node.
 		 */
 		usbTree: () => {
 			const usb = usbService;
-			const users = {};
-			Object.keys(instances).forEach((id) => {
-				const o = instances[id].options || {};
-				[o.path, o.port, o.device, o.conn].filter((v) => typeof v === "string" && v.startsWith("/dev/")).forEach((dev) => {
-					(users[dev] = users[dev] || []).push(id);
-				});
-			});
+			const users = devUsers();
 			const link = (n) => {
 				const out = Object.assign({}, n, { labDevices: [].concat(...n.nodes.map((dev) => users[dev] || [])) });
 				if (n.ports) {

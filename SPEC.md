@@ -88,6 +88,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
 | UART in/out | ✅ | flowgraph `uart_tx` (text/hex → line levels: start/stop, parity, data bits, oversampling, repeat) and `uart_rx` (logic/analog/bits at any oversampling → bytes; parity/framing errors; value + blob + per-line `uart` log entries for classifiers). Verified 8N1/8E1/8O2, noise, fractional oversampling; regression test. Serial consoles: `serial` driver + log pane command box |
+| Tables: sort, filter, export | ⬜ | every SDK table (devices, channels, readings/markers, classifier, values, uart ports, …): click-to-sort columns (numeric-aware), a filter box, export of the visible rows to CSV and JSON |
+| USB-UART consoles (ttyUSB / ttyACM, Tigard port A, CP210x, CH340, FTDI, CDC-ACM) | ✅ | `uart` driver: port by stable identity (`match` {vid, pid, serial, product, usbPath, interface, byId}) or fixed `path`; waits while the adapter is absent and reconnects after replugs/re-enumeration; live `set` of baud / format (8N1, 7E1…) / flow / eol / display; `write`, `write_hex`, `query` (until regex); rx lines (ANSI stripped, idle-flushed prompts) → log "rx" (classifier, notifications), hex display; raw `capture_start/stop` → blob. `terminal` pane (scrollback, send with history, hex send, baud/format/eol/display). `uart_ports` tool + `/api/uart/ports` (adapter identity, by-id, which lab device uses it). Tested over a socat pty pair (jest) and live in the browser; not yet on a real Tigard/CP210x |
 | SDR level trigger | ✅ | flowgraph `level_trigger` (power squelch): gates the stream above threshold_db with pretrigger/hold, logs + counts bursts, saves each as IQ blob + envelope trace. Verified on gated GFSK bursts |
 | Beamforming math | 🟡 | done: `steering(n, d, θ)`, `array_factor(n, d, steer, θ)`, `array_factor_db` (ULA, d in λ, degrees; −100 dB floor) in all math; beam patterns verified in the graph pane (dB vs angle, polar with `equal` aspect). Next: UCA, DoA (delay-and-sum, MUSIC) once multi-channel coherent SDR input exists (bladeRF 2×2, KrakenSDR) |
 | Boardview: PCB analysis / schematic tracing | ⬜ | pane with imported board photos, layer scans and PDFs (pdf.js) as aligned layers; draw traces/pads/components/test points/nets on top, highlight nets; DM858 continuity → net connections; probe points ↔ scope channels; netlist export; annotations as values the AI can read and extend. Sample material: `~/rib/docs` (Motorola GM600 service-manual schematic PDFs, renders, EEPROM dumps; vendor files stay local, never committed) |
@@ -116,7 +118,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | tinySA Ultra | 🟡 | protocol from docs |
 | LiteVNA 64 | 🟡 | protocol from docs |
 | HackRF / bladeRF | 🟡 | hackrf_sweep, soapy bridge, flowgraph source |
-| Proxmark3 (node-proxmark3) | 🟡 | |
+| Proxmark3 / Proxmark5 (node-proxmark3) | ✅ | runs on the lab's PM5 (AT32F437, Iceman firmware from ~/pm5-og): `PM3_CLIENT` defaults to ~/pm5-og/client/proxmark3 when built; `match` {serial} picks the Proxmark by USB serial; start timeout kills a client that never starts. node-proxmark3 0.0.12 on npm lacks json.lua (ignored via .gitignore) → mailab adds a LUA_PATH shim (dkjson); fixed upstream in node-proxmark3 8a33621 (0.0.13, not yet published to npm) |
 | PicoGlitcher (findus) | 🟡 | |
 | nRF52840 modem | ⬜ | the mdp-p906 bridge firmware as a generic 2.4 GHz ESB radio (listen/send) |
 | InfiRay P2 Pro thermal camera | ⬜ | UVC; false-colour image + min/max/centre temperature channels |
@@ -292,3 +294,6 @@ Next:
 117. udev notifications: the AI can define "udev rules" (in-app, not real udev rules) to be notified on specific USB events
 118. make sure to update spec with any of my requirements
 119. use agents to do features in parallel
+120. when I said uart, I meant usb to uart, tigard... ttyUSB / ttyACM
+121. ~/pm5-og: the Proxmark5 (Iceman tree, PM5 platform) client + firmware; the lab's proxmark on ttyACM0 is a PM5
+122. table sort, filter, export to csv and json

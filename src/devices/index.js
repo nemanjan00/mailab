@@ -4,6 +4,7 @@
 const DRIVERS = [
 	require("./sim"),
 	require("./serial"),
+	require("./uart"),
 	require("./process"),
 	require("./scpi"),
 	require("./dm858"),

@@ -18,7 +18,14 @@
 	},
 	"jest": {
 		"testEnvironment": "node",
-		"forceExit": true
+		"forceExit": true,
+		"modulePathIgnorePatterns": [
+			"<rootDir>/.claude/"
+		],
+		"testPathIgnorePatterns": [
+			"/node_modules/",
+			"<rootDir>/.claude/"
+		]
 	},
 	"lint-staged": {
 		"*.js": "eslint --fix"

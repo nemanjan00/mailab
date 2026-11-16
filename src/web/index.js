@@ -174,6 +174,7 @@ const api = (lab) => {
 		return lab.importState(req.body);
 	}));
 	router.get("/usb", route(() => lab.usbTree()));
+	router.get("/uart/ports", route(() => lab.uartPorts()));
 	router.post("/usb/power", route((req) => {
 		human(req);
 		const usb = require("../services/usb");

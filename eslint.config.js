@@ -15,7 +15,7 @@ const RULES = {
 
 module.exports = [
 	{
-		ignores: ["node_modules/", "data/", "public/build/"]
+		ignores: ["node_modules/", "data/", "public/build/", ".claude/"]
 	},
 	js.configs.recommended,
 	{

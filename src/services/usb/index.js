@@ -228,6 +228,57 @@ const inventory = (roots) => {
 	};
 };
 
+// ---- serial ports (USB-UART adapters) ------------------------------------------------------
+
+const BY_ID = "/dev/serial/by-id";
+
+/**
+ * Every ttyUSB / ttyACM node with the USB device and interface it belongs to.
+ * @param {Object[]} buses from inventory()
+ * @param {string} [byIdDir]
+ */
+const serialPorts = (buses, byIdDir) => {
+	const dir = byIdDir || BY_ID;
+	const links = {};
+	list(dir).forEach((name) => {
+		try {
+			links["/dev/" + path.basename(fs.readlinkSync(path.join(dir, name)))] = path.join(dir, name);
+		} catch (_err) {
+			// not a link
+		}
+	});
+	const out = [];
+	const walk = (n) => {
+		(n.subsystems || []).forEach((s) => {
+			s.nodes.filter((node) => /^\/dev\/tty(USB|ACM)\d+$/.test(node)).forEach((node) => {
+				out.push({
+					node: node, byId: links[node] || null, usbPath: n.name, interface: Number(s.name.split(".").pop()),
+					vid: n.vid, pid: n.pid, serial: n.serial, product: n.product || n.idName, manufacturer: n.manufacturer, driver: s.driver
+				});
+			});
+		});
+		(n.ports || []).forEach((p) => p.device && walk(p.device));
+	};
+	buses.forEach(walk);
+	return out.sort((a, b) => a.node.localeCompare(b.node, undefined, { numeric: true }));
+};
+
+/**
+ * Find the port matching a stable identity, so a device survives re-enumeration
+ * (ttyUSB0 becoming ttyUSB1 after a replug).
+ * @param {Object[]} ports from serialPorts()
+ * @param {{vid, pid, serial, product, usbPath, interface, byId}} match all optional; interface defaults to the first
+ * @returns {Object|null}
+ */
+const findPort = (ports, match) => {
+	const m = match || {};
+	const eq = (a, b) => b === undefined || b === null || b === "" || String(a || "").toLowerCase() === String(b).toLowerCase();
+	const hits = ports.filter((p) => eq(p.vid, m.vid) && eq(p.pid, m.pid) && eq(p.serial, m.serial) && eq(p.usbPath, m.usbPath) && eq(p.byId, m.byId)
+		&& (!m.product || String(p.product || "").toLowerCase().indexOf(String(m.product).toLowerCase()) !== -1)
+		&& (m.interface === undefined || m.interface === null || p.interface === Number(m.interface)));
+	return hits.sort((a, b) => a.interface - b.interface)[0] || null;
+};
+
 // ---- port power (uhubctl) ---------------------------------------------------------------------
 
 /**
@@ -266,6 +317,8 @@ const usb = {
 	parseIdsData: parseIdsData,
 	parseUhubctl: parseUhubctl,
 	parentOf: parentOf,
+	serialPorts: serialPorts,
+	findPort: findPort,
 
 	/**
 	 * Power status of switchable hubs; {_error} when uhubctl is missing or not permitted.

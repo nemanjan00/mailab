@@ -69,6 +69,10 @@ const TYPES = {
 		description: "editor for a flowgraph device: blocks, links, live rates and errors",
 		config: { device: "flowgraph device id" }
 	},
+	terminal: {
+		description: "serial terminal for a uart device (USB-UART adapter): scrollback, send line / hex, live baud, format, line ending, hex view",
+		config: { device: "uart device id" }
+	},
 	usb: {
 		description: "USB tree: hubs, ports, devices with /dev nodes and the lab devices using them; power toggles on switchable hubs (uhubctl)",
 		config: {}

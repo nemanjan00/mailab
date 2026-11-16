@@ -1,5 +1,6 @@
 // Runtime configuration from the environment, with defaults.
 
+const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
@@ -14,7 +15,10 @@ const DEFAULTS = {
 	MDP_HOST_PATH: path.join(os.homedir(), "mdp-p906", "host"),
 	SIGROK_CLI: "sigrok-cli",
 	PYTHON: "python3",
-	PM3_CLIENT: "proxmark3",
+	// RRG/Iceman client: a source checkout's build (e.g. ~/pm5-og, the PM5
+	// tree) when there is one, else `proxmark3` from PATH
+	PM3_CLIENT: [path.join(os.homedir(), "pm5-og", "client", "proxmark3"), path.join(os.homedir(), "proxmark3", "client", "proxmark3")]
+		.find((file) => fs.existsSync(file)) || "proxmark3",
 	CIV_PATH: path.join(os.homedir(), "ci-v"),
 	// "name:token[:rw|ro],..." enables auth for collaboration (empty = open)
 	MAILAB_TOKENS: "",

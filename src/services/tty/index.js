@@ -11,6 +11,37 @@ const execFileSync = require("child_process").execFileSync;
 const serialize = require("../../utils/mutex").serialize;
 
 const DEFAULT_BAUD = 115200;
+const FLOW = { none: ["-crtscts", "-ixon", "-ixoff"], rtscts: ["crtscts", "-ixon", "-ixoff"], xonxoff: ["-crtscts", "ixon", "ixoff"] };
+
+/**
+ * stty arguments for a line format.
+ * @param {{baud: number, format: string, flow: string}} options format like "8N1", "7E1", "8O2"
+ * @returns {string[]}
+ */
+const sttyArgs = (options) => {
+	const opts = options || {};
+	const baud = Number(opts.baud || DEFAULT_BAUD);
+	if (!Number.isInteger(baud) || baud < 50 || baud > 20000000) {
+		throw new Error("bad baud rate: " + opts.baud);
+	}
+	const m = /^([5-8])([NEO])([12])$/i.exec(opts.format || "8N1");
+	if (!m) {
+		throw new Error("bad format (expected e.g. 8N1, 7E1): " + opts.format);
+	}
+	const flow = FLOW[opts.flow || "none"];
+	if (!flow) {
+		throw new Error("flow must be none, rtscts or xonxoff");
+	}
+	const parity = m[2].toUpperCase();
+	return [String(baud), "cs" + m[1], parity === "N" ? "-parenb" : "parenb", parity === "O" ? "parodd" : "-parodd", m[3] === "2" ? "cstopb" : "-cstopb"].concat(flow);
+};
+
+/**
+ * Change baud / format / flow control of a (possibly open) port.
+ */
+const configure = (path, options) => {
+	execFileSync("stty", ["-F", path].concat(sttyArgs(options)));
+};
 
 /**
  * @param {string} path serial device, e.g. /dev/ttyACM0
@@ -21,7 +52,7 @@ const open = (path, options) => {
 	const baud = opts.baud || DEFAULT_BAUD;
 	// raw mode, no echo; opening the tty raises DTR, which USB CDC devices
 	// usually want before they talk
-	execFileSync("stty", ["-F", path, String(baud), "raw", "-echo", "-hupcl"]);
+	execFileSync("stty", ["-F", path, "raw", "-echo", "-hupcl"].concat(opts.format || opts.flow ? sttyArgs(opts) : [String(baud)]));
 	const flags = fs.constants.O_RDWR | fs.constants.O_NOCTTY | fs.constants.O_NONBLOCK;
 	const fd = fs.openSync(path, flags);
 	const input = new tty.ReadStream(fd);
@@ -150,6 +181,8 @@ const inUse = () => {
 
 module.exports = {
 	open: open,
+	configure: configure,
+	sttyArgs: sttyArgs,
 	acquire: acquire,
 	release: release,
 	inUse: inUse,

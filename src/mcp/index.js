@@ -100,7 +100,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "usb_tree", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -513,6 +513,9 @@ const create = (lab, context) => {
 	// ---- USB --------------------------------------------------------------------
 
 	tool("usb_tree", "USB tree: buses → hubs → ports → devices (vid:pid, product, serial, /dev nodes, which lab device uses it) and per-port power status of switchable hubs (uhubctl)", {}, () => lab.usbTree());
+
+	tool("uart_ports", "Serial ports (ttyUSB / ttyACM) with the USB adapter behind each: vid:pid, serial, product, interface, by-id link, and which lab device uses it. "
+		+ "Use the identity as a uart device's `match` (e.g. {vid: \"0403\", pid: \"6010\", interface: 0} for Tigard's UART) so it survives replugs", {}, () => lab.uartPorts());
 
 	tool("usb_power", "Switch a USB hub port: on, off or cycle (power-cycle a hung device). Hub = uhubctl location (e.g. \"1-2\"). Waits for a person's approval", {
 		hub: z.string(),
