@@ -183,6 +183,7 @@ const create = (options, io) => {
 const pythonPreset = (spec) => {
 	const path = require("path");
 	const pyenv = require("../../services/pyenv");
+	const media = require("../../services/media");
 	return {
 		name: spec.name,
 		description: spec.description,
@@ -197,7 +198,8 @@ const pythonPreset = (spec) => {
 					inner = create({
 						command: python,
 						args: [path.join(__dirname, "..", "..", "..", "python", spec.script)].concat(spec.args(options)),
-						env: options.env
+						// set last: device options can't widen where bridges may read media
+						env: Object.assign({}, options.env || {}, { MAILAB_MEDIA_ROOTS: media.roots().join(":") })
 					}, io);
 					return inner.start();
 				}),

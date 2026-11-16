@@ -12,7 +12,9 @@ and per-block stats are published as lab values "<device>_graph" / "_stats".
 import argparse
 import base64
 import json
+import os
 import socket
+import subprocess
 import time
 import wave
 
@@ -124,14 +126,26 @@ class ModulatedSource(Block):
         return x.astype(np.complex64), rate
 
 
+def _media_path(path, must_exist=True):
+    """resolve a media path; only inside MAILAB_MEDIA_ROOTS (set by mailab, not by device options),
+    so an AI's graph can't read or overwrite arbitrary files"""
+    roots = [os.path.realpath(r) for r in os.environ.get("MAILAB_MEDIA_ROOTS", "").split(":") if r]
+    real = os.path.realpath(str(path))
+    if not os.path.isabs(str(path)) or not any(real == r or real.startswith(r + os.sep) for r in roots):
+        raise ValueError("file paths must be inside " + (", ".join(roots) or "the media dirs") + " (MAILAB_MEDIA_DIRS)")
+    if must_exist and not os.path.isfile(real):
+        raise ValueError("no such file: " + str(path))
+    return real
+
+
 class FileSource(Block):
     kind = "source"
     doc = "raw cf32 IQ file, played back in real time"
-    params = {"path": ("", "cf32 file"), "rate": (1e6, "sample rate"), "loop": (True, "")}
+    params = {"path": ("", "cf32 file inside DATA_DIR/media or MAILAB_MEDIA_DIRS"), "rate": (1e6, "sample rate"), "loop": (True, "")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
-        self.data = np.fromfile(self.p["path"], dtype=np.complex64)
+        self.data = np.fromfile(_media_path(self.p["path"]), dtype=np.complex64)
         self.pos = 0
         self.t = time.monotonic()
 
@@ -150,6 +164,51 @@ class FileSource(Block):
             elif not len(out):
                 return None
         return out, rate
+
+
+class AudioFileSource(Block):
+    kind = "source"
+    doc = "audio file (wav/flac/mp3/ogg/… or a video's audio, decoded by ffmpeg) as real float samples"
+    params = {"path": ("", "file inside DATA_DIR/media or MAILAB_MEDIA_DIRS"), "rate": (48000, "output sample rate"),
+              "channel": (0, "channel to take (0 = mix down to mono)"), "loop": (True, ""),
+              "realtime": (True, "pace like a live source; false = as fast as the graph runs"), "gain": (1.0, "")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        path = _media_path(self.p["path"])
+        rate = int(float(self.p["rate"]))
+        ch = int(self.p["channel"])
+        # mono mix or one channel picked with the pan filter
+        af = ["-ac", "1"] if ch <= 0 else ["-af", "pan=mono|c0=c%d" % (ch - 1)]
+        out = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe",
+                              "-i", "file:" + path, "-vn"] + af + ["-ar", str(rate), "-f", "f32le", "pipe:1"],
+                             capture_output=True, timeout=120)
+        if out.returncode != 0:
+            raise ValueError("ffmpeg: " + out.stderr.decode(errors="replace").strip()[-300:])
+        self.data = (np.frombuffer(out.stdout, dtype="<f4") * float(self.p["gain"])).astype(np.complex64)
+        self.rate_out = float(rate)
+        self.pos = 0
+        self.t = time.monotonic()
+
+    def produce(self):
+        if not len(self.data):
+            return None
+        if self.p["realtime"]:
+            now = time.monotonic()
+            count = int((now - self.t) * self.rate_out)
+            if count <= 0:
+                return None
+            self.t += count / self.rate_out
+        else:
+            count = int(self.rate_out * TICK)
+        out = self.data[self.pos:self.pos + count]
+        self.pos += count
+        if self.pos >= len(self.data):
+            if self.p["loop"]:
+                self.pos = 0
+            elif not len(out):
+                return None
+        return out, self.rate_out
 
 
 class SoapySource(Block):
@@ -1045,11 +1104,15 @@ class Audio(Block):
 class Wav(Block):
     kind = "sink"
     doc = "record real samples to a WAV file"
-    params = {"path": ("/tmp/mailab.wav", "")}
+    params = {"path": ("", "output file inside DATA_DIR/media or MAILAB_MEDIA_DIRS (default <media>/<block id>.wav)")}
 
     def work(self, x, rate):
         if not hasattr(self, "w"):
-            self.w = wave.open(self.p["path"], "wb")
+            roots = [r for r in os.environ.get("MAILAB_MEDIA_ROOTS", "").split(":") if r]
+            path = self.p["path"] or (os.path.join(roots[0], self.id + ".wav") if roots else "")
+            if roots:
+                os.makedirs(roots[0], exist_ok=True)
+            self.w = wave.open(_media_path(path, must_exist=False), "wb")
             self.w.setnchannels(1)
             self.w.setsampwidth(2)
             self.w.setframerate(int(rate))
@@ -1221,7 +1284,7 @@ class NetSink(Block):
 
 
 BLOCKS = {
-    "signal": SignalSource, "modulated": ModulatedSource, "file": FileSource, "soapy": SoapySource,
+    "signal": SignalSource, "modulated": ModulatedSource, "file": FileSource, "audio_file": AudioFileSource, "soapy": SoapySource,
     "shift": Shift, "resample": Resample, "lowpass": Lowpass, "agc": Agc, "fm_demod": FmDemod, "am_demod": AmDemod,
     "symbol_sync": SymbolSync, "carrier_recovery": CarrierRecovery, "demod": Demod, "mag": Mag, "decimate": Decimate,
     "python": Python,

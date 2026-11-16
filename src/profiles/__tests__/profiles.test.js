@@ -109,6 +109,29 @@ describe("lab profiles", () => {
 			})
 			.then((res) => {
 				expect(res.body.result.isError).toBe(true);
+				// approved: what's saved is the snapshot shown, not changes made while waiting
+				const saving = request(app).post("/mcp").set(MCP).set(AI).send({
+					jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "lab_save", arguments: { name: "safe" } }
+				}).then((r) => r);
+				return wait(150)
+					.then(() => lab.addDevice("sneaky", "sim", {}))
+					.then(() => request(app).post("/api/approvals/" + lab.safety.listPending()[0].id).set(ME).send({ approve: true }))
+					.then(() => saving)
+					.then((r) => {
+						expect(r.body.result.isError).toBeFalsy();
+						const saved = lab.profiles.get("safe");
+						expect(saved.devices.find((d) => d.id === "psu").options.maxVolts).toBe(30);
+						expect(saved.devices.some((d) => d.id === "sneaky")).toBe(false);
+						return lab.removeDevice("sneaky");
+					})
+					.then(() => request(app).post("/api/profiles").set(ME).send({ name: "safe" }).expect(200))
+					.then(() => {
+						lab.profiles.save("safe", Object.assign(lab.exportState(), { devices: lab.exportState().devices.map((d) => (d.id === "psu" ? Object.assign({}, d, { options: { maxVolts: 5 } }) : d)) }));
+						return { body: { result: { isError: true } } };
+					});
+			})
+			.then((res) => {
+				expect(res.body.result.isError).toBe(true);
 				expect(lab.profiles.get("safe").devices.find((d) => d.id === "psu").options.maxVolts).toBe(5);
 				return request(app).post("/api/profiles").set(ME).send({ name: "safe" }).expect(200);
 			})

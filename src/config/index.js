@@ -27,7 +27,9 @@ const DEFAULTS = {
 	// extra Host names accepted without tokens, e.g. "lab.local"
 	MAILAB_ALLOWED_HOSTS: "",
 	// 0 = don't manage a python venv (use PYTHON as is)
-	MAILAB_MANAGE_PYTHON: "1"
+	MAILAB_MANAGE_PYTHON: "1",
+	// extra directories media tools and flowgraph file blocks may read/write (":"-separated); DATA_DIR/media always
+	MAILAB_MEDIA_DIRS: ""
 };
 
 // a DATA_DIR with control characters (e.g. ANSI colour codes from a

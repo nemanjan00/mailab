@@ -114,15 +114,19 @@ const create = (lab, dir) => {
 		 * Lines describing what saving now would change in profile `name`
 		 * (empty when it doesn't exist yet).
 		 */
-		saveDiff: (name) => (profiles.exists(name) ? diffStates(profiles.get(name), lab.exportState()) : []),
+		saveDiff: (name, state) => (profiles.exists(name) ? diffStates(profiles.get(name), state || lab.exportState()) : []),
 
 		/**
 		 * Lines describing what loading profile `name` would change in the lab.
 		 */
 		loadDiff: (name) => diffStates(lab.exportState(), profiles.get(name)),
 
-		save: (name) => {
-			const state = lab.exportState();
+		/**
+		 * @param {string} name
+		 * @param {Object} [state] a snapshot taken earlier (what a person approved); default: now
+		 */
+		save: (name, snapshot) => {
+			const state = snapshot || lab.exportState();
 			fs.mkdirSync(dir, { recursive: true });
 			fs.writeFileSync(fileFor(name), JSON.stringify(state, null, "\t"));
 			return { name: name, savedAt: state.savedAt, devices: state.devices.length, panes: state.panes.length };

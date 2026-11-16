@@ -7,6 +7,7 @@ const pkg = require("../../package.json");
 const batch = require("../batch");
 const kaitai = require("../kaitai");
 const blobs = require("../blobs");
+const media = require("../services/media");
 const sweepModule = require("../sweep");
 
 const MAX_POINTS = 500;
@@ -101,7 +102,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -392,6 +393,69 @@ const create = (lab, context) => {
 		});
 	});
 
+	// ---- media (ffmpeg / sox) ------------------------------------------------
+
+	const mediaInput = (a) => (a.blob ? { data: lab.getBlob(a.blob).data } : { path: a.path });
+	const mediaSource = { blob: z.string().optional().describe("lab blob holding the file (upload: PUT /api/blobs/:name)"), path: z.string().optional().describe("absolute path inside DATA_DIR/media or MAILAB_MEDIA_DIRS") };
+
+	tool("media_probe", "Container, duration and streams (codec, sample rate, channels, video size, fps) of an audio/video file or blob", mediaSource, (a) => media.probe(mediaInput(a)));
+
+	tool("audio_to_pcm", "Decode an audio (or video's audio) file/blob to raw PCM, stored as blob `name` (for kaitai/blob tools, flowgraph `audio_file`, analysis). "
+		+ "Optionally also plays it into lab audio stream `name` for the audio pane", Object.assign({
+		name: z.string(),
+		rate: z.number().optional().describe("default 48000"),
+		channels: z.number().optional().describe("default 1"),
+		format: z.enum(["s16le", "f32le", "s32le", "u8"]).optional(),
+		start: z.number().optional().describe("seconds"),
+		duration: z.number().optional().describe("seconds"),
+		engine: z.enum(["ffmpeg", "sox"]).optional(),
+		play: z.boolean().optional()
+	}, mediaSource), (a) => media.decodeAudio(mediaInput(a), a).then((r) => {
+		lab.setBlob(a.name, r.pcm, actor());
+		if (a.play && r.format === "s16le" && r.channels === 1) {
+			// in ~0.1 s chunks, like a flowgraph audio sink
+			const step = Math.round(r.rate / 10) * 2;
+			for (let i = 0; i < r.pcm.length; i += step) {
+				lab.pushAudio(a.name, r.rate, r.pcm.subarray(i, i + step).toString("base64"));
+			}
+		}
+		return { blob: a.name, bytes: r.pcm.length, rate: r.rate, channels: r.channels, format: r.format, samples: r.samples, seconds: r.samples / r.rate };
+	}));
+
+	tool("audio_encode", "Encode a raw PCM blob to wav / flac / mp3 / ogg / opus (blob `name`)", {
+		blob: z.string().describe("raw PCM blob"),
+		name: z.string(),
+		rate: z.number(),
+		channels: z.number().optional(),
+		format: z.enum(["s16le", "f32le", "s32le", "u8"]).optional(),
+		codec: z.enum(["wav", "flac", "mp3", "ogg", "opus"]).optional(),
+		bitrate: z.string().optional().describe("e.g. 128k")
+	}, (a) => media.encodeAudio(lab.getBlob(a.blob).data, a).then((out) => {
+		lab.setBlob(a.name, out, actor());
+		return { blob: a.name, bytes: out.length };
+	}));
+
+	tool("video_frames", "Decode frames of a video file/blob into lab images `<name>_<n>` (look at them with image_get)", Object.assign({
+		name: z.string(),
+		fps: z.number().optional().describe("frames per second of video to take (default 1)"),
+		start: z.number().optional().describe("seconds"),
+		maxFrames: z.number().optional().describe("default 10, max 200"),
+		width: z.number().optional().describe("scale to this width")
+	}, mediaSource), (a) => media.videoFrames(mediaInput(a), a).then((frames) => {
+		frames.forEach((png, i) => lab.setImage(a.name + "_" + i, png, "image/png"));
+		return { images: frames.map((_png, i) => a.name + "_" + i) };
+	}));
+
+	tool("video_encode", "Encode lab images (same size, in order) into a video blob: mp4 / webm / gif (e.g. a time-lapse of camera snapshots)", {
+		images: z.array(z.string()),
+		name: z.string(),
+		fps: z.number().optional(),
+		format: z.enum(["mp4", "webm", "gif"]).optional()
+	}, (a) => media.encodeVideo(a.images.map((n) => lab.getImage(n).data), a).then((out) => {
+		lab.setBlob(a.name, out, actor());
+		return { blob: a.name, bytes: out.length };
+	}));
+
 	tool("image_get", "Get an image (e.g. a scope screenshot) to look at", { name: z.string() }, (a) => {
 		const img = lab.getImage(a.name);
 		return { _image: { data: img.data.toString("base64"), mime: img.mime }, name: img.name, t: img.t };
@@ -576,11 +640,14 @@ const create = (lab, context) => {
 		if (!lab.profiles.exists(a.name)) {
 			return lab.profiles.save(a.name);
 		}
-		const diff = lab.profiles.saveDiff(a.name);
+		// the snapshot the person sees is the one saved: changes made while the
+		// approval waits are not slipped in
+		const snapshot = lab.exportState();
+		const diff = lab.profiles.saveDiff(a.name, snapshot);
 		return lab.safety.requestApproval({
 			who: actor(), device: "lab", command: "save", args: { profile: a.name },
 			reason: "overwrites profile \"" + a.name + "\"" + (diff.length ? ":\n" + diff.join("\n") : " (no changes)")
-		}).then(() => lab.profiles.save(a.name));
+		}).then(() => lab.profiles.save(a.name, snapshot));
 	});
 
 	tool("lab_load", "Replace the lab with a saved profile (stops all devices). Waits for a person's approval: it can replace safety rules", {
