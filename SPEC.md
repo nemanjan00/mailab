@@ -87,6 +87,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | MCP connection help in the UI | ✅ | the header's MCP address opens a modal: `claude mcp add` with this lab's URL, JSON config for other clients, token hint when auth is on, channel-bridge config, copy buttons |
 | libsigrokdecode for external inputs | ✅ | flowgraph `decode` block + `decode`/`feed` commands (base64/hex/bits/lab blob; net_source u8/u16/u32/bits; sigrok `capture_blob`): the installed libsigrokdecode decoder scripts run in-process through a `sigrokdecode` stand-in (stacking works, e.g. spi+spiflash), because local sigrok-cli 0.7.2 + libsigrokdecode-git fails on any channel mapping; built-in numpy uart/spi/i2c/manchester with the same annotations. → value table, events, log, data blob, count channel. Regression test. `capture_blob` untested |
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
+| 802.11-style OFDM modulation (real Wi-Fi shaping) | ⬜ in progress (agent) | flowgraph `ofdm_mod` / `ofdm_demod`: 64-pt IFFT, 48 data + 4 pilot subcarriers, QAM per carrier, cyclic prefix, 802.11a/g STF/LTF preamble; bytes → genuine OFDM IQ (not single-carrier). Drives the beacon demo (demos/beacon-to-iq) so the spectrum is real Wi-Fi-shaped; loopback demod recovers the bytes. Still a DSP/signal block — TX stays behind the SDR TX safety gate |
 | HackRF / bladeRF modulation (TX) | ⬜ in progress (agent) | flowgraph `soapy_sink` (HackRF / bladeRF / any SoapySDR TX) and a hackrf_transfer TX path: modulated output from any flowgraph chain (mod, analog_mod, uart_tx, files). Safety: one shared RF TX policy for all transmitters (rfcat too): lab region bands (`MAILAB_RF_REGION`) + lab-level extra bands (e.g. amateur with a licence) only a person can configure; every TX start needs approval; gain / power caps; automatic stop after a max duration; TX state visible in the UI with a kill switch |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
@@ -341,3 +342,7 @@ Next:
 153. reviewer: torch install could pick PyPI's CPU 2.15.0 and resolve unpinned deps across two indexes → torch==2.15.0+cu134, --index-url for that step, constraints file with the exact dependency closure
 154. nanokvm+ from sipeed
 155. you need sdr tx
+156. cool demo: craft wifi beacon bytes, modulate, view IQ/spectrum (loopback, not TX) — committed as demos/beacon-to-iq
+157. with screenshot
+158. commit that demo
+159. oh, use real wifi modulation (OFDM, not single-carrier QAM256)
