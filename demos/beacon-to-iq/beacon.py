@@ -58,25 +58,31 @@ def main():
     # 1. the crafted bytes as a blob (the kaitai pane parses them into fields)
     mcp("blob_write", {"name": "beacon", "hex": frame.hex()})
 
-    # 2. one flowgraph: bytes -> QAM256 -> loopback channel -> spectrum + recovered constellation
+    # 2. one flowgraph: bytes -> 16-QAM -> loopback channel -> spectrum + a
+    #    *recovered* constellation. The receive chain mirrors the modem toolkit:
+    #    agc (normalise amplitude) -> symbol_sync (timing) -> carrier_recovery
+    #    (phase) so the scatter lands on the 16-QAM reference grid. 16-QAM is a
+    #    real 802.11 MCS and 54 bytes = 108 symbols fill its 16 points cleanly
+    #    (QAM256 would only sample ~54 of its 256 points from one short frame).
     mcp("device_add", {"id": "fg", "driver": "flowgraph", "options": {"graph": {
         "blocks": [
             {"id": "src", "type": "bits", "params": {"pattern": "hex:" + frame.hex(), "bitrate": 20000, "preamble": "aaaa", "sync": "2dd4"}},
-            {"id": "tx", "type": "mod", "params": {"scheme": "qam256", "sps": 8}},
-            {"id": "air", "type": "channel", "params": {"snr_db": 30}},
+            {"id": "tx", "type": "mod", "params": {"scheme": "qam16", "sps": 8}},
+            {"id": "air", "type": "channel", "params": {"snr_db": 28}},
             {"id": "spec", "type": "spectrum", "params": {}},
-            {"id": "mf", "type": "matched_filter", "params": {"sps": 8}},
+            {"id": "agc", "type": "agc", "params": {}},
             {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+            {"id": "pll", "type": "carrier_recovery", "params": {"scheme": "qam16"}},
             {"id": "con", "type": "constellation", "params": {}},
         ],
-        "links": [["src", "tx"], ["tx", "air"], ["air", "spec"], ["air", "mf"], ["mf", "sync"], ["sync", "con"]],
+        "links": [["src", "tx"], ["tx", "air"], ["air", "spec"], ["air", "agc"], ["agc", "sync"], ["sync", "pll"], ["pll", "con"]],
     }}})
 
     # 3. panes: the parsed frame, the spectrum, the constellation, the graph
     mcp("pane_add", {"type": "kaitai", "title": "beacon frame", "config": {"blob": "beacon", "ksy": ksy}, "x": 0, "y": 0, "w": 6, "h": 7})
-    mcp("pane_add", {"type": "trace", "title": "spectrum (QAM256 at baseband)", "config": {"trace": "fg_spec"}, "x": 6, "y": 0, "w": 6, "h": 4})
+    mcp("pane_add", {"type": "trace", "title": "spectrum (16-QAM at baseband)", "config": {"trace": "fg_spec"}, "x": 6, "y": 0, "w": 6, "h": 4})
     mcp("pane_add", {"type": "trace", "title": "constellation (after loopback)", "config": {"trace": "fg_con"}, "x": 6, "y": 4, "w": 6, "h": 3})
-    mcp("pane_add", {"type": "flowgraph", "title": "beacon -> QAM256 -> loopback", "config": {"device": "fg"}, "x": 0, "y": 7, "w": 12, "h": 4})
+    mcp("pane_add", {"type": "flowgraph", "title": "beacon -> 16-QAM -> loopback", "config": {"device": "fg"}, "x": 0, "y": 7, "w": 12, "h": 4})
 
     print("built: open", URL, "- the beacon bytes flow bits -> QAM256 -> channel -> spectrum/constellation")
 
