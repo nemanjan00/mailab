@@ -517,3 +517,62 @@ body.has-maximized .grid-stack-item:not(.maximized) { visibility: hidden; }
 .vnc-toggle input { width: auto; margin: 0; accent-color: #bd93f9; }
 .vnc-clip { flex: 1 1 120px; min-width: 80px; width: auto; font-family: var(--mono); }
 .vnc .widget { flex: 1; min-height: 0; background: #282a36; overflow: hidden; }
+/* hex editor */
+.hexpane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.hx-bar { flex-wrap: wrap; padding: 4px 8px; }
+.hx-bar select, .hx-bar input, .hx-form select, .hx-form input:not([type=checkbox]) { width: auto; flex: none; padding: 3px 6px; }
+.hx-form input:not([type=checkbox]):not(.short) { flex: 1; min-width: 120px; }
+.hx-bar input.hx-jump { width: 220px; }
+.hx-panel > input { padding: 3px 6px; }
+.hx-form input[type=checkbox] { width: auto; }
+.hx-spacer { flex: 1; }
+.hx-save { font-size: 12px; color: var(--accent); white-space: nowrap; }
+.hx-save.dirty, .hx-save.saving { color: var(--warn); }
+.hx-save.error { color: var(--err); }
+.hx-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 330px; min-height: 0; }
+.hx-body.nopanel { grid-template-columns: minmax(0, 1fr); }
+.hx-body.nopanel .hx-side { display: none; }
+.hx-main { display: flex; min-width: 0; min-height: 0; }
+.hx-grid { flex: 1; overflow-x: auto; overflow-y: hidden; outline: none; min-width: 0; cursor: text; user-select: none; }
+.hx-grid:focus-visible { box-shadow: inset 0 0 0 1px var(--line); }
+.hx-gutter { width: 14px; flex: none; height: 100%; cursor: pointer; }
+.hx-rows { font-size: 12px; white-space: pre; padding: 0 6px; }
+.hx-row { height: 18px; line-height: 18px; }
+.hx-off { color: var(--muted); margin-right: 10px; }
+.hx-hex i, .hx-asc i { font-style: normal; }
+.hx-hex i { padding: 0 3px; }
+.hx-hex i.g { margin-left: 6px; }
+.hx-asc { margin-left: 10px; }
+.hx-sep { color: var(--line); margin: 0 8px; }
+.hx-rows i.z { color: var(--muted); }
+.hx-rows i.np { color: var(--muted); }
+.hx-rows i.na, .hx-rows i.end { color: var(--line); }
+.hx-rows i.sel { background: color-mix(in srgb, var(--accent-2) 30%, transparent); }
+.hx-rows i.hit { background: color-mix(in srgb, var(--c5) 35%, transparent); }
+.hx-rows i.hitc { background: var(--c5); color: var(--on-accent); }
+.hx-rows i.dif { color: var(--c6); font-weight: 600; }
+.hx-b i.dif { background: color-mix(in srgb, var(--c6) 25%, transparent); }
+.hx-rows i.bm { box-shadow: inset 0 -2px 0 var(--c0); }
+.hx-rows i.dirty { color: var(--warn); }
+.hx-rows i.cur { background: var(--accent); color: var(--on-accent); }
+.hx-rows i.cur2 { box-shadow: inset 0 0 0 1px var(--accent); }
+.hx-status { padding: 2px 8px; font-size: 11px; border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-side { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.hx-tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.hx-tabs button { border: none; background: none; color: var(--muted); padding: 4px 7px; border-radius: 0; }
+.hx-tabs button.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.hx-panel { overflow: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; min-height: 0; flex: 1; }
+.hx-panel h4 { margin: 6px 0 2px; color: var(--accent-2); font-size: 12px; }
+.hx-form { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.hx-form label { display: flex; align-items: center; gap: 2px; }
+.hx-panel input.short { width: 70px; }
+.hx-inspect { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.hx-inspect tr > :first-child { width: 48px; }
+.hx-inspect td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hx-inspect td, .hx-inspect th { padding: 1px 3px; text-align: left; }
+.hx-inspect input { width: 100%; padding: 1px 4px; font-size: 11px; }
+.hx-inspect .small { font-size: 10px; }
+.hx-mark { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hx-copyable { cursor: copy; }
+.hx-hist { width: 100%; height: 64px; background: var(--bg); }
+@media (max-width: 700px) { .hx-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 45%); } .hx-side { border-left: none; border-top: 1px solid var(--line); } }

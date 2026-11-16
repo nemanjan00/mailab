@@ -28,6 +28,7 @@ import kaitai from "./panes/kaitai.js";
 import chat from "./panes/chat.js";
 import graph from "./panes/graph.js";
 import blob from "./panes/blob.js";
+import hex from "./panes/hex.js";
 import classifier from "./panes/classifier.js";
 import trend from "./panes/trend.js";
 import custom from "./panes/custom.js";
@@ -38,7 +39,9 @@ import board from "./panes/board.js";
 import datasheets from "./panes/datasheets.js";
 import vnc from "./panes/vnc.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc };
+
+
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc, hex };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;

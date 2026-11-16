@@ -15,12 +15,23 @@ const captureModule = require("../capture");
 const fccid = require("../services/fccid");
 const datasheets = require("../services/datasheets");
 const vncProxy = require("./vnc");
+const blobEdit = require("../blobs/edit");
+const checksum = require("../utils/checksum");
 
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
 const ROOT = path.join(__dirname, "..", "..");
 // browsers send capture messages (camera frames up to 2 MB, base64) over /ws
 const WS_MAX_PAYLOAD = 4 * 1024 * 1024;
+
+// optional numeric / boolean query parameters
+const queryNumber = (value) => {
+	if (value === undefined || value === "") {
+		return undefined;
+	}
+	return Number(value);
+};
+const queryFlag = (value) => value === "1" || value === "true";
 
 // wrap a handler returning a value/promise into an express route
 const route = (handler) => {
@@ -96,6 +107,48 @@ const api = (lab) => {
 	}));
 	router.get("/blobs/:a/diff/:b", route((req) => {
 		return blobs.diff(lab.getBlob(req.params.a).data, lab.getBlob(req.params.b).data);
+	}));
+	// ---- hex editor: ranged reads, patches, search / replace, checksums ----
+	router.get("/blobs/:name/range", (req, res) => {
+		try {
+			const r = blobEdit.range(lab, req.params.name, queryNumber(req.query.offset), queryNumber(req.query.length));
+			res.set({ "x-blob-size": String(r.size), "x-blob-offset": String(r.offset), "cache-control": "no-store" });
+			res.type("application/octet-stream").send(r.data);
+		} catch (err) {
+			res.status(/unknown blob/.test(err.message) ? 404 : 400).json({ error: err.message });
+		}
+	});
+	router.get("/blobs/:name/peek", route((req) => {
+		return blobEdit.peek(lab, { name: req.params.name, offset: queryNumber(req.query.offset), length: queryNumber(req.query.length), as: req.query.as });
+	}));
+	router.patch("/blobs/:name", route((req) => {
+		return blobEdit.patch(lab, { name: req.params.name, ops: req.body.ops }, "ui");
+	}));
+	router.post("/blobs/:name/poke", route((req) => {
+		return blobEdit.poke(lab, Object.assign({}, req.body, { name: req.params.name }), "ui");
+	}));
+	router.get("/blobs/:name/search", route((req) => {
+		const q = req.query;
+		return blobEdit.search(lab, {
+			name: req.params.name, hex: q.hex, text: q.text, encoding: q.encoding, regex: q.regex, flags: q.flags,
+			ignoreCase: queryFlag(q.ignoreCase), wrap: queryFlag(q.wrap), dir: q.dir,
+			from: queryNumber(q.from), start: queryNumber(q.start), end: queryNumber(q.end), max: queryNumber(q.max)
+		});
+	}));
+	router.post("/blobs/:name/replace", route((req) => {
+		return blobEdit.replace(lab, Object.assign({}, req.body, { name: req.params.name }), "ui");
+	}));
+	router.get("/blobs/:name/checksum", route((req) => {
+		return blobEdit.checksum(lab, { name: req.params.name, offset: queryNumber(req.query.offset), length: queryNumber(req.query.length), algorithms: req.query.algorithms });
+	}));
+	router.get("/checksums", route(() => {
+		return checksum.catalogue();
+	}));
+	router.post("/blobs/:name/slice", route((req) => {
+		return blobEdit.slice(lab, Object.assign({}, req.body, { name: req.params.name }), "ui");
+	}));
+	router.get("/blobs/:a/change/:b", route((req) => {
+		return blobEdit.change(lab, { a: req.params.a, b: req.params.b, from: queryNumber(req.query.from), dir: req.query.dir });
 	}));
 	router.post("/kaitai", route((req) => {
 		return kaitai.parse(req.body.ksy, lab.getBlob(req.body.blob).data);

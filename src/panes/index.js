@@ -117,6 +117,21 @@ const TYPES = {
 		description: "blob analysis: file type, entropy profile, binwalk signatures; with compare, a byte diff against another blob",
 		config: { blob: "blob name", compare: "second blob to diff against (optional)" }
 	},
+	hex: {
+		description: "hex editor on a lab blob: virtual-scrolled hex + ASCII (fast on 64 MB dumps), jump to offset / expression, selection + copy as hex / C / Python / base64, "
+			+ "poke / insert / delete / fill with undo (saved to the blob), search & replace (hex ?? wildcards, text, regex), data inspector, checksums (CRC-8/16/32, sums, hashes, entropy), "
+			+ "side-by-side diff with config.compare, bookmarks, entropy / binwalk / kaitai overlays in the scroll gutter",
+		config: {
+			blob: "blob name",
+			compare: "second blob for a side-by-side diff (optional)",
+			bytesPerRow: "8 | 16 (default) | 32",
+			radix: "offset column: hex (default) | dec",
+			base: "address of byte 0 shown in the offset column (e.g. 0x08000000); \"@addr\" in jump uses it",
+			bookmarks: "[{offset, label}]",
+			ksy: ".ksy YAML: top-level field ranges as gutter overlay (optional)",
+			overlays: "false to skip entropy / binwalk analysis"
+		}
+	},
 	graph: {
 		description: "graphing calculator: mathjs expressions of x, parametric \"x(t); y(t)\", or lab data (db(mag(fft(ch))))",
 		config: { exprs: "[\"sin(x)\", {x: \"cos(t)\", y: \"sin(t)\"}]", xmin: "default -10", xmax: "default 10", ymin: "", ymax: "", equal: "same scale on both axes (polar)", refreshMs: "default 2000" }

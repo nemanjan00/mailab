@@ -180,6 +180,7 @@ laptop), a phone needs https (e.g. a reverse proxy with a certificate).
 | `trace_read`, `trace_write`, `image_get` | captures, spectra, screenshots |
 | `math_eval`, `math_derive`, `math_remove`, `plot` | analysis and the graphing calculator |
 | `value_read`, `value_write`, `blob_write`, `blob_read`, `kaitai_parse` | JSON values, binary blobs, Kaitai parsing |
+| `blob_peek`, `blob_poke`, `blob_patch`, `blob_search`, `blob_replace`, `blob_checksum`, `blob_slice`, `blob_diff` | hex editing: typed reads / writes (u8…u64, f32/f64, LE/BE), poke / insert / delete / fill with undo ops, search & replace (hex `??` wildcards, text, regex), CRC-8/16/32 variants, sums, hashes, entropy; the `hex` pane is the same for people |
 | `pane_types`, `pane_add`, `pane_update`, `pane_remove`, `note` | the shared UI |
 | `chat_send`, `chat_read` | lab chat |
 | `batch` | many calls in one request, ~1 ms timing, loops, result references |
