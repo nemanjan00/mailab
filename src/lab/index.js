@@ -1,0 +1,505 @@
+// The lab: devices feed channels, traces, scatter datasets and images; math
+// derives channels; panes describe the UI. Everything the web UI and the MCP
+// server do goes through here. Emits:
+//   "state"    devices / channels / panes / derived changed
+//   "trace"    {name}               a trace was replaced or appended to
+//   "image"    {name}
+//   "log"      {t, device, level, text}
+//   "activity" {t, tool, args, ok, summary}
+
+const EventEmitter = require("events");
+const channelsModule = require("../channels");
+const devices = require("../devices");
+const math = require("../math");
+const panesModule = require("../panes");
+const storeModule = require("../store");
+
+const LOG_SIZE = 2000;
+const ACTIVITY_SIZE = 500;
+const MAX_SCATTER_POINTS = 100000;
+const MAX_DERIVED_DEPTH = 8;
+
+const DEFAULT_PANES = [
+	{ type: "markdown", title: "mailab", x: 0, y: 0, w: 4, h: 4, config: { content: "# mailab\n\nThe AI owns this lab. Connect it over MCP at `/mcp`, or add devices and panes here.\n\n$$P = V \\cdot I$$" } },
+	{ type: "devices", title: "Devices", x: 4, y: 0, w: 4, h: 4 },
+	{ type: "activity", title: "AI activity", x: 8, y: 0, w: 4, h: 4 },
+	{ type: "chart", title: "Live", x: 0, y: 4, w: 8, h: 5, config: { channels: [], seconds: 30 } },
+	{ type: "channels", title: "Channels", x: 8, y: 4, w: 4, h: 5 }
+];
+
+const ring = (list, entry, size) => {
+	list.push(entry);
+	if (list.length > size) {
+		list.splice(0, list.length - size);
+	}
+};
+
+/**
+ * @param {{dataDir: string, channelCapacity: number}} options
+ */
+const create = (options) => {
+	const events = new EventEmitter();
+	const store = storeModule.create(options.dataDir);
+	const saved = store.load() || {};
+	const channels = channelsModule.create(options.channelCapacity);
+	const instances = {};
+	const traces = {};
+	const images = {};
+	const logs = [];
+	const activity = [];
+	const derived = {};
+	// samples not yet pushed to web clients: name -> {t: [], v: []}
+	let pending = {};
+
+	const snapshot = () => {
+		return {
+			devices: Object.keys(instances).map((id) => {
+				const inst = instances[id];
+				return { id: id, driver: inst.driver, options: inst.options, enabled: inst.enabled };
+			}),
+			derived: Object.keys(derived).map((name) => {
+				return { name: name, expression: derived[name].expression, unit: derived[name].unit };
+			}),
+			panes: panes.list()
+		};
+	};
+
+	const changed = () => {
+		store.save(snapshot);
+		events.emit("state");
+	};
+
+	const panes = panesModule.create(saved.panes, changed);
+
+	const queue = (name, t, v) => {
+		if (!pending[name]) {
+			pending[name] = { t: [], v: [] };
+		}
+		pending[name].t.push(t);
+		pending[name].v.push(v);
+	};
+
+	const runDerived = (input, t, depth) => {
+		if (depth > MAX_DERIVED_DEPTH) {
+			return;
+		}
+		Object.keys(derived).forEach((name) => {
+			const d = derived[name];
+			if (d.inputs.indexOf(input) === -1) {
+				return;
+			}
+			const scope = {};
+			const ready = d.inputs.every((symbol) => {
+				const latest = channels.latest(symbol);
+				if (latest) {
+					scope[symbol] = latest.v;
+				}
+				// unknown symbols are mathjs constants/functions (pi, sqrt, ...)
+				return latest || !channels.has(symbol);
+			});
+			if (!ready) {
+				return;
+			}
+			let value;
+			try {
+				value = d.evaluate(scope);
+			} catch (_err) {
+				return;
+			}
+			if (Number.isFinite(value)) {
+				lab.pushSample(name, value, { t: t }, depth + 1);
+			}
+		});
+	};
+
+	const lab = {
+		events: events,
+		channels: channels,
+
+		// ---- data -------------------------------------------------------
+
+		/**
+		 * @param {string} name channel
+		 * @param {number} value
+		 * @param {{t: number, unit: string, source: string}} [meta]
+		 */
+		pushSample: (name, value, meta, depth) => {
+			const m = meta || {};
+			const isNew = !channels.has(name);
+			channels.ensure(name, { unit: m.unit, source: m.source });
+			const t = m.t || Date.now();
+			const v = Number(value);
+			channels.push(name, t, v);
+			queue(name, t, v);
+			if (isNew) {
+				events.emit("state");
+			}
+			runDerived(name, t, depth || 0);
+		},
+
+		drainPending: () => {
+			const out = pending;
+			pending = {};
+			return out;
+		},
+
+		/**
+		 * Replace a trace.
+		 * @param {{x: number[], series: Object[], xUnit: string, yUnit: string, mode: string}} data
+		 */
+		setTrace: (name, data, source) => {
+			const isNew = !traces[name];
+			traces[name] = {
+				name: name,
+				source: source || "",
+				x: data.x || [],
+				series: data.series || [],
+				xUnit: data.xUnit || "",
+				yUnit: data.yUnit || "",
+				mode: data.mode || "line",
+				t: Date.now()
+			};
+			if (isNew) {
+				events.emit("state");
+			}
+			events.emit("trace", { name: name });
+		},
+
+		/**
+		 * Append a classified point to a scatter dataset (one series per class).
+		 * @param {{x: number, y: number, class: string, info: string, xLabel: string, yLabel: string}} p
+		 */
+		addPoint: (name, p, source) => {
+			if (!traces[name]) {
+				lab.setTrace(name, { mode: "scatter", xUnit: p.xLabel || "x", yUnit: p.yLabel || "y" }, source);
+			}
+			const trace = traces[name];
+			let series = trace.series.find((s) => {
+				return s.label === p.class;
+			});
+			if (!series) {
+				series = { label: p.class, x: [], y: [] };
+				trace.series.push(series);
+			}
+			if (series.x.length < MAX_SCATTER_POINTS) {
+				series.x.push(p.x);
+				series.y.push(p.y);
+			}
+			trace.t = Date.now();
+			events.emit("trace", { name: name });
+		},
+
+		getTrace: (name) => {
+			if (!traces[name]) {
+				throw new Error("unknown trace: " + name);
+			}
+			return traces[name];
+		},
+
+		listTraces: () => {
+			return Object.keys(traces).sort().map((name) => {
+				const tr = traces[name];
+				return {
+					name: name,
+					source: tr.source,
+					mode: tr.mode,
+					points: tr.x.length || tr.series.reduce((n, s) => {
+						return n + ((s.x && s.x.length) || 0);
+					}, 0),
+					series: tr.series.map((s) => {
+						return s.label;
+					}),
+					xUnit: tr.xUnit,
+					yUnit: tr.yUnit,
+					t: tr.t
+				};
+			});
+		},
+
+		setImage: (name, buffer, mime) => {
+			const isNew = !images[name];
+			images[name] = { name: name, mime: mime || "image/png", data: buffer, t: Date.now() };
+			if (isNew) {
+				events.emit("state");
+			}
+			events.emit("image", { name: name });
+		},
+
+		getImage: (name) => {
+			if (!images[name]) {
+				throw new Error("unknown image: " + name);
+			}
+			return images[name];
+		},
+
+		listImages: () => {
+			return Object.keys(images).sort().map((name) => {
+				return { name: name, mime: images[name].mime, t: images[name].t };
+			});
+		},
+
+		log: (device, text, level) => {
+			const entry = { t: Date.now(), device: device, level: level || "info", text: String(text) };
+			ring(logs, entry, LOG_SIZE);
+			events.emit("log", entry);
+		},
+
+		getLogs: (options) => {
+			const opts = options || {};
+			return logs.filter((entry) => {
+				return !opts.device || entry.device === opts.device;
+			}).slice(-(opts.last || 200));
+		},
+
+		recordActivity: (entry) => {
+			const full = Object.assign({ t: Date.now() }, entry);
+			ring(activity, full, ACTIVITY_SIZE);
+			events.emit("activity", full);
+		},
+
+		getActivity: () => {
+			return activity;
+		},
+
+		// ---- devices ----------------------------------------------------
+
+		/**
+		 * @param {string} id device id, becomes the channel prefix (<id>_<field>)
+		 * @param {string} driverName
+		 * @param {Object} options driver options
+		 */
+		addDevice: (id, driverName, options) => {
+			if (!channelsModule.isValidName(id)) {
+				throw new Error("invalid device id: " + id + " (letters, digits, _)");
+			}
+			if (instances[id]) {
+				throw new Error("device exists: " + id);
+			}
+			// throws on unknown driver
+			devices.get(driverName);
+			instances[id] = { id: id, driver: driverName, options: options || {}, enabled: true, state: "stopped", detail: "", instance: null };
+			changed();
+			return lab.startDevice(id);
+		},
+
+		startDevice: (id) => {
+			const inst = lab.getDevice(id);
+			const driver = devices.get(inst.driver);
+			const field = (name) => {
+				return id + "_" + channelsModule.sanitizeName(name);
+			};
+			const io = {
+				sample: (name, value, meta) => {
+					const m = meta || {};
+					lab.pushSample(field(name), value, { t: m.t, unit: m.unit, source: id });
+				},
+				samples: (name, t, v, unit) => {
+					t.forEach((ts, i) => {
+						lab.pushSample(field(name), v[i], { t: ts, unit: unit, source: id });
+					});
+				},
+				meta: (name, meta) => {
+					channels.ensure(field(name), meta);
+					events.emit("state");
+				},
+				trace: (name, data) => {
+					lab.setTrace(field(name), data, id);
+				},
+				point: (name, p) => {
+					lab.addPoint(field(name), p, id);
+				},
+				image: (name, buffer, mime) => {
+					lab.setImage(field(name), buffer, mime);
+				},
+				log: (text, level) => {
+					lab.log(id, text, level);
+				},
+				status: (state, detail) => {
+					inst.state = state;
+					inst.detail = detail || "";
+					events.emit("state");
+				}
+			};
+			inst.enabled = true;
+			inst.state = "starting";
+			inst.detail = "";
+			events.emit("state");
+			return Promise.resolve()
+				.then(() => {
+					inst.instance = driver.create(inst.options, io);
+					return inst.instance.start();
+				})
+				.then(() => {
+					if (inst.state === "starting") {
+						io.status("running");
+					}
+					changed();
+					return lab.describeDevice(id);
+				}, (err) => {
+					io.status("error", err.message);
+					lab.log(id, "start failed: " + err.message, "error");
+					changed();
+					return lab.describeDevice(id);
+				});
+		},
+
+		stopDevice: (id) => {
+			const inst = lab.getDevice(id);
+			inst.enabled = false;
+			let stopping = Promise.resolve();
+			if (inst.instance) {
+				stopping = inst.instance.stop();
+			}
+			return stopping.catch((err) => {
+				lab.log(id, "stop failed: " + err.message, "warn");
+			}).then(() => {
+				inst.instance = null;
+				inst.state = "stopped";
+				changed();
+				return lab.describeDevice(id);
+			});
+		},
+
+		removeDevice: (id) => {
+			return lab.stopDevice(id).then(() => {
+				delete instances[id];
+				changed();
+			});
+		},
+
+		commandDevice: (id, name, args) => {
+			const inst = lab.getDevice(id);
+			if (!inst.instance || inst.state === "error" || inst.state === "stopped") {
+				return Promise.reject(new Error("device " + id + " is " + inst.state + (inst.detail ? ": " + inst.detail : "")));
+			}
+			return inst.instance.command(name, args || {});
+		},
+
+		getDevice: (id) => {
+			if (!instances[id]) {
+				throw new Error("unknown device: " + id);
+			}
+			return instances[id];
+		},
+
+		describeDevice: (id) => {
+			const inst = lab.getDevice(id);
+			return {
+				id: id,
+				driver: inst.driver,
+				options: inst.options,
+				state: inst.state,
+				detail: inst.detail,
+				commands: devices.get(inst.driver).commands
+			};
+		},
+
+		listDevices: () => {
+			return Object.keys(instances).sort().map(lab.describeDevice);
+		},
+
+		// ---- math -------------------------------------------------------
+
+		/**
+		 * Evaluate an expression; each channel symbol is the vector of its
+		 * last `samples` values, each trace symbol is {x, y} of its first series.
+		 */
+		evaluate: (expression, options) => {
+			const opts = options || {};
+			const scope = {};
+			math.symbols(expression).forEach((symbol) => {
+				if (channels.has(symbol)) {
+					scope[symbol] = channels.read(symbol, { last: opts.samples || 1000, seconds: opts.seconds }).v;
+				} else if (traces[symbol]) {
+					scope[symbol] = traces[symbol].series[0].y;
+					scope[symbol + "_x"] = traces[symbol].x;
+				}
+			});
+			return math.evaluate(expression, scope);
+		},
+
+		defineDerived: (name, expression, unit) => {
+			if (!channelsModule.isValidName(name)) {
+				throw new Error("invalid channel name: " + name);
+			}
+			const compiled = math.compile(expression);
+			if (compiled.inputs.indexOf(name) !== -1) {
+				throw new Error("derived channel cannot depend on itself");
+			}
+			derived[name] = Object.assign(compiled, { unit: unit || "" });
+			channels.ensure(name, { unit: unit, source: "math", description: expression });
+			changed();
+			return { name: name, expression: expression, inputs: compiled.inputs };
+		},
+
+		removeDerived: (name) => {
+			delete derived[name];
+			channels.remove(name);
+			changed();
+		},
+
+		listDerived: () => {
+			return Object.keys(derived).map((name) => {
+				return { name: name, expression: derived[name].expression, inputs: derived[name].inputs, unit: derived[name].unit };
+			});
+		},
+
+		// ---- ui ---------------------------------------------------------
+
+		panes: panes,
+
+		state: () => {
+			return {
+				devices: lab.listDevices(),
+				channels: channels.list(),
+				traces: lab.listTraces(),
+				images: lab.listImages(),
+				derived: lab.listDerived(),
+				panes: panes.list(),
+				paneTypes: panesModule.TYPES
+			};
+		},
+
+		// ---- lifecycle --------------------------------------------------
+
+		restore: () => {
+			if (!saved.panes) {
+				DEFAULT_PANES.forEach(panes.add);
+			}
+			(saved.derived || []).forEach((d) => {
+				try {
+					lab.defineDerived(d.name, d.expression, d.unit);
+				} catch (err) {
+					lab.log("lab", "derived " + d.name + ": " + err.message, "error");
+				}
+			});
+			return Promise.all((saved.devices || []).map((d) => {
+				instances[d.id] = { id: d.id, driver: d.driver, options: d.options || {}, enabled: d.enabled, state: "stopped", detail: "", instance: null };
+				if (!d.enabled) {
+					return null;
+				}
+				return lab.startDevice(d.id);
+			}));
+		},
+
+		shutdown: () => {
+			return Promise.all(Object.keys(instances).map((id) => {
+				const inst = instances[id];
+				if (!inst.instance) {
+					return null;
+				}
+				return inst.instance.stop().catch(() => {
+					return null;
+				});
+			})).then(() => {
+				store.saveNow(snapshot());
+			});
+		}
+	};
+
+	return lab;
+};
+
+module.exports = {
+	create: create
+};
