@@ -105,6 +105,22 @@ def test_detect():
     print("ok detect (packet start found at offsets 0/37/200/513)")
 
 
+def test_pad():
+    """n_sym padding fills the last symbol BEFORE scrambling, so the receiver's
+    descramble reproduces every bit bit-exactly (regression: padding after the
+    scramble left the pad descrambled against a data-dependent state)."""
+    bits = rng.integers(0, 2, 100).astype(np.uint8)   # not a whole symbol
+    iq, info = O.modulate(bits, "qam16", n_sym=3)
+    assert info["bits_per_packet"] == 3 * O.N_DATA * 4
+    r = O.demodulate(iq, "qam16", n_sym=3)
+    assert r["ok"]
+    assert len(r["bits"]) == info["bits_per_packet"]
+    assert np.array_equal(r["bits"][:len(bits)], bits)
+    pad = O.scrambler_seq(info["bits_per_packet"] - len(bits), 0x5A)
+    assert np.array_equal(r["bits"][len(bits):], pad)
+    print("ok pad (last-symbol fill recovered bit-exact)")
+
+
 def test_chunks():
     """The streaming ofdm_demod block recovers the bits regardless of how the
     IQ is chunked (chunk-size independence), over several looped packets."""
@@ -132,4 +148,5 @@ if __name__ == "__main__":
     test_structure()
     test_pilots()
     test_detect()
+    test_pad()
     test_chunks()

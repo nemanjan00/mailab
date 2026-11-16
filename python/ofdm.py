@@ -243,6 +243,14 @@ def modulate(bits, scheme="qpsk", n_sym=None, cp_len=N_CP, scramble_state=0x7F):
     """
     bps = SCHEMES[scheme]
     cp_len = int(cp_len)
+    bits = np.asarray(bits, dtype=np.uint8)
+    if n_sym:
+        # pad to a whole number of symbols BEFORE scrambling so the receiver's
+        # descramble reproduces the pad bits (else the unscrambled pad is
+        # descrambled against a data-dependent state and comes out garbled)
+        need = int(n_sym) * N_DATA * bps
+        if len(bits) < need:
+            bits = np.concatenate([bits, scrambler_seq(need - len(bits), 0x5A)])
     sbits = scramble(bits, scramble_state)
     freq_syms, n_sym = data_symbols_from_bits(sbits, scheme, n_sym)
     parts = [PREAMBLE]

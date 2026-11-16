@@ -77,7 +77,7 @@ def main():
             {"id": "air", "type": "channel", "params": {"snr_db": 40}},
             {"id": "spec", "type": "spectrum", "params": {"fft": 256, "traces": ["avg"], "average": 16}},
             {"id": "rx", "type": "ofdm_demod", "params": {"scheme": scheme, "n_sym": n_sym}},
-            {"id": "bits", "type": "bitview", "params": {"bits": len(frame) * 8}},
+            {"id": "bits", "type": "bitview", "params": {"bits": n_sym * bits_per_sym}},
         ],
         "links": [["tx", "air"], ["air", "spec"], ["air", "rx"], ["rx", "bits"]],
     }}})
@@ -86,7 +86,7 @@ def main():
     mcp("pane_add", {"type": "kaitai", "title": "beacon frame", "config": {"blob": "beacon", "ksy": ksy}, "x": 0, "y": 0, "w": 6, "h": 8})
     mcp("pane_add", {"type": "trace", "title": "OFDM spectrum (48 data + 4 pilots, 64-pt FFT)", "config": {"trace": "fg_spec"}, "x": 6, "y": 0, "w": 6, "h": 4})
     mcp("pane_add", {"type": "trace", "title": "equalized subcarrier constellation (16-QAM)", "config": {"trace": "fg_rx_const"}, "x": 6, "y": 4, "w": 6, "h": 4})
-    mcp("pane_add", {"type": "json", "title": "recovered bytes (after OFDM demod)", "config": {"value": "fg_bits"}, "x": 0, "y": 8, "w": 3, "h": 3})
+    mcp("pane_add", {"type": "json", "title": "recovered bytes (after OFDM demod; scrambler fill after the frame)", "config": {"value": "fg_bits"}, "x": 0, "y": 8, "w": 3, "h": 3})
     mcp("pane_add", {"type": "trace", "title": "LTF channel estimate |H|", "config": {"trace": "fg_rx_chan"}, "x": 3, "y": 8, "w": 3, "h": 3})
     mcp("pane_add", {"type": "flowgraph", "title": "beacon -> OFDM -> loopback -> demod", "config": {"device": "fg"}, "x": 6, "y": 8, "w": 6, "h": 3})
 
