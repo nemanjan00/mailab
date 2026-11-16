@@ -315,3 +315,5 @@ ul.tree li > details { display: inline; }
 .chat-text { padding: 0 !important; font-family: var(--sans); white-space: normal !important; }
 .chat-text p { margin: 2px 0; }
 .chat-name { width: 90px !important; flex: none; }
+.widget { width: 100%; height: 100%; }
+.toolbar { display: flex; gap: 6px; align-items: center; border-bottom: 1px solid var(--line); }

@@ -1,80 +1,68 @@
-// Table of channels and traces with latest values; quick "chart it" actions.
+// Everything the lab holds: channels (live values), traces, JSON values and
+// binary blobs, each with a one-click "show it in a pane".
 
-import { escapeHtml, eng } from "./util.js";
+import { el, list, when } from "@nemanjan00/qrp";
+import { empty, iconButton, pane } from "../sdk/index.js";
+import { eng } from "./util.js";
 
-export default {
-	mount: (body, _initial, ctx) => {
-		let last = 0;
+const show = (ctx, icon, title, spec) => iconButton(icon, title, () => ctx.api("POST", "/panes", spec));
 
-		const render = () => {
-			const chans = ctx.state.channels;
-			const traces = ctx.state.traces;
-			const values = ctx.state.values || [];
-			if (!chans.length && !traces.length && !values.length) {
-				body.innerHTML = "<div class=\"empty\">no data yet</div>";
-				return;
+// one table, four keyed sections
+const sections = (ctx) => [
+	{
+		rows: () => ctx.state.channels,
+		key: (c) => "c:" + c.name,
+		latest: (c) => {
+			let v = ctx.store.live[c.name];
+			if (v === undefined && c.latest) {
+				v = c.latest.v;
 			}
-			const rows = chans.map((c) => {
-				const buf = ctx.data.series(c.name);
-				let v = buf.v[buf.v.length - 1];
-				if (v === undefined && c.latest) {
-					v = c.latest.v;
-				}
-				return "<tr data-channel=\"" + escapeHtml(c.name) + "\"><td class=\"mono\">" + escapeHtml(c.name) + "</td>"
-					+ "<td class=\"num\">" + eng(v) + escapeHtml(c.unit || "") + "</td>"
-					+ "<td class=\"muted\">" + escapeHtml(c.source || "") + "</td>"
-					+ "<td><button class=\"icon\" data-act=\"chart\" title=\"chart\">📈</button>"
-					+ "<button class=\"icon\" data-act=\"value\" title=\"readout\">#</button></td></tr>";
-			}).concat(traces.map((t) => {
-				return "<tr data-trace=\"" + escapeHtml(t.name) + "\"><td class=\"mono\">" + escapeHtml(t.name) + "</td>"
-					+ "<td class=\"num\">" + t.points + " pts</td>"
-					+ "<td class=\"muted\">trace · " + escapeHtml(t.mode) + "</td>"
-					+ "<td><button class=\"icon\" data-act=\"trace\" title=\"plot\">📈</button>"
-					+ "<button class=\"icon\" data-act=\"waterfall\" title=\"waterfall\">≋</button></td></tr>";
-			})).concat(values.map((v) => {
-				return "<tr data-value=\"" + escapeHtml(v.name) + "\"><td class=\"mono\">" + escapeHtml(v.name) + "</td>"
-					+ "<td class=\"num\">json</td>"
-					+ "<td class=\"muted\">value · " + escapeHtml(v.source || "") + "</td>"
-					+ "<td><button class=\"icon\" data-act=\"json\" title=\"view\">{}</button></td></tr>";
-			}));
-			body.innerHTML = "<table><thead><tr><th>name</th><th>latest</th><th>source</th><th></th></tr></thead><tbody>"
-				+ rows.join("") + "</tbody></table>";
-		};
-
-		body.addEventListener("click", (event) => {
-			const button = event.target.closest("button[data-act]");
-			if (!button) {
-				return;
-			}
-			const row = button.closest("tr");
-			const act = button.dataset.act;
-			const channel = row.dataset.channel;
-			const trace = row.dataset.trace;
-			const value = row.dataset.value;
-			const specs = {
-				chart: { type: "chart", title: channel, config: { channels: [channel], seconds: 30 } },
-				value: { type: "value", title: channel, w: 3, h: 3, config: { channel: channel } },
-				trace: { type: "trace", title: trace, config: { traces: [trace] } },
-				waterfall: { type: "waterfall", title: trace + " waterfall", config: { trace: trace } },
-				json: { type: "json", title: value, config: { value: value } }
-			};
-			ctx.api("POST", "/panes", specs[act]);
-		});
-
-		const offs = [
-			ctx.on("state", render),
-			ctx.on("samples", () => {
-				if (Date.now() - last > 250) {
-					last = Date.now();
-					render();
-				}
-			})
-		];
-		render();
-		return {
-			destroy: () => {
-				offs.forEach((off) => off());
-			}
-		};
+			return eng(v) + (c.unit || "");
+		},
+		source: (c) => c.source || "",
+		actions: (c) => [
+			show(ctx, "📈", "chart", { type: "chart", title: c.name, config: { channels: [c.name], seconds: 30 } }),
+			show(ctx, "#", "readout", { type: "value", title: c.name, w: 3, h: 3, config: { channel: c.name } })
+		]
+	},
+	{
+		rows: () => ctx.state.traces,
+		key: (t) => "t:" + t.name,
+		latest: (t) => t.points + " pts",
+		source: (t) => "trace · " + t.mode,
+		actions: (t) => [
+			show(ctx, "📈", "plot", { type: "trace", title: t.name, config: { traces: [t.name] } }),
+			show(ctx, "≋", "waterfall", { type: "waterfall", title: t.name + " waterfall", config: { trace: t.name } })
+		]
+	},
+	{
+		rows: () => ctx.state.values || [],
+		key: (v) => "v:" + v.name,
+		latest: () => "json",
+		source: (v) => "value · " + (v.source || ""),
+		actions: (v) => [show(ctx, "{}", "json view", { type: "json", title: v.name, config: { value: v.name } })]
+	},
+	{
+		rows: () => ctx.state.blobs || [],
+		key: (b) => "b:" + b.name,
+		latest: (b) => b.bytes + " B",
+		source: (b) => "blob · " + (b.source || ""),
+		actions: (b) => [show(ctx, "⬚", "kaitai view", { type: "kaitai", title: b.name, config: { blob: b.name, ksy: "" } })]
 	}
-};
+];
+
+const row = (section) => (item) => el("tr", {},
+	el("td", { class: "mono" }, () => item.name),
+	el("td", { class: "num" }, () => section.latest(item)),
+	el("td", { class: "muted" }, () => section.source(item)),
+	el("td", {}, section.actions(item)));
+
+export default pane((ctx) => {
+	const parts = sections(ctx);
+	const total = () => parts.reduce((n, s) => n + s.rows().length, 0);
+	return when(() => total() > 0,
+		() => el("table", {},
+			el("thead", {}, el("tr", {}, el("th", {}, "name"), el("th", {}, "latest"), el("th", {}, "source"), el("th"))),
+			el("tbody", {}, ...parts.map((s) => list(s.rows, s.key, row(s))))),
+		() => empty("no data yet"));
+});

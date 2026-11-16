@@ -35,7 +35,7 @@ SPEC.md lists every request with its status; update it as soon as a request come
 ## Conventions
 
 - Channel names are `<deviceId>_<field>` and must match `[A-Za-z_][A-Za-z0-9_]*` (mathjs symbols)
-- New pane type: add it to `TYPES` in `src/panes`, write `public/panes/<type>.js`, register it in `public/app.js`
+- New pane type: add it to `TYPES` in `src/panes`, write `public/panes/<type>.js` with the GUI SDK (`public/sdk`: `export default pane((ctx, p) => table({...}))`), register it in `public/app.js`. Read qrp's SHARP-EDGES (thunk vs value, `list()` for arrays) before writing views
 - ESLint 10 flat config (`eslint.config.js`): same rules as the usual `.eslintrc.json`
 - External libs that aren't on npm (mdp-p906 host, ci-v) load from configurable paths (`MDP_HOST_PATH`, `CIV_PATH`)
 - husky hooks are active (yarn ran `prepare`); commits run lint-staged + jest

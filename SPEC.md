@@ -20,8 +20,9 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Charts, live preview | ✅ | chart, trace, waterfall, value panes |
 | Multiple instances of every device | ✅ | auto ids, port registry, shared CI-V bus and MDP radio bridge, unit selection (serial/path/port/conn) |
 | Multi-call scripts ("script" = multi-MCP-call) for better timing | ✅ | `batch` tool: steps with `at`/`delayMs`/`repeat`/`intervalMs`, `$name.path` result references, loops, ~1 ms accuracy |
+| GUI SDK for readable panes | 🟡 | `public/sdk/`: `pane()` (reactive config, auto-dispose), `table`, `feed`, `iconButton`, `empty`, `toolbar`, `field`, `widget` (uPlot/canvas composed in, disposed with the scope). Panes on it: devices, channels, activity, chat. Next: log, value, json, kaitai, flowgraph, image, audio; then chart/trace via `widget` |
 | Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
-| Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | zero-dep, no-build reactive framework (Proxy state + real DOM). Migrating incrementally: lab state → `state()`, list panes declarative, canvas/uPlot panes stay imperative inside qrp components |
+| Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | app store is qrp `state()` (lab state, activity/chat feeds, live values at 4 Hz in `batch`); 4 panes migrated via the SDK; imperative panes still work against the same store |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
 | HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
@@ -96,6 +97,8 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | RTL-SDR | 🟡 | via `soapy` driver / flowgraph `soapy` source with `driver=rtlsdr` (SoapyRTLSDR in the Docker image). Planned: `rtl_power` wideband sweep driver, `rtl_tcp` interop through the net IQ blocks |
 | Harogic HTRA spectrum analyzer | 🟡 | `harogic` driver: sweep → `spectrum` trace via vendor `libhtraapi` (ctypes, struct layouts checked against `htra_api.h` with the C compiler). Library from SAStudio4 on `lab` (desktop shortcut → `~/sastudio/SAStudio4_x86_64_4.4.55.50`). Device not on `lab`'s USB at the time; not run yet. Next: IQ streaming (IQS) as a flowgraph source |
 | DeepAce KC901K / KC908V | ⬜ | handheld RF analyzers, same vendor as the KC9531B (try its framing: 0xFE header + sum checksum); sweeps → spectrum trace |
+| ThunderScope | ⬜ | open-source 4-ch 1 GS/s PCIe/Thunderbolt scope; TS.NET SCPI + waveform data socket (as used by ngscopeclient) → traces, scope measurements, triggers |
+| NanoKVM(+) | ⬜ | IP-KVM as an instrument: HDMI screen (MJPEG stream → image pane, snapshot to the AI), USB keyboard/mouse (type text, keys), ATX power/reset; via its HTTP/WebSocket API |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
@@ -197,3 +200,7 @@ Next:
 69. also reference https://github.com/nemanjan00/diversity-classifier
 70. you are vanilla js? mayne nemanjan00/qrp
 71. esbundle
+72. it is friendly to composable js elements (qrp)
+73. nanokvm+ as hw
+74. thunderscope
+75. gui sdk, for more readable individual components?

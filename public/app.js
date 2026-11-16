@@ -3,6 +3,7 @@
 // Bundled with esbuild (yarn build) into public/build/.
 
 import { GridStack } from "gridstack";
+import { batch, state } from "@nemanjan00/qrp";
 import "gridstack/dist/gridstack.min.css";
 import "uplot/dist/uPlot.min.css";
 import "katex/dist/katex.min.css";
@@ -130,8 +131,15 @@ const data = {
 // ---- traces & state -------------------------------------------------------
 
 const traces = {};
+// latest value per channel, refreshed a few times a second (readouts, tables)
+const LIVE_REFRESH_MS = 250;
+const FEED_SIZE = 500;
+
 const ctx = {
-	state: { devices: [], channels: [], traces: [], images: [], panes: [], paneTypes: {} },
+	// reactive (qrp) store: lab state from the server, feeds, live values.
+	// qrp panes bind to it; imperative panes read it like a plain object.
+	state: state({ devices: [], channels: [], traces: [], images: [], values: [], blobs: [], panes: [], paneTypes: {} }),
+	store: state({ activity: [], chat: [], live: {} }),
 	data: data,
 	traces: traces,
 	api: api,
@@ -149,6 +157,32 @@ const ctx = {
 	editPane: null
 };
 
+const pushFeed = (feed, entry) => {
+	feed.push(entry);
+	if (feed.length > FEED_SIZE) {
+		feed.splice(0, feed.length - FEED_SIZE);
+	}
+};
+
+// feeds start from the server's history; live entries arrive over ws
+api("GET", "/activity").then((entries) => {
+	ctx.store.activity = entries.slice(-FEED_SIZE);
+}, () => null);
+api("GET", "/chat").then((messages) => {
+	ctx.store.chat = messages;
+}, () => null);
+
+setInterval(() => {
+	batch(() => {
+		Object.keys(buffers).forEach((name) => {
+			const buf = buffers[name];
+			if (buf.v.length && ctx.store.live[name] !== buf.v[buf.v.length - 1]) {
+				ctx.store.live[name] = buf.v[buf.v.length - 1];
+			}
+		});
+	});
+}, LIVE_REFRESH_MS);
+
 // ---- websocket ------------------------------------------------------------
 
 const connect = () => {
@@ -164,7 +198,11 @@ const connect = () => {
 	ws.onmessage = (event) => {
 		const msg = JSON.parse(event.data);
 		if (msg.type === "state") {
-			ctx.state = msg.state;
+			batch(() => {
+				Object.keys(msg.state).forEach((key) => {
+					ctx.state[key] = msg.state[key];
+				});
+			});
 			syncPanes(msg.state.panes);
 			emit("state", msg.state);
 		} else if (msg.type === "samples") {
@@ -178,6 +216,12 @@ const connect = () => {
 				trim(buf);
 			});
 			emit("samples", msg.samples);
+		} else if (msg.type === "activity") {
+			pushFeed(ctx.store.activity, msg.entry);
+			emit("activity", msg);
+		} else if (msg.type === "chat") {
+			pushFeed(ctx.store.chat, msg.message);
+			emit("chat", msg);
 		} else if (msg.type === "trace") {
 			traces[msg.trace.name] = msg.trace;
 			emit("trace", msg.trace);

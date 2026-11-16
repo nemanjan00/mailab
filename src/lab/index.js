@@ -53,6 +53,7 @@ const create = (options) => {
 	const blobs = {};
 	const logs = [];
 	const activity = [];
+	let activityId = 0;
 	const chat = (saved.chat || []).slice();
 	let chatId = chat.reduce((max, m) => Math.max(max, m.id), 0);
 	const derived = {};
@@ -320,7 +321,8 @@ const create = (options) => {
 		},
 
 		recordActivity: (entry) => {
-			const full = Object.assign({ t: Date.now() }, entry);
+			activityId++;
+			const full = Object.assign({ id: activityId, t: Date.now() }, entry);
 			ring(activity, full, ACTIVITY_SIZE);
 			events.emit("activity", full);
 		},

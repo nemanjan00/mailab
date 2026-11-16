@@ -1,40 +1,19 @@
-// What the AI did through MCP, newest at the bottom.
+// What the AIs did through MCP (who, tool, args), newest at the bottom.
 
-import { escapeHtml, time } from "./util.js";
+import { el } from "@nemanjan00/qrp";
+import { feed, pane } from "../sdk/index.js";
+import { time } from "./util.js";
 
-const line = (entry) => {
-	let detail = entry.args;
-	if (!entry.ok) {
-		detail = detail + "  ✗ " + entry.error;
-	}
-	return "<div class=\"" + (entry.ok ? "" : "fail") + "\"><span class=\"t\">" + time(entry.t) + "</span> "
-		+ (entry.who ? "<span class=\"muted\">" + escapeHtml(entry.who) + "</span> " : "")
-		+ "<span class=\"tool\">" + escapeHtml(entry.tool) + "</span> " + escapeHtml(detail) + "</div>";
-};
+const entry = (e) => el("div", { class: e.ok ? "" : "fail" },
+	el("span", { class: "t" }, time(e.t)), " ",
+	e.who ? el("span", { class: "muted" }, e.who + " ") : "",
+	el("span", { class: "tool" }, e.tool), " ",
+	e.ok ? e.args : e.args + "  ✗ " + e.error);
 
-export default {
-	mount: (body, _initial, ctx) => {
-		body.innerHTML = "<div class=\"feed activity\"></div>";
-		const feed = body.querySelector(".feed");
-
-		ctx.api("GET", "/activity").then((entries) => {
-			if (!entries.length) {
-				feed.innerHTML = "<div class=\"muted\">no AI activity yet — connect an MCP client to /mcp</div>";
-				return;
-			}
-			feed.innerHTML = entries.map(line).join("");
-			body.scrollTop = body.scrollHeight;
-		});
-
-		const off = ctx.on("activity", (msg) => {
-			const empty = feed.querySelector(".muted");
-			if (empty) {
-				empty.remove();
-			}
-			feed.insertAdjacentHTML("beforeend", line(msg.entry));
-			body.scrollTop = body.scrollHeight;
-		});
-
-		return { destroy: off };
-	}
-};
+export default pane((ctx) => feed({
+	items: () => ctx.store.activity,
+	key: (e) => e.id,
+	render: entry,
+	className: "activity",
+	empty: "no AI activity yet — connect an MCP client to /mcp"
+}));
