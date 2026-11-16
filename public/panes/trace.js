@@ -2,10 +2,12 @@
 // (uPlot, with markers + readings table), and canvas modes: glitch scatter,
 // constellation, eye diagram.
 import uPlot from "uplot";
+import { el, mount, state } from "@nemanjan00/qrp";
+import { tableState } from "../sdk/index.js";
 
 import { axisStyle, eng, frameThrottle } from "./util.js";
 import { CANVAS_MODES, drawMap } from "./plot2d.js";
-import { computeReadings, drawMarkers, measurementsTable, readingsTable } from "./markers.js";
+import { computeReadings, drawMarkers, measurementsTable, readingRows, readingsTable } from "./markers.js";
 
 const LEGEND_HEIGHT = 28;
 
@@ -18,6 +20,17 @@ export default {
 		let readings = [];
 		let plotEl = null;
 		let tableEl = null;
+		let measEl = null;
+		// readings table: qrp-mounted under tableEl, fed through readingsState
+		let readingsMount = null;
+		// filtering / sorting the readings changes the table's height: refit the plot
+		const tableResize = new ResizeObserver(() => {
+			if (plot) {
+				plot.setSize(size());
+			}
+		});
+		const readingsState = state({ rows: [] });
+		const readingsUi = tableState();
 		body.classList.add("fill");
 
 		const hasMarkers = () => (pane.config.markers || []).length > 0 || Number(pane.config.peaks) > 0;
@@ -32,13 +45,16 @@ export default {
 			return ctx.api("PATCH", "/panes/" + pane.id, { config: { markers: markers } });
 		};
 
+		const removeMarker = (index) => saveMarkers((pane.config.markers || []).filter((_m, i) => i !== index));
+
 		const refreshReadings = (trs) => {
 			if (!tableEl) {
 				return;
 			}
 			readings = hasMarkers() ? computeReadings(trs, pane.config) : [];
 			const before = tableEl.offsetHeight;
-			tableEl.innerHTML = measurementsTable(trs[0] && trs[0].measurements) + readingsTable(readings);
+			measEl.innerHTML = measurementsTable(trs[0] && trs[0].measurements);
+			readingsState.rows = readingRows(readings);
 			if (plot && tableEl.offsetHeight !== before) {
 				plot.setSize(size());
 			}
@@ -53,9 +69,15 @@ export default {
 				plot.destroy();
 				plot = null;
 			}
+			if (readingsMount) {
+				readingsMount.dispose();
+				readingsMount = null;
+			}
+			tableResize.disconnect();
 			canvas = null;
 			plotEl = null;
 			tableEl = null;
+			measEl = null;
 			body.innerHTML = "";
 		};
 
@@ -95,8 +117,14 @@ export default {
 			plotEl = document.createElement("div");
 			tableEl = document.createElement("div");
 			tableEl.className = "readings-wrap";
+			measEl = el("div");
+			tableEl.appendChild(measEl);
+			const readingsHost = el("div");
+			tableEl.appendChild(readingsHost);
+			readingsMount = mount(readingsHost, () => readingsTable(() => readingsState.rows, removeMarker, readingsUi));
 			body.appendChild(plotEl);
 			body.appendChild(tableEl);
+			tableResize.observe(tableEl);
 			refreshReadings(trs);
 			plot = new uPlot(Object.assign({
 				scales: { x: { time: false, distr: pane.config.logX ? 3 : 1 }, y: scaleY, y2: { auto: true } },
@@ -116,14 +144,6 @@ export default {
 				}
 				const x = plot.posToVal(plot.cursor.left, "x");
 				saveMarkers((pane.config.markers || []).concat([{ mode: "x", x: x }]));
-			});
-			tableEl.addEventListener("click", (event) => {
-				const button = event.target.closest("button[data-remove]");
-				if (!button) {
-					return;
-				}
-				const index = Number(button.dataset.remove);
-				saveMarkers((pane.config.markers || []).filter((_m, i) => i !== index));
 			});
 		};
 

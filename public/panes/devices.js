@@ -8,11 +8,12 @@ const isRunning = (d) => d.state === "running" || d.state === "starting";
 export default pane((ctx) => table({
 	rows: () => ctx.state.devices,
 	key: (d) => d.id,
+	name: "devices",
 	empty: "no devices — use “+ device”, or let the AI add some",
 	columns: [
 		{ title: "id", mono: true, value: (d) => d.id },
 		{ title: "driver", value: (d) => d.driver },
-		{ title: "state", value: (d) => el("span", { class: "state " + d.state, title: d.detail }, d.state) },
+		{ title: "state", raw: (d) => d.state, value: (d) => el("span", { class: "state " + d.state, title: d.detail }, d.state) },
 		{
 			value: (d) => [
 				iconButton(isRunning(d) ? "■" : "▶", isRunning(d) ? "stop" : "start",

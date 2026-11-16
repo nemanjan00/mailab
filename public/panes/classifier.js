@@ -31,6 +31,7 @@ export default pane((ctx) => {
 		table({
 			rows: () => view.templates,
 			key: (t) => t.name,
+			name: "classifier-templates",
 			empty: "no templates yet: turn a cluster below into one",
 			columns: [
 				{ title: "name", mono: true, value: (t) => t.name },
@@ -49,6 +50,7 @@ export default pane((ctx) => {
 		table({
 			rows: () => view.unclassified,
 			key: (c) => c.signature,
+			name: "classifier-unclassified",
 			empty: "nothing unclassified",
 			columns: [
 				{ title: "×", num: true, value: (c) => c.count },

@@ -175,6 +175,12 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
 td.num { text-align: right; font-family: var(--mono); }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text); }
+.sort-mark { color: var(--accent); }
+.table-tools { display: flex; gap: 4px; align-items: center; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.table-tools .table-filter { flex: 1; min-width: 60px; padding: 2px 6px; font-size: 12px; }
+.table-tools button.icon { font: 11px var(--mono); }
 
 .state { font: 11px var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--panel-2); }
 .state.running { color: var(--accent); }

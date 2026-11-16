@@ -1,8 +1,7 @@
 // Everything the lab holds: channels (live values), traces, JSON values and
 // binary blobs, each with a one-click "show it in a pane".
 
-import { el, list, when } from "@nemanjan00/qrp";
-import { empty, iconButton, pane } from "../sdk/index.js";
+import { iconButton, pane, table } from "../sdk/index.js";
 import { eng } from "./util.js";
 
 const show = (ctx, icon, title, spec) => iconButton(icon, title, () => ctx.api("POST", "/panes", spec));
@@ -54,18 +53,21 @@ const sections = (ctx) => [
 	}
 ];
 
-const row = (section) => (item) => el("tr", {},
-	el("td", { class: "mono" }, () => item.name),
-	el("td", { class: "num" }, () => section.latest(item)),
-	el("td", { class: "muted" }, () => section.source(item)),
-	el("td", {}, section.actions(item)));
-
 export default pane((ctx) => {
 	const parts = sections(ctx);
-	const total = () => parts.reduce((n, s) => n + s.rows().length, 0);
-	return when(() => total() > 0,
-		() => el("table", {},
-			el("thead", {}, el("tr", {}, el("th", {}, "name"), el("th", {}, "latest"), el("th", {}, "source"), el("th"))),
-			el("tbody", {}, ...parts.map((s) => list(s.rows, s.key, row(s))))),
-		() => empty("no data yet"));
+	// one row per item, tagged with its section
+	const rows = () => parts.reduce((all, s, index) => all.concat(s.rows().map((item) => ({ s: index, item: item }))), []);
+	const part = (x) => parts[x.s];
+	return table({
+		rows: rows,
+		key: (x) => part(x).key(x.item),
+		name: "channels",
+		empty: "no data yet",
+		columns: [
+			{ title: "name", mono: true, value: (x) => x.item.name },
+			{ title: "latest", num: true, value: (x) => part(x).latest(x.item) },
+			{ title: "source", muted: true, value: (x) => part(x).source(x.item) },
+			{ value: (x) => part(x).actions(x.item) }
+		]
+	});
 });
