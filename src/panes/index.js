@@ -89,6 +89,10 @@ const TYPES = {
 			+ "board view + auto-laid-out schematic graph with cross-probing, text search, netlist export (see board_* tools)",
 		config: { board: "board name", view: "split | board | graph (default split)" }
 	},
+	vnc: {
+		description: "live remote desktop of a vnc device (noVNC): see and drive legacy GUIs with the AI; scale to fit, view-only, Ctrl-Alt-Del, clipboard send, screenshot to the lab",
+		config: { device: "vnc device id", viewOnly: "start view-only (default false)" }
+	},
 	usb: {
 		description: "USB tree: hubs, ports, devices with /dev nodes and the lab devices using them; power toggles on switchable hubs (uhubctl)",
 		config: {}

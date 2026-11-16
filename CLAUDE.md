@@ -17,6 +17,7 @@ MCP server + live web UI for a hardware lab the AI operates. See README.md
 - `src/services/http`: polite web client (UA, per-host spacing, size caps, disk cache with TTL) on node:https; fccid.io's Cloudflare 403s undici `fetch`. `testing.js`: fake transport for tests
 - `src/services/fccid`: FCC ID filings/exhibits scraped from fccid.io (apps.fcc.gov 403s scripts); parsers in `parse.js`, fixtures in `__tests__/fixtures`
 - `src/services/datasheets`: online providers (keyless manufacturer URL probes; Mouser/Nexar/DigiKey/SearXNG via env, untested live) + local DB (`library.js`: pdftotext pages, inverted index, pdftoppm renders) in `DATA_DIR/datasheets`
+- `src/services/rfb`: VNC client (RFB 3.3/3.7/3.8, None + VNC auth via `src/utils/des`, Raw + CopyRect); `src/web/vnc`: `/ws/vnc/<device>` noVNC bridge (auths server-side, only to a vnc device's host:port, drops input for ro / view-only)
 - `src/mcp`: MCP tools (identity-aware, read-only gating); every call is recorded via `lab.recordActivity`. `sessions.js`: stateful Streamable HTTP sessions (stateless fallback), `notifyAll` for push
 - `src/capture`: browser media (capture pane: getUserMedia mic + camera) over `/ws` → virtual `browser` devices (`src/devices/browser`); validation, caps, snapshot requests to the browser
 - `src/auth`: optional `MAILAB_TOKENS` (name:token:rw|ro), used by REST, `/mcp` and `/ws`

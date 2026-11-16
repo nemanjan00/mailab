@@ -39,6 +39,9 @@ the AI wire up live:
   values), JSON view, Kaitai Struct view (parse binary blobs:
   field tree + hex).
 - **Lab:** flowgraph editor, audio, camera, device consoles, AI activity, lab chat.
+- **Remote desktops:** a `vnc` device + pane (noVNC) for legacy GUIs in
+  emulators and VMs (e.g. a Windows 3.1 dealer programmer): you drive it in the
+  pane, the AI uses screenshot / type / key / click / wait_change.
 
 **AI tools**: lab overview, device control, data reads, math and the
 graphing calculator, Kaitai parsing, UI control, chat, and `batch`, which

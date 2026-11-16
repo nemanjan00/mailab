@@ -14,6 +14,7 @@ const blobs = require("../blobs");
 const captureModule = require("../capture");
 const fccid = require("../services/fccid");
 const datasheets = require("../services/datasheets");
+const vncProxy = require("./vnc");
 
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
@@ -382,12 +383,28 @@ const api = (lab) => {
  * Push lab events to every connected browser.
  */
 const attachSockets = (server, lab, pushIntervalMs, auth, capture) => {
+	// one upgrade handler for every WebSocket path: two ws servers attached to
+	// the same http server would each reject the other's paths
 	const wss = new ws.Server({
-		server: server,
-		path: "/ws",
+		noServer: true,
 		maxPayload: WS_MAX_PAYLOAD,
 		verifyClient: (info) => {
 			return Boolean(auth.identify(info.req));
+		}
+	});
+	const vnc = vncProxy.create(lab, auth);
+	server.on("upgrade", (req, socket, head) => {
+		const url = String(req.url || "");
+		const pathname = url.indexOf("?") === -1 ? url : url.slice(0, url.indexOf("?"));
+		if (pathname === "/ws") {
+			wss.handleUpgrade(req, socket, head, (client) => {
+				wss.emit("connection", client, req);
+			});
+		} else if (vnc.handles(req)) {
+			vnc.upgrade(req, socket, head);
+		} else {
+			socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+			socket.destroy();
 		}
 	});
 	const lastTraceSent = {};
@@ -478,6 +495,7 @@ const attachSockets = (server, lab, pushIntervalMs, auth, capture) => {
 	server.on("close", () => {
 		clearInterval(pusher);
 		wss.close();
+		vnc.close();
 	});
 
 	wss.on("connection", (socket, req) => {

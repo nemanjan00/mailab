@@ -28,7 +28,8 @@ const DRIVERS = [
 	require("./sysmon"),
 	require("./rtl_power"),
 	require("./flashrom"),
-	require("./minipro")
+	require("./minipro"),
+	require("./vnc")
 ];
 
 const devices = {
