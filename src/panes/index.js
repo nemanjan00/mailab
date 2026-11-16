@@ -68,11 +68,25 @@ const create = (initial, onChange) => {
 		}
 	};
 
-	// first free row below everything
-	const nextY = () => {
-		return panes.reduce((max, pane) => {
+	const overlaps = (a, b) => {
+		return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+	};
+
+	// first top-left spot where a w×h pane fits without overlapping others
+	const freeSpot = (w, h) => {
+		const bottom = panes.reduce((max, pane) => {
 			return Math.max(max, pane.y + pane.h);
 		}, 0);
+		const candidates = Array.from({ length: bottom + 1 }, (_, y) => {
+			return Array.from({ length: GRID_COLUMNS - w + 1 }, (__, x) => {
+				return { x: x, y: y, w: w, h: h };
+			});
+		}).flat();
+		return candidates.find((spot) => {
+			return !panes.some((pane) => {
+				return overlaps(spot, pane);
+			});
+		});
 	};
 
 	const layout = {
@@ -97,15 +111,21 @@ const create = (initial, onChange) => {
 		 */
 		add: (spec) => {
 			validate(spec);
+			const w = Math.min(spec.w || DEFAULT_SIZE.w, GRID_COLUMNS);
+			const h = spec.h || DEFAULT_SIZE.h;
+			let spot = { x: spec.x, y: spec.y };
+			if (spec.x === undefined || spec.y === undefined) {
+				spot = freeSpot(w, h);
+			}
 			const pane = {
 				id: spec.id || uuid().slice(0, 8),
 				type: spec.type,
 				title: spec.title || spec.type,
 				config: spec.config || {},
-				x: spec.x !== undefined ? spec.x : 0,
-				y: spec.y !== undefined ? spec.y : nextY(),
-				w: Math.min(spec.w || DEFAULT_SIZE.w, GRID_COLUMNS),
-				h: spec.h || DEFAULT_SIZE.h
+				x: spot.x,
+				y: spot.y,
+				w: w,
+				h: h
 			};
 			panes = panes.concat([pane]);
 			onChange();

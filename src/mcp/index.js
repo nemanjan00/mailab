@@ -6,7 +6,7 @@ const z = require("zod");
 const pkg = require("../../package.json");
 
 const MAX_POINTS = 500;
-const ARGS_PREVIEW = 300;
+const ARGS_PREVIEW = 160;
 
 const INSTRUCTIONS = [
 	"mailab is a hardware lab you operate. Instruments are devices (lab_drivers lists drivers, their options and commands).",
