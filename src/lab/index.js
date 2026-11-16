@@ -470,6 +470,10 @@ const create = (options) => {
 				blob: (name, data) => {
 					lab.setBlob(field(name), data, id);
 				},
+				// any lab blob by its full name (images to write/verify)
+				getBlob: (name) => {
+					return lab.getBlob(name).data;
+				},
 				// a device's custom pane: created once, then its layout follows the device
 				panel: (name, layout, opts) => {
 					const paneId = id + "-" + channelsModule.sanitizeName(name);

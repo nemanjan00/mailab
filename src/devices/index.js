@@ -21,7 +21,11 @@ const DRIVERS = [
 	require("./picoglitcher"),
 	require("./flowgraph"),
 	require("./camera"),
-	require("./harogic")
+	require("./harogic"),
+	require("./sysmon"),
+	require("./rtl_power"),
+	require("./flashrom"),
+	require("./minipro")
 ];
 
 const devices = {
