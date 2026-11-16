@@ -79,6 +79,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | Bus Pirate | ⬜ | BPIO2, using the buspirate skill |
 | XGecu programmers (minipro) | ⬜ | `minipro` CLI: identify, read/write/verify chips; dumps as blobs for the Kaitai view |
 | Glasgow | ⬜ | `glasgow` CLI applets |
+| ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher |
 
 ## 5. Project
 
@@ -97,7 +98,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 4. findus map preview (heatmap)
 5. Markdown live values
 6. MHO900 siggen; Soapy TX block with safety gate
-7. nRF52840 modem, Bus Pirate, minipro, Glasgow drivers
+7. nRF52840 modem, Bus Pirate, minipro, Glasgow, ChipWhisperer Husky drivers
 8. Digital analysis: FSK/GFSK, baud estimation, packet decoding
 9. Deployment on `lab`: waiting on your decision
 
@@ -108,7 +109,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 3. https://github.com/nemanjan00/mdp-p906
 4. https://github.com/nemanjan00/libsigrok
 5. https://github.com/nemanjan00/pymp305
-6. husky, mho900, md858e
+6. husky, mho900, md858e ("husky" most likely meant the ChipWhisperer Husky, see 46; husky git hooks were added too)
 7. https://github.com/nemanjan00/kc9531b
 8. tinysa ultra
 9. litevna64
@@ -148,3 +149,4 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 43. xgecu (minipro)
 44. glasgow
 45. take a break, write down spec.md, everything I said in this session and then keep going
+46. chipwhisperer husky
