@@ -21,7 +21,8 @@ const DRIVERS = [
 	require("./picoglitcher"),
 	require("./flowgraph"),
 	require("./camera"),
-	require("./harogic")
+	require("./harogic"),
+	require("./replay")
 ];
 
 const devices = {

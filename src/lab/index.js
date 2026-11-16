@@ -17,6 +17,7 @@ const plotModule = require("../plot");
 const safetyModule = require("../safety");
 const classifyModule = require("../classify");
 const trendsModule = require("../trends");
+const recordingsModule = require("../recordings");
 const profilesModule = require("../profiles");
 const pathModule = require("path");
 const panesModule = require("../panes");
@@ -139,6 +140,7 @@ const create = (options) => {
 
 	let stopSafety = null;
 	let stopTrends = null;
+	let stopRecordings = null;
 	let stopUdev = null;
 
 	const lab = {
@@ -166,6 +168,7 @@ const create = (options) => {
 			runDerived(name, t, depth || 0);
 			lab.safety.onSample(name);
 			lab.trends.sample(name, t, v);
+			lab.recordings.sample(name, t, v);
 		},
 
 		drainPending: () => {
@@ -442,6 +445,29 @@ const create = (options) => {
 			const io = {
 				// device id, e.g. for owning shared ports
 				id: id,
+				// drivers keeping files in the lab's data directory (replay)
+				dataDir: options.dataDir,
+				// full names, no "<id>_" prefix: virtual devices standing in for
+				// others (replay); names are validated like any channel name
+				publish: {
+					sample: (name, value, meta) => {
+						const m = meta || {};
+						lab.pushSample(name, value, { t: m.t, unit: m.unit, source: id });
+					},
+					meta: (name, meta) => {
+						channels.ensure(name, Object.assign({ source: id }, meta));
+						events.emit("state");
+					},
+					trace: (name, data) => {
+						lab.setTrace(name, data, id);
+					},
+					value: (name, value) => {
+						lab.setValue(name, value, id);
+					},
+					notify: (event) => {
+						lab.notify(Object.assign({}, event, { device: id }));
+					}
+				},
 				sample: (name, value, meta) => {
 					const m = meta || {};
 					lab.pushSample(field(name), value, { t: m.t, unit: m.unit, source: id });
@@ -714,6 +740,7 @@ const create = (options) => {
 			lab.safety.restore();
 			stopSafety = lab.safety.start();
 			stopTrends = lab.trends.start();
+			stopRecordings = lab.recordings.attach();
 			if (options.watchUsb !== false) {
 				stopUdev = lab.udev.start();
 			}
@@ -807,6 +834,10 @@ const create = (options) => {
 			if (stopTrends) {
 				stopTrends();
 			}
+			if (stopRecordings) {
+				stopRecordings();
+			}
+			lab.recordings.stopAll("shutdown");
 			if (stopUdev) {
 				stopUdev();
 			}
@@ -827,6 +858,7 @@ const create = (options) => {
 	lab.safety = safetyModule.create(lab, saved.safety);
 	lab.safety.changed = changed;
 	lab.trends = trendsModule.create(pathModule.join(options.dataDir, "trends"), saved.trends);
+	lab.recordings = recordingsModule.create(lab, pathModule.join(options.dataDir, "recordings"));
 	lab.profiles = profilesModule.create(lab, pathModule.join(options.dataDir, "profiles"));
 	lab.classifier = classifyModule.create(lab, saved.classifier);
 	lab.classifier.changed = changed;

@@ -7,6 +7,7 @@ const pkg = require("../../package.json");
 const batch = require("../batch");
 const kaitai = require("../kaitai");
 const blobs = require("../blobs");
+const sweepModule = require("../sweep");
 
 const MAX_POINTS = 500;
 const ARGS_PREVIEW = 160;
@@ -100,7 +101,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "usb_tree", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -662,6 +663,76 @@ const create = (lab, context) => {
 		since: z.number().optional().describe("only events with id > since"),
 		types: z.array(z.string()).optional()
 	}, (a) => lab.getNotifications({ since: a.since }).filter((ev) => !a.types || a.types.indexOf(ev.type) !== -1));
+
+	// ---- record & replay -------------------------------------------------
+
+	tool("recordings", "Recordings on disk and running (name, channels, duration, counts). Play one back with device_add driver \"replay\" options {recording, prefix, speed, loop}", {}, () => lab.recordings.list());
+
+	tool("recording_start", "Record channels (globs) plus traces, values, lab events and device log lines to DATA_DIR/recordings/<name>.ndjson, "
+		+ "to replay later as a virtual device (driver \"replay\") and develop analysis/rules offline on real data", {
+		name: z.string().describe("letters, digits, _ . - (max 64)"),
+		channels: z.array(z.string()).describe("channel globs, e.g. [\"psu_*\", \"scope_ch1\"] or [\"*\"]"),
+		traces: z.array(z.string()).optional().describe("trace globs (default: the channel globs)"),
+		values: z.array(z.string()).optional().describe("value globs (default: the channel globs)"),
+		events: z.boolean().optional().describe("lab events: triggers, rules, matches... (default true)"),
+		logs: z.boolean().optional().describe("device log lines (default true)"),
+		note: z.string().optional(),
+		maxSeconds: z.number().optional().describe("stop automatically after N seconds")
+	}, (a) => lab.recordings.start(a, actor()));
+
+	tool("recording_stop", "Stop a running recording", { name: z.string() }, (a) => lab.recordings.stop(a.name));
+
+	// ---- sweep & optimize -------------------------------------------------
+
+	const axisShape = z.object({
+		device: z.string(),
+		command: z.string(),
+		arg: z.string().optional().describe("the command argument to step, e.g. \"volts\" (or put \"$value\" in args)"),
+		args: json.optional().describe("other arguments, e.g. {signal: \"sine\", key: \"freq\", value: \"$value\"}"),
+		values: z.array(z.any()).optional().describe("explicit list of values"),
+		from: z.number().optional(),
+		to: z.number().optional(),
+		steps: z.number().optional().describe("number of points, from..to inclusive"),
+		scale: z.enum(["linear", "log"]).optional(),
+		unit: z.string().optional()
+	});
+	const afterShape = z.object({ device: z.string(), command: z.string(), args: json.optional() }).optional()
+		.describe("command run at the end, also after a failure (e.g. turn the output off)");
+
+	tool("sweep", "Step one or two device-command parameters (x, optional y: a grid) over a range, wait settleMs, measure channels "
+		+ "(mean over windowMs, or the first fresh sample with mode \"latest\") and return a table; stored as value `name` (json pane) "
+		+ "and trace `name` (trace pane). stopWhen (mathjs over x, y and the read channels) ends early, e.g. brown-out: "
+		+ "x = psu volts 3.3→1.5, reads [\"uart_alive\"], stopWhen \"uart_alive < 0.5\". "
+		+ "Commands pass the approval policy: if any step needs approval a person approves the whole plan once", {
+		name: z.string().optional().describe("value/trace name (default \"sweep\")"),
+		x: axisShape,
+		y: axisShape.optional(),
+		reads: z.array(z.union([z.string(), z.object({ channel: z.string(), mode: z.enum(["mean", "latest"]).optional(), windowMs: z.number().optional() })])),
+		settleMs: z.number().optional().describe("wait after setting (default 100)"),
+		windowMs: z.number().optional().describe("measurement window (default 200)"),
+		stopWhen: z.string().optional(),
+		after: afterShape,
+		trace: z.boolean().optional().describe("also store a trace (default true)"),
+		yUnit: z.string().optional()
+	}, (a) => sweepModule.sweep(lab, a, lab.safety.gate(actor())));
+
+	tool("optimize", "Search one device-command parameter in [min, max] for the min or max of an objective (mathjs over channels, each the mean over windowMs after settleMs; x = the parameter). "
+		+ "method golden (golden-section, unimodal objectives) or hill (hill-climb from start with step, halving). maxIterations = measurements (default 20, max 200). "
+		+ "Stores value and scatter trace `name`. Commands pass the approval policy (one approval for the range)", {
+		name: z.string().optional().describe("value/trace name (default \"optimize\")"),
+		param: axisShape.extend({ min: z.number(), max: z.number() }),
+		objective: z.string().describe("e.g. \"rx_rssi\", \"-abs(scope_vpp - 1)\", \"psu_v * psu_i\""),
+		goal: z.enum(["min", "max"]).optional().describe("default min"),
+		method: z.enum(["golden", "hill"]).optional(),
+		maxIterations: z.number().optional(),
+		tolerance: z.number().optional().describe("stop when the bracket/step is below this (default range/1000)"),
+		step: z.number().optional().describe("hill: initial step (default range/10)"),
+		start: z.number().optional().describe("hill: start point (default middle)"),
+		settleMs: z.number().optional(),
+		windowMs: z.number().optional(),
+		mode: z.enum(["mean", "latest"]).optional(),
+		after: afterShape
+	}, (a) => sweepModule.optimize(lab, a, lab.safety.gate(actor())));
 
 	// ---- batch -----------------------------------------------------------
 

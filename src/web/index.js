@@ -173,6 +173,21 @@ const api = (lab) => {
 		human(req);
 		return lab.importState(req.body);
 	}));
+	// recordings: starting/stopping is a normal write, deleting is for people
+	router.get("/recordings", route(() => lab.recordings.list()));
+	router.post("/recordings", route((req) => lab.recordings.start(req.body || {}, (req.who && req.who.name) || "local")));
+	router.post("/recordings/:name/stop", route((req) => lab.recordings.stop(req.params.name)));
+	router.get("/recordings/:name", (req, res) => {
+		try {
+			res.attachment(req.params.name + ".ndjson").sendFile(lab.recordings.fileFor(req.params.name));
+		} catch (err) {
+			res.status(404).json({ error: err.message });
+		}
+	});
+	router.delete("/recordings/:name", route((req) => {
+		human(req);
+		return lab.recordings.remove(req.params.name);
+	}));
 	router.get("/usb", route(() => lab.usbTree()));
 	router.post("/usb/power", route((req) => {
 		human(req);
