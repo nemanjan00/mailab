@@ -14,6 +14,7 @@ const channelsModule = require("../channels");
 const devices = require("../devices");
 const math = require("../math");
 const plotModule = require("../plot");
+const safetyModule = require("../safety");
 const panesModule = require("../panes");
 const storeModule = require("../store");
 
@@ -71,7 +72,8 @@ const create = (options) => {
 				return { name: name, expression: derived[name].expression, unit: derived[name].unit };
 			}),
 			panes: panes.list(),
-			chat: chat.slice(-CHAT_PERSISTED)
+			chat: chat.slice(-CHAT_PERSISTED),
+			safety: lab.safety.snapshot()
 		};
 	};
 
@@ -123,6 +125,8 @@ const create = (options) => {
 		});
 	};
 
+	let stopSafety = null;
+
 	const lab = {
 		events: events,
 		channels: channels,
@@ -146,6 +150,7 @@ const create = (options) => {
 				events.emit("state");
 			}
 			runDerived(name, t, depth || 0);
+			lab.safety.onSample(name);
 		},
 
 		drainPending: () => {
@@ -343,6 +348,9 @@ const create = (options) => {
 			}
 			chatId++;
 			const entry = { id: chatId, t: Date.now(), from: msg.from || "anonymous", kind: msg.kind || "human", text: String(msg.text) };
+			if (msg.approval) {
+				entry.approval = { id: msg.approval.id };
+			}
 			ring(chat, entry, CHAT_SIZE);
 			store.save(snapshot);
 			events.emit("chat", Object.assign({ session: msg.session }, entry));
@@ -552,8 +560,18 @@ const create = (options) => {
 			const scope = {};
 			symbols.forEach((symbol) => {
 				const base = symbol.replace(/_x$/, "");
-				if (channels.has(symbol)) {
+				const aged = symbol.replace(/_age$/, "");
+				if (channels.has(symbol) && opts.latest) {
+					const last = channels.latest(symbol);
+					if (last) {
+						scope[symbol] = last.v;
+					}
+				} else if (channels.has(symbol)) {
 					scope[symbol] = channels.read(symbol, { last: opts.samples || 1000, seconds: opts.seconds }).v;
+				} else if (symbol !== aged && channels.has(aged)) {
+					// seconds since the channel's last sample ("silent for 5 s")
+					const last = channels.latest(aged);
+					scope[symbol] = last ? (Date.now() - last.t) / 1000 : Infinity;
 				} else if (traces[symbol]) {
 					scope[symbol] = traces[symbol].series[0].y;
 				} else if (traces[base]) {
@@ -561,6 +579,10 @@ const create = (options) => {
 				}
 			});
 			return scope;
+		},
+
+		isLabSymbol: (symbol) => {
+			return channels.has(symbol) || Boolean(traces[symbol]) || channels.has(symbol.replace(/_age$/, ""));
 		},
 
 		evaluate: (expression, options) => {
@@ -625,6 +647,8 @@ const create = (options) => {
 		// ---- lifecycle --------------------------------------------------
 
 		restore: () => {
+			lab.safety.restore();
+			stopSafety = lab.safety.start();
 			if (!saved.panes) {
 				DEFAULT_PANES.forEach(panes.add);
 			}
@@ -645,6 +669,9 @@ const create = (options) => {
 		},
 
 		shutdown: () => {
+			if (stopSafety) {
+				stopSafety();
+			}
 			return Promise.all(Object.keys(instances).map((id) => {
 				const inst = instances[id];
 				if (!inst.instance) {
@@ -658,6 +685,9 @@ const create = (options) => {
 			});
 		}
 	};
+
+	lab.safety = safetyModule.create(lab, saved.safety);
+	lab.safety.changed = changed;
 
 	return lab;
 };

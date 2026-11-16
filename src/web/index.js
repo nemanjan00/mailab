@@ -99,6 +99,24 @@ const api = (lab) => {
 		}
 		return lab.postChat({ from: from, kind: kind, text: req.body.text });
 	}));
+	router.get("/safety", route(() => {
+		return { rules: lab.safety.listRules(), policy: lab.safety.getPolicy(), pending: lab.safety.listPending(), fired: lab.safety.firedLog() };
+	}));
+	router.post("/safety/rules", route((req) => {
+		return lab.safety.addRule(req.body, (req.who && req.who.name) || "local");
+	}));
+	router.delete("/safety/rules/:id", route((req) => {
+		// people may remove locked rules; the AI may not (MCP passes human=false)
+		return lab.safety.removeRule(req.params.id, true);
+	}));
+	router.put("/safety/policy", route((req) => {
+		lab.safety.setPolicy(req.body.policy || []);
+		return lab.safety.getPolicy();
+	}));
+	router.post("/approvals/:id", route((req) => {
+		const decision = req.body.approve === true ? "approved" : "denied";
+		return lab.safety.decide(req.params.id, decision, (req.who && req.who.name) || "local");
+	}));
 	router.get("/whoami", route((req) => {
 		return req.who || { name: "local", role: "rw" };
 	}));
@@ -215,6 +233,9 @@ const attachSockets = (server, lab, pushIntervalMs, auth) => {
 		const entry = Object.assign({}, msg);
 		delete entry.session;
 		broadcast({ type: "chat", message: entry });
+	});
+	lab.events.on("approval", (entry) => {
+		broadcast({ type: "approval", approval: entry });
 	});
 	lab.events.on("blob", (e) => {
 		broadcast({ type: "blob", name: e.name });

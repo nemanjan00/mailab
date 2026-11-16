@@ -13,11 +13,27 @@ const savedName = () => {
 	}
 };
 
-const message = (m) => {
+// Approve/Deny for a risky AI command; the status follows the server
+const approvalCard = (ctx, id) => {
+	const status = () => {
+		const entry = ctx.store.approvals[id];
+		return entry ? entry.status : "expired";
+	};
+	const decide = (approve) => ctx.api("POST", "/approvals/" + id, { approve: approve }).catch(() => null);
+	return el("div", { class: "approval" },
+		when(() => status() === "pending",
+			() => el("span", {},
+				el("button", { class: "primary", onclick: () => decide(true) }, "Approve"), " ",
+				el("button", { onclick: () => decide(false) }, "Deny")),
+			() => el("span", { class: () => "muted approval-" + status() }, () => status())));
+};
+
+const message = (ctx) => (m) => {
 	// messages never change: render the markdown once
 	const text = el("div", { class: "chat-text md" });
 	text.innerHTML = renderMarkdown(m.text);
-	return el("div", { class: "chat-msg " + m.kind }, el("span", { class: "t" }, time(m.t)), " ", el("b", {}, m.from), text);
+	return el("div", { class: "chat-msg " + m.kind }, el("span", { class: "t" }, time(m.t)), " ", el("b", {}, m.from), text,
+		m.approval ? approvalCard(ctx, m.approval.id) : "");
 };
 
 export default pane((ctx) => {
@@ -53,7 +69,7 @@ export default pane((ctx) => {
 		feed({
 			items: () => ctx.store.chat,
 			key: (m) => m.id,
-			render: message,
+			render: message(ctx),
 			className: "chat",
 			empty: "no messages yet: say hi, AIs read this via chat_read"
 		}),

@@ -98,7 +98,7 @@ const toContent = (value) => {
 };
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
-const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read",
+const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
 	"blob_read", "kaitai_parse", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
@@ -182,12 +182,40 @@ const create = (lab, context) => {
 		return lab.stopDevice(a.id);
 	});
 
-	tool("device_command", "Run a driver command on a device (see lab_drivers for commands and args)", {
+	tool("device_command", "Run a driver command on a device (see lab_drivers for commands and args). "
+		+ "Risky commands (outputs on, high voltage, PTT, glitching, pairing; see safety_overview) wait for a person to approve them in the lab chat", {
 		id: z.string(),
 		command: z.string(),
 		args: json.optional()
 	}, (a) => {
-		return lab.commandDevice(a.id, a.command, a.args || {});
+		const args = a.args || {};
+		const device = lab.getDevice(a.id);
+		const rule = lab.safety.needsApproval(a.id, device.driver, a.command, args);
+		if (!rule) {
+			return lab.commandDevice(a.id, a.command, args);
+		}
+		return lab.safety.requestApproval({ who: actor(), device: a.id, command: a.command, args: args, reason: rule.reason || "approval required" })
+			.then(() => lab.commandDevice(a.id, a.command, args));
+	});
+
+	tool("safety_overview", "Safety rules (server-enforced), the approval policy, pending approvals and recent rule firings", {}, () => {
+		return { rules: lab.safety.listRules(), policy: lab.safety.getPolicy(), pending: lab.safety.listPending(), fired: lab.safety.firedLog().slice(-20) };
+	});
+
+	tool("rule_add", "Add a server-enforced safety rule: when (mathjs over latest channel values; <channel>_age = seconds since its last sample) "
+		+ "holds for for_ms, run action {device, command, args}. E.g. when \"psu_i > 0.5\", action {device: \"psu\", command: \"output\", args: {on: false}}", {
+		name: z.string(),
+		when: z.string(),
+		for_ms: z.number().optional(),
+		cooldown_ms: z.number().optional(),
+		action: z.object({ device: z.string(), command: z.string(), args: json.optional() }).optional(),
+		locked: z.boolean().optional().describe("locked rules can only be removed by a person in the web UI")
+	}, (a) => {
+		return lab.safety.addRule(a, actor());
+	});
+
+	tool("rule_remove", "Remove a safety rule (locked rules can only be removed by a person)", { id: z.string() }, (a) => {
+		return lab.safety.removeRule(a.id, false);
 	});
 
 	tool("device_log", "Recent log / console lines (all devices or one)", {

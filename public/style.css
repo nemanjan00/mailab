@@ -337,3 +337,10 @@ dialog.help p { margin: 6px 0; }
 .copy pre { margin: 0; padding: 10px 70px 10px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
 	font: 12px var(--mono); white-space: pre-wrap; word-break: break-all; }
 .copy button { position: absolute; top: 6px; right: 6px; }
+
+/* safety & approvals in chat */
+.chat-msg.safety b { color: var(--err); }
+.chat-msg.approval b { color: var(--warn); }
+.approval { margin: 4px 0 2px; }
+.approval-approved { color: var(--accent) !important; }
+.approval-denied, .approval-timeout { color: var(--err) !important; }

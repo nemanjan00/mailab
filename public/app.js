@@ -140,7 +140,7 @@ const ctx = {
 	// reactive (qrp) store: lab state from the server, feeds, live values.
 	// qrp panes bind to it; imperative panes read it like a plain object.
 	state: state({ devices: [], channels: [], traces: [], images: [], values: [], blobs: [], panes: [], paneTypes: {} }),
-	store: state({ activity: [], chat: [], live: {} }),
+	store: state({ activity: [], chat: [], live: {}, approvals: {} }),
 	data: data,
 	traces: traces,
 	api: api,
@@ -171,6 +171,11 @@ api("GET", "/activity").then((entries) => {
 }, () => null);
 api("GET", "/chat").then((messages) => {
 	ctx.store.chat = messages;
+}, () => null);
+api("GET", "/safety").then((safety) => {
+	safety.pending.forEach((entry) => {
+		ctx.store.approvals[entry.id] = entry;
+	});
 }, () => null);
 
 setInterval(() => {
@@ -220,6 +225,8 @@ const connect = () => {
 		} else if (msg.type === "activity") {
 			pushFeed(ctx.store.activity, msg.entry);
 			emit("activity", msg);
+		} else if (msg.type === "approval") {
+			ctx.store.approvals[msg.approval.id] = msg.approval;
 		} else if (msg.type === "chat") {
 			pushFeed(ctx.store.chat, msg.message);
 			emit("chat", msg);

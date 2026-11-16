@@ -31,8 +31,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
 | HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
 | Collab chat (web UI + MCP) with MCP push notifications | ✅ | chat pane (markdown/KaTeX) + `chat_send`/`chat_read`, persisted; push: stdio channel bridge `bin/channel.js` (`notifications/claude/channel`, verified end to end: push in, reply out); HTTP sessions get `notifications/message`. Claude Code channels are stdio-only research preview |
-| Server-enforced safety rules | ⬜ | rules as math over channels, checked on every sample by the server (so they hold even if the AI is wrong or slow): `mdp_i > 0.5 → mdp output off`, `pg target silent 5 s → uhubctl cycle`. Fills the "lab-wide safety policy" gap. **Priority, pairs with approvals** |
-| Approve-in-UI for risky commands | ⬜ | a third outcome besides refuse/run: the AI asks, an Approve/Deny card appears in the chat pane (output above X V, PTT, arming a glitch, pairing…). Same "owner approval per write" rule as in mdp-p906. **Priority** |
+| Server-enforced safety rules | ✅ | `src/safety`: `when` (mathjs over latest channel values, `<ch>_age` = seconds since last sample) held for `for_ms` → action `{device, command, args}`, cooldown; checked on every input sample + a 250 ms tick; firings → activity + chat; `locked` rules only removable by a person (REST), not by the AI (MCP `rule_remove` refused). MCP `rule_add`/`rule_remove`/`safety_overview`, REST `/api/safety`. Tests + verified live: a rule pulled back an approved AI change |
+| Approve-in-UI for risky commands | ✅ | policy (default: outputs on, voltage > 5 V, PTT, glitch/campaign, pairing; editable only via REST/UI, not by the AI) → AI `device_command` waits; Approve/Deny card in the chat pane; approve runs it, deny/timeout (120 s) refuses. Tests + clicked through in the browser |
 | Generic sweep & optimize | ⬜ | generalize the glitch campaign: sweep any setpoints (P906 voltage, SoapySDR frequency, a delay) against any measured result → map view + narrowing search. Brown-out profiling = one call (lower V until the target UART stops answering) |
 | One timebase across instruments | ⬜ | samples carry host time, so PSU/scope/logic drift by ms; a sync pulse every instrument sees aligns them (matters for glitching and power analysis) |
 | Record & replay as a device | ⬜ | save a session's channels/traces/logs, play it back as a fake instrument: test panes and AI workflows without the bench, CI on real data, live demos without hardware |
@@ -54,6 +54,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | markdown panes (+ KaTeX) | 🟡 | done: rendering, editing, AI `note` tool. Planned: live values inside notes (`{{channel}}`, `{{= expr}}`) |
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
 | Kaitai view | ✅ | lab blobs (devices/AI/upload) + server-side Kaitai (compiler in debug mode): field tree with byte ranges + hex dump with highlight; MCP `blob_write`/`blob_read`/`kaitai_parse` |
+| Grafana-like long-term trends | ⬜ | persistent, downsampled history per channel (min/max/mean buckets: 1 s → 1 min → 1 h tiers) on disk; trend pane with timeframe picker (5 min … 30 days), zoom, multiple channels/axes; e.g. battery charging curves over hours |
+| Configurable MCP notifications / subscriptions | ⬜ | the AI subscribes to events (safety rule firings, level-trigger bursts, approvals, UART/CLI lines matching patterns); pushed via channel bridge + `notifications/message`; diversity-classifier style: lines → templates, only unmatched clusters + debounced digests pushed, per-template counts recorded as channels for plotting |
 | Log classification (reference: diversity-classifier) | ⬜ | github.com/nemanjan00/diversity-classifier as reference: device logs / serial consoles / glitch-target replies → templates; the AI sees only unmatched clusters + aggregates/alarms; also replaces the generic glitch reply classes |
 | Shared terminals (shell-session-mcp) | ⬜ | github.com/nemanjan00/shell-session-mcp: PTY sessions (bash, gdb, openocd, serial consoles) as a `shell` device + terminal pane (xterm.js), driven by both the user and the AI; output pushes like its `notifications/message` events |
 | protokai (.proto → .ksy) in the Kaitai view | ⬜ | github.com/nemanjan00/protokai: kaitai pane/`kaitai_parse` accept `proto` → protokai → .ksy (needs multi-file .ksy imports in the Kaitai loader) → parse protobuf blobs with field names |
@@ -150,7 +152,6 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. Safety rules + approve-in-UI (makes unattended AI-on-the-bench safe)
 2. Blob analysis: entropy, `file`, binwalk, binary diff; then flashrom/minipro/OpenOCD dumps into it
 3. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
 4. Finish the qrp/SDK migration of the remaining panes; markdown live values
@@ -258,3 +259,6 @@ Next:
 94. reviewer: read-only users can redefine math (createUnit); zeros(30000,30000) could exhaust memory
 95. uart in/out
 96. goal: implement everything from spec and test everything you can (write tests and manual verify)
+97. configurable mcp notifications for things like triggers, uart/cli line, like diversity classifier; diversity-classifier-like recording and plotting
+98. grafana like different timeframe longterm recordings of trends, like battery charging
+99. update spec
