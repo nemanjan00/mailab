@@ -56,3 +56,27 @@ export const axisStyle = () => {
 export const plotSize = (body, legend) => {
 	return { width: Math.max(50, body.clientWidth), height: Math.max(40, body.clientHeight - (legend ? 28 : 0)) };
 };
+
+// latest value of a channel: the live buffer, else the server's last sample
+export const liveValue = (ctx, channel) => {
+	const v = ctx.store.live[channel];
+	if (v !== undefined) {
+		return v;
+	}
+	const ch = ctx.state.channels.find((c) => c.name === channel);
+	return ch && ch.latest ? ch.latest.v : undefined;
+};
+
+export const channelUnit = (ctx, channel) => {
+	const ch = ctx.state.channels.find((c) => c.name === channel);
+	return (ch && ch.unit) || "";
+};
+
+// "{{channel}}" / "{{channel|digits}}" -> "1.234 mV" (engineering notation)
+export const formatPlaceholder = (ctx, name, precision) => {
+	const v = liveValue(ctx, name);
+	if (typeof v !== "number" || !Number.isFinite(v)) {
+		return "—";
+	}
+	return eng(v, precision) + channelUnit(ctx, name);
+};
