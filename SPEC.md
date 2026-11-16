@@ -79,6 +79,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Scriptable blocks | ✅ | `python` block: `work(x, rate)` with numpy/dsp |
 | Modem toolkit, all common modulations (✅ BER-tested in `yarn test`/husky via jest + pytest, all at BER ≈ 0: bpsk qpsk psk8 apsk16 qam4/8/16/32/64/128/256 sqam32/128 2fsk msk gfsk gmsk 4fsk ook. Fixed: qam32 via matched filter + Gardner (`symbol_sync method: gardner`; liquid's loop mis-locks on the 8×4 grid), GMSK/GFSK via an integrating discriminator (2e-2 → 0)): analog AM/DSB/SSB/FM/PM; digital OOK/ASK, 2/4-FSK, GFSK, MSK, GMSK, BPSK…PSK, QAM up to 256, APSK, DPSK; BER; sync; clock recovery; bit streams | 🟡 | flowgraph blocks: bit sources (PRBS/pattern/text), modulators, AWGN/CFO channel, FSK/OOK demod, clock recovery (Gardner/M&M on real signals; symbol_sync for linear), slicer → bits, sync-word framing, BER meter (PRBS self-sync), bit-stream sinks (value/blob) |
 | OpenCV (vision on lab images / camera streams) | ⬜ in progress (agent) | `vision` service on any lab image or camera/KVM/browser/VNC frame stream: read instrument displays (7-segment / LCD digits, OCR via tesseract), LED state/blink → channels, regions of interest with thresholds → channels + events (watch a status LED, a needle, a screen region), change/motion detection triggers, template matching (find a button/icon on a VNC screen), contours/measure in px or mm (calibration card / ArUco), perspective warp & align (PCB photos onto a PDF for the tracing tool), color picking, annotate overlays. MCP tools + a ROI editor pane; opencv-python-headless pinned in the managed venv |
+| Realtime audio DSP + AI denoise | ⬜ in progress (agent) | flowgraph audio blocks usable live (mic, SDR demod, audio files): notch (fixed, multi-harmonic hum 50/60 Hz, auto-tracking tone notch), biquad filters (LP/HP/BP/shelf/peaking EQ), noise gate, compressor/limiter/AGC, spectral-subtraction noise reduction, de-click; neural denoise: DeepFilterNet on CUDA (RTX 5080) with RNNoise CPU fallback; NVIDIA Maxine Audio Effects as an optional backend when its SDK is installed (proprietary, not bundled). Latency budget per block, live parameter changes, before/after spectrum |
 | Analog video decode | ⬜ | PAL/NTSC composite from SDR/scope samples (e.g. FM-demodulated FPV): H/V sync detection, line assembly → image frames in the image pane |
 | ngscopeclient decoders & blocks | ⬜ | reference/reuse libscopehal's filter catalog: CDR/PLL, TIE & jitter, eye masks, 8b/10b, Manchester, UART/SPI/I2C/CAN/USB/Ethernet, math filters; port key ones as flowgraph blocks or run libscopehal headless as a bridge |
 | MCP connection help in the UI | ✅ | the header's MCP address opens a modal: `claude mcp add` with this lab's URL, JSON config for other clients, token hint when auth is on, channel-bridge config, copy buttons |
@@ -171,7 +172,7 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. In progress (agents): PCB tracing tool, datasheet + FCC ID search, VNC pane, hex editor, OpenCV vision
+1. In progress (agents): PCB tracing tool, datasheet + FCC ID search, VNC pane, hex editor, OpenCV vision, audio DSP/denoise
 2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
 3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
 4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
@@ -321,3 +322,4 @@ Next:
 137. hex editor, peek, poke, bin diff, binary calcs... search replace, view... jump...
 138. panes should be collapsable, organized in tabs, etc.
 139. opencv
+140. audio dsp, notch, filtering, nvidia ai denoise, realtime
