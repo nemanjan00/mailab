@@ -93,6 +93,10 @@ const TYPES = {
 		description: "USB tree: hubs, ports, devices with /dev nodes and the lab devices using them; power toggles on switchable hubs (uhubctl)",
 		config: {}
 	},
+	datasheets: {
+		description: "research: datasheet search (local DB + online), local datasheet DB with a page viewer, FCC ID lookup with exhibits",
+		config: { query: "initial datasheet search", fccId: "initial FCC ID / company lookup", datasheet: "datasheet id to open", page: "page to show (default 1)" }
+	},
 	custom: {
 		description: "custom control panel: a layout tree of SDK elements (built by python bridges via mailab_ui.py, or by the AI)",
 		config: { layout: "{col: [{text: \"## PSU {{psu_v}}\"}, {row: [{value: \"psu_v\"}, {number: \"set V\", device: \"psu\", command: \"set_voltage\", arg: \"volts\", unit: \"V\"}]}, {toggle: \"output\", device: \"psu\", command: \"output\", arg: \"on\"}, {chart: [\"psu_v\"]}]}  elements: row col text value button toggle slider number chart table image" }

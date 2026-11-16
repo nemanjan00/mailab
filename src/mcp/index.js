@@ -9,8 +9,19 @@ const kaitai = require("../kaitai");
 const blobs = require("../blobs");
 const media = require("../services/media");
 const sweepModule = require("../sweep");
+const pdfUtil = require("../utils/pdf");
+const research = {
+	fccid: require("../services/fccid"),
+	datasheets: require("../services/datasheets")
+};
 
 const MAX_POINTS = 500;
+const DEFAULT_RENDER_PAGES = 3;
+const MAX_RENDER_PAGES = 20;
+const FCC_DPI = 100;
+
+// blob / image names from free text (ids, document titles)
+const labName = (str) => String(str).replace(/[^A-Za-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") || "doc";
 const ARGS_PREVIEW = 160;
 
 const INSTRUCTIONS = [
@@ -18,6 +29,7 @@ const INSTRUCTIONS = [
 	"Devices publish live time series as channels named <device>_<field>, captured arrays (spectra, VNA sweeps, scope/logic captures, glitch scatter) as traces, and images (screenshots).",
 	"Use math_eval for analysis (mathjs; a channel name is a vector of its recent values, a trace name is its first series' y and <name>_x its x).",
 	"Shape the user's web UI with panes (pane_types, pane_add, pane_update, note) so they can see what you see: charts for channels, trace panes for captures, markdown notes with KaTeX for findings.",
+	"For an unknown device or chip, research it: fccid_search / fccid_exhibits / fccid_fetch (FCC filings: internal photos, block diagrams), datasheet_search / datasheet_fetch / datasheet_find / datasheet_page (pinouts, register maps).",
 	"Hardware can be damaged: confirm with the user before enabling power outputs, transmitting (ptt) or glitching unknown targets.",
 	"Several people and AIs may share this lab: coordinate in the lab chat (chat_read / chat_send) before changing shared devices."
 ].join(" ");
@@ -103,7 +115,9 @@ const toContent = (value) => {
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
 	"blob_read", "media_probe", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "recordings", "usb_tree", "uart_ports", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send",
-	"board_list", "board_get", "board_search", "board_graph", "board_netlist", "board_view"];
+	"board_list", "board_get", "board_search", "board_graph", "board_netlist", "board_view",
+	// lookups only (they fill the on-disk HTTP cache, not the lab)
+	"fccid_search", "fccid_exhibits", "datasheet_search", "datasheet_find"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -460,6 +474,127 @@ const create = (lab, context) => {
 	tool("image_get", "Get an image (e.g. a scope screenshot) to look at", { name: z.string() }, (a) => {
 		const img = lab.getImage(a.name);
 		return { _image: { data: img.data.toString("base64"), mime: img.mime }, name: img.name, t: img.t };
+	});
+
+	// ---- research: FCC ID filings, datasheets -----------------------------
+
+	tool("fccid_search", "Look up FCC equipment authorizations (via fccid.io, a mirror of the FCC's public records). "
+		+ "An FCC ID (grantee + product code, e.g. 2AC7Z-ESP32WROOM32E, BCG-E2430A) gives the filing: description, grantee, grant dates, frequency ranges with output power, confidentiality and the exhibit list; "
+		+ "a grantee code (2AC7Z) lists the company's FCC IDs; anything else (company, model) is a search", {
+		query: z.string().describe("FCC ID, grantee code, company or model")
+	}, (a) => {
+		return research.fccid.find(a.query);
+	});
+
+	tool("fccid_exhibits", "Exhibits of an FCC ID: external/internal photos, block diagram, schematics, test reports, user manual... "
+		+ "with links and whether each is public or held confidential (available: false). Fetch one with fccid_fetch", {
+		fccId: z.string()
+	}, (a) => {
+		return research.fccid.exhibits(a.fccId);
+	});
+
+	tool("fccid_fetch", "Download an FCC exhibit into the lab: the file becomes blob `name`, PDF pages are rendered to images <name>_p1.. (you get the first one to look at; image_get the others). "
+		+ "Give the exhibit url from fccid_exhibits, or fccId + type (substring of type/title, e.g. \"internal photo\", \"schematic\", \"block diagram\") + index", {
+		url: z.string().optional().describe("exhibit page URL (from fccid_exhibits)"),
+		fccId: z.string().optional(),
+		type: z.string().optional(),
+		index: z.number().optional().describe("n-th matching exhibit (default 0)"),
+		name: z.string().optional().describe("blob/image name (default fcc_<document id>)"),
+		pages: z.number().optional().describe("PDF pages to render as images (default 3, max 20, 0 = none)"),
+		dpi: z.number().optional().describe("render resolution (default 100)")
+	}, (a) => {
+		return research.fccid.download({ url: a.url, fccId: a.fccId, type: a.type, index: a.index }).then((r) => {
+			const name = labName(a.name || "fcc_" + (r.exhibit.documentId || r.exhibit.sha256 || Date.now()));
+			lab.setBlob(name, r.data, "fccid");
+			const out = {
+				name: name,
+				bytes: r.data.length,
+				mime: r.mime,
+				fccId: r.exhibit.fccId,
+				type: r.exhibit.type,
+				title: r.exhibit.title,
+				documentTitle: r.exhibit.documentTitle,
+				pages: r.exhibit.pages,
+				source: r.exhibit.fileUrl,
+				fccUrl: r.exhibit.fccUrl
+			};
+			if (/^image\//.test(r.mime)) {
+				lab.setImage(name, r.data, r.mime);
+				return Object.assign(out, { images: [name], _image: { data: r.data.toString("base64"), mime: r.mime } });
+			}
+			if (!pdfUtil.isPdf(r.data)) {
+				return out;
+			}
+			const count = Math.min(MAX_RENDER_PAGES, a.pages === undefined ? DEFAULT_RENDER_PAGES : Math.max(0, a.pages));
+			return pdfUtil.withTempFile(r.data, (file) => {
+				return pdfUtil.info(file).then((info) => {
+					const pages = Array.from({ length: Math.min(count, info.Pages || count) }, (_x, i) => i + 1);
+					// one page at a time: pdftoppm on big scans is memory hungry
+					return pages.reduce((chain, page) => chain.then((images) => {
+						return pdfUtil.render(file, page, a.dpi || FCC_DPI).then((png) => {
+							lab.setImage(name + "_p" + page, png, "image/png");
+							return images.concat([{ name: name + "_p" + page, png: png }]);
+						});
+					}), Promise.resolve([])).then((images) => {
+						const result = Object.assign(out, { pages: info.Pages, images: images.map((img) => img.name) });
+						if (images.length) {
+							result._image = { data: images[0].png.toString("base64"), mime: "image/png" };
+						}
+						return result;
+					});
+				});
+			});
+		});
+	});
+
+	tool("datasheet_search", "Find datasheets for a part number: the local datasheet DB (by name and full text) plus online candidates "
+		+ "(manufacturer URL patterns verified as PDF; Mouser / Nexar-Octopart / DigiKey / SearXNG when their keys are configured). Store one with datasheet_fetch", {
+		query: z.string().describe("part number, e.g. NE555, STM32F103C8, ESP32-WROOM-32"),
+		online: z.boolean().optional().describe("default true; false = local DB only"),
+		providers: z.array(z.string()).optional().describe("only these providers (manufacturer, mouser, nexar, digikey, searxng)")
+	}, (a) => {
+		return research.datasheets.search(a.query, { online: a.online, providers: a.providers });
+	});
+
+	tool("datasheet_fetch", "Download a datasheet PDF (url) into the local datasheet DB, or import a PDF lab blob; extracts the text of every page for datasheet_find", {
+		url: z.string().optional(),
+		blob: z.string().optional().describe("import this lab blob (a PDF) instead"),
+		part: z.string().optional(),
+		manufacturer: z.string().optional(),
+		title: z.string().optional()
+	}, (a) => {
+		const info = { part: a.part, manufacturer: a.manufacturer, title: a.title };
+		if (a.blob) {
+			return research.datasheets.importPdf(lab.getBlob(a.blob).data, info);
+		}
+		return research.datasheets.fetch(Object.assign({ url: a.url }, info));
+	});
+
+	tool("datasheet_find", "Full-text search in the local datasheet DB with page numbers and snippets. "
+		+ "kind finds sections: pinout, registers, ratings, package, timing. Then read the page with datasheet_page (rendered image + text)", {
+		query: z.string().optional().describe("words that must all be on the page; \"quoted phrase\" for exact text"),
+		kind: z.enum(Object.keys(research.datasheets.library().KINDS)).optional(),
+		id: z.string().optional().describe("only this datasheet (id from datasheet_search)"),
+		limit: z.number().optional()
+	}, (a) => {
+		return research.datasheets.find({ query: a.query, kind: a.kind, id: a.id, limit: a.limit });
+	});
+
+	tool("datasheet_page", "Render a datasheet page as lab image ds_<id>_p<page> to look at (pinout drawings, register tables, timing diagrams); text: true adds the page's extracted text", {
+		id: z.string(),
+		page: z.number(),
+		dpi: z.number().optional().describe("default 110 (150-200 for small print)"),
+		text: z.boolean().optional()
+	}, (a) => {
+		return research.datasheets.render(a.id, a.page, a.dpi).then((png) => {
+			const name = labName("ds_" + a.id + "_p" + a.page);
+			lab.setImage(name, png, "image/png");
+			const out = { name: name, id: a.id, page: a.page, _image: { data: png.toString("base64"), mime: "image/png" } };
+			if (a.text) {
+				out.text = research.datasheets.library().pageText(a.id, a.page);
+			}
+			return out;
+		});
 	});
 
 	// ---- math ------------------------------------------------------------

@@ -29,7 +29,18 @@ const DEFAULTS = {
 	// 0 = don't manage a python venv (use PYTHON as is)
 	MAILAB_MANAGE_PYTHON: "1",
 	// extra directories media tools and flowgraph file blocks may read/write (":"-separated); DATA_DIR/media always
-	MAILAB_MEDIA_DIRS: ""
+	MAILAB_MEDIA_DIRS: "",
+	// download caps for FCC exhibits / datasheet PDFs (bytes)
+	FCCID_MAX_BYTES: String(30 * 1024 * 1024),
+	DATASHEET_MAX_BYTES: String(50 * 1024 * 1024),
+	// optional datasheet providers, disabled while unset
+	MOUSER_API_KEY: "",
+	NEXAR_CLIENT_ID: "",
+	NEXAR_CLIENT_SECRET: "",
+	DIGIKEY_CLIENT_ID: "",
+	DIGIKEY_CLIENT_SECRET: "",
+	// a SearXNG instance (JSON format enabled) for keyless web search
+	SEARXNG_URL: ""
 };
 
 // a DATA_DIR with control characters (e.g. ANSI colour codes from a
