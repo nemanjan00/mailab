@@ -1,7 +1,8 @@
 // Lab profiles dialog: save the setup under a name, load/download/delete
 // saved ones, or upload a .mailab.json. Loading replaces the whole lab.
 
-import { el, list, mount, state, when } from "@nemanjan00/qrp";
+import { el, mount, state, when } from "@nemanjan00/qrp";
+import { table } from "./sdk/index.js";
 import { time } from "./panes/util.js";
 
 let mounted = null;
@@ -56,13 +57,16 @@ export default (dialog, body, ctx) => {
 		el("button", { class: "primary" }, "save current lab"),
 		el("label", { class: "upload" }, "upload…", el("input", { type: "file", accept: ".json", hidden: true, onchange: upload }))),
 		when(() => view.status, () => el("p", { class: "muted" }, () => view.status)),
-		when(() => view.profiles.length, () => el("table", {},
-			el("thead", {}, el("tr", {}, el("th", {}, "profile"), el("th", {}, "devices"), el("th", {}, "saved"), el("th"))),
-			el("tbody", {}, list(() => view.profiles, (p) => p.name, (p) => el("tr", {},
-				el("td", { class: "mono" }, p.name),
-				el("td", { class: "muted" }, p.devices.join(", ") || "—"),
-				el("td", { class: "muted" }, p.savedAt ? time(Date.parse(p.savedAt)) : ""),
-				el("td", {},
+		table({
+			rows: () => view.profiles,
+			key: (p) => p.name,
+			name: "profiles",
+			empty: "no saved profiles yet",
+			columns: [
+				{ title: "profile", mono: true, value: (p) => p.name },
+				{ title: "devices", muted: true, raw: (p) => p.devices.join(", "), value: (p) => p.devices.join(", ") || "—" },
+				{ title: "saved", muted: true, raw: (p) => p.savedAt || "", value: (p) => (p.savedAt ? time(Date.parse(p.savedAt)) : "") },
+				{ value: (p) => [
 					el("button", { onclick: () => ctx.api("GET", "/profiles/" + encodeURIComponent(p.name) + "/diff").then((d) => {
 						if (confirm("Replace the whole lab with \"" + p.name + "\"? Devices restart.\n\n" + (d.load.length ? d.load.join("\n") : "(same as the current lab)"))) {
 							act(ctx.api("POST", "/profiles/" + p.name + "/load"), "loaded " + p.name);
@@ -75,8 +79,9 @@ export default (dialog, body, ctx) => {
 						if (confirm("Delete profile " + p.name + "?")) {
 							act(ctx.api("DELETE", "/profiles/" + p.name), "deleted " + p.name);
 						}
-					} }, "×")))))),
-		() => el("p", { class: "muted" }, "no saved profiles yet")),
+					} }, "×")] }
+			]
+		}),
 		el("p", {}, el("a", { href: "/api/lab/export", download: "lab.mailab.json" }, "download the current lab"), " · ",
 			el("button", { onclick: () => dialog.close() }, "close"))));
 	refresh();

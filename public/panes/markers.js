@@ -6,6 +6,8 @@
 //   ref    index of another marker: the table shows Δx / Δy to it
 // pane.config.peaks: N   adds the N highest local maxima as extra markers
 
+import { when } from "@nemanjan00/qrp";
+import { iconButton, table } from "../sdk/index.js";
 import { cssVar, escapeHtml, eng } from "./util.js";
 
 const MIN_PEAK_SEPARATION = 0.01;
@@ -129,26 +131,55 @@ export const drawMarkers = (u, readings) => {
 	g.restore();
 };
 
-export const readingsTable = (readings) => {
-	if (!readings.length) {
-		return "";
+/**
+ * Plain, export-friendly rows for readingsTable (numbers in base units).
+ */
+export const readingRows = (readings) => readings.map((r) => {
+	const tr = r.trace;
+	const row = {
+		label: r.label,
+		mode: r.mode,
+		x: r.x,
+		xText: eng(r.x, 4) + tr.xUnit,
+		level: r.y,
+		levelText: r.y.toFixed(2) + " " + tr.yUnit,
+		dx: null,
+		dxText: "",
+		dy: null,
+		dyText: "",
+		removable: r.removable === undefined ? null : r.removable
+	};
+	if (r.dx !== undefined) {
+		row.dx = r.dx;
+		row.dxText = "Δ" + r.refLabel + " " + eng(r.dx, 4) + tr.xUnit;
+		row.dy = r.dy;
+		row.dyText = (r.dy >= 0 ? "+" : "") + r.dy.toFixed(2) + " " + tr.yUnit;
 	}
-	const rows = readings.map((r) => {
-		const tr = r.trace;
-		let delta = "<td></td><td></td>";
-		if (r.dx !== undefined) {
-			delta = "<td class=\"num\">Δ" + escapeHtml(r.refLabel) + " " + eng(r.dx, 4) + tr.xUnit + "</td><td class=\"num\">" + (r.dy >= 0 ? "+" : "") + r.dy.toFixed(2) + " " + escapeHtml(tr.yUnit) + "</td>";
-		}
-		let remove = "";
-		if (r.removable !== undefined) {
-			remove = "<button class=\"icon\" data-remove=\"" + r.removable + "\" title=\"remove\">×</button>";
-		}
-		return "<tr><td class=\"mono\">" + escapeHtml(r.label) + "</td><td class=\"muted\">" + escapeHtml(r.mode) + "</td>"
-			+ "<td class=\"num\">" + eng(r.x, 4) + escapeHtml(tr.xUnit) + "</td><td class=\"num\">" + r.y.toFixed(2) + " " + escapeHtml(tr.yUnit) + "</td>"
-			+ delta + "<td>" + remove + "</td></tr>";
-	}).join("");
-	return "<table class=\"readings\"><thead><tr><th>mk</th><th>mode</th><th>x</th><th>level</th><th>Δx</th><th>Δlevel</th><th></th></tr></thead><tbody>" + rows + "</tbody></table>";
-};
+	return row;
+});
+
+/**
+ * Readings table (sortable, filterable, exportable) over reactive rows from readingRows.
+ * @param {function(): Array} rows
+ * @param {function(number)} onRemove removes the manual marker at that index
+ * @param {Object} [ui] tableState(), kept by the caller so sort / filter survive a rebuild
+ */
+export const readingsTable = (rows, onRemove, ui) => when(() => rows().length > 0, () => table({
+	rows: rows,
+	ui: ui,
+	key: (r) => r.label,
+	name: "readings",
+	className: "readings",
+	columns: [
+		{ title: "mk", mono: true, value: (r) => r.label },
+		{ title: "mode", muted: true, value: (r) => r.mode },
+		{ title: "x", num: true, raw: (r) => r.x, text: (r) => r.xText, value: (r) => r.xText },
+		{ title: "level", num: true, raw: (r) => r.level, text: (r) => r.levelText, value: (r) => r.levelText },
+		{ title: "Δx", num: true, raw: (r) => r.dx, text: (r) => r.dxText, value: (r) => r.dxText },
+		{ title: "Δlevel", num: true, raw: (r) => r.dy, text: (r) => r.dyText, value: (r) => r.dyText },
+		{ value: (r) => (r.removable === null ? "" : iconButton("×", "remove", () => onRemove(r.removable))) }
+	]
+}));
 
 /**
  * Scope-style measurement table from trace.measurements: [{name, value, unit}]

@@ -188,6 +188,13 @@ export default pane((ctx) => table({
 }));
 ```
 
+Every SDK `table` sorts by clicking a header (numbers and engineering
+notation like `-381.042 mV` by value, text naturally), filters (`text`,
+`col:text`) and exports the visible rows as CSV / JSON. A column's `raw`
+accessor gives the value to sort and export when the cell renders something
+else; `tools: false` hides the filter/export row. The logic lives in
+`src/utils/table` (jest-tested).
+
 **Flowgraph block**: a class in `python/flowgraph_bridge.py` with
 `params`, `doc` and `work(x, rate) -> (y, rate)`, or write it inline in a
 `python` block.

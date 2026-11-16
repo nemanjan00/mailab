@@ -10,12 +10,13 @@
 // text takes {{channel}} or {{channel|digits}}; number opens a keypad on tap and
 // sends the value in base units (unit picks the prefix buttons: V -> mV/V/kV)
 
-import { el, list, onDispose, state, when } from "@nemanjan00/qrp";
-import { empty, numberField, pane } from "../sdk/index.js";
+import { el, onDispose, state, when } from "@nemanjan00/qrp";
+import { empty, numberField, objectTable, pane } from "../sdk/index.js";
 import chartPane from "./chart.js";
 import { renderMarkdown } from "./markdown.js";
-import { channelUnit, eng, escapeHtml, formatPlaceholder, liveValue } from "./util.js";
+import { channelUnit, eng, formatPlaceholder, liveValue } from "./util.js";
 import placeholders from "../../src/utils/placeholders/index.js";
+import tableUtil from "../../src/utils/table/index.js";
 
 const live = liveValue;
 const unitOf = channelUnit;
@@ -123,16 +124,15 @@ const controls = {
 	table: (ctx, node) => {
 		const view = state({ rows: [] });
 		const load = () => ctx.api("GET", "/values/" + encodeURIComponent(node.table)).then((v) => {
-			view.rows = [].concat(v.value || []);
+			view.rows = tableUtil.rowsOf(v.value);
 		}, () => null);
 		load();
 		onDispose(ctx.on("value", (msg) => {
 			if (msg.value.name === node.table) {
-				view.rows = [].concat(msg.value.value || []);
+				view.rows = tableUtil.rowsOf(msg.value.value);
 			}
 		}));
-		return el("table", {}, el("tbody", {}, list(() => view.rows.map((r, i) => ({ i: i, r: r })), (x) => x.i,
-			(x) => el("tr", {}, ...(typeof x.r === "object" ? Object.keys(x.r).map((k) => el("td", {}, escapeHtml(String(x.r[k])))) : [el("td", {}, String(x.r))])))));
+		return objectTable({ rows: () => view.rows, name: node.table, tools: node.tools, empty: "no rows in " + node.table });
 	},
 
 	image: (ctx, node) => {
