@@ -16,7 +16,8 @@ import channels from "/panes/channels.js";
 const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
-const PALETTE = ["#37e2a0", "#4cb4ff", "#ffb547", "#ff5c9a", "#b48cff", "#5ce1e6", "#f2ef5b", "#ff7a45"];
+const PALETTE_SIZE = 8;
+const THEMES = ["dracula", "lab", "light"];
 
 // ---- events -------------------------------------------------------------
 
@@ -106,7 +107,8 @@ const ctx = {
 	traces: traces,
 	api: api,
 	on: on,
-	color: (i) => PALETTE[i % PALETTE.length],
+	// series colours come from the theme (--c0 .. --c7)
+	color: (i) => getComputedStyle(document.documentElement).getPropertyValue("--c" + (i % PALETTE_SIZE)).trim(),
 	fetchTrace: (name) => {
 		return api("GET", "/traces/" + name).then((tr) => {
 			traces[name] = tr;
@@ -424,13 +426,17 @@ const applyTheme = (theme) => {
 	document.documentElement.setAttribute("data-theme", theme);
 	emit("theme", theme);
 };
+let savedTheme;
 try {
-	applyTheme(localStorage.getItem("mailab-theme") || "dark");
+	savedTheme = localStorage.getItem("mailab-theme") || "dracula";
 } catch (_err) {
-	applyTheme("dark");
+	savedTheme = "dracula";
 }
+applyTheme(THEMES.indexOf(savedTheme) === -1 ? "dracula" : savedTheme);
 themeButton.addEventListener("click", () => {
-	const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+	const current = THEMES.indexOf(document.documentElement.getAttribute("data-theme"));
+	const next = THEMES[(current + 1) % THEMES.length];
+	themeButton.title = "theme: " + next;
 	applyTheme(next);
 	try {
 		localStorage.setItem("mailab-theme", next);

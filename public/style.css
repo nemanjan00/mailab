@@ -1,4 +1,32 @@
+/* Dracula (default): https://draculatheme.com/contribute */
 :root {
+	--bg: #21222c;
+	--panel: #282a36;
+	--panel-2: #343746;
+	--line: #44475a;
+	--text: #f8f8f2;
+	--muted: #6272a4;
+	--accent: #50fa7b;
+	--accent-2: #8be9fd;
+	--warn: #ffb86c;
+	--err: #ff5555;
+	--grid-line: rgba(248, 248, 242, 0.07);
+	--on-accent: #282a36;
+	/* series colours, in order */
+	--c0: #50fa7b;
+	--c1: #8be9fd;
+	--c2: #ffb86c;
+	--c3: #ff79c6;
+	--c4: #bd93f9;
+	--c5: #f1fa8c;
+	--c6: #ff5555;
+	--c7: #6272a4;
+	--mono: "JetBrains Mono", "Fira Code", ui-monospace, Menlo, Consolas, monospace;
+	--sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+	color-scheme: dark;
+}
+
+:root[data-theme="lab"] {
 	--bg: #0b0f12;
 	--panel: #11171c;
 	--panel-2: #161e24;
@@ -10,9 +38,15 @@
 	--warn: #ffb547;
 	--err: #ff5c6c;
 	--grid-line: rgba(255, 255, 255, 0.06);
-	--mono: "JetBrains Mono", "Fira Code", ui-monospace, Menlo, Consolas, monospace;
-	--sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-	color-scheme: dark;
+	--on-accent: #04140d;
+	--c0: #37e2a0;
+	--c1: #4cb4ff;
+	--c2: #ffb547;
+	--c3: #ff5c9a;
+	--c4: #b48cff;
+	--c5: #5ce1e6;
+	--c6: #f2ef5b;
+	--c7: #ff7a45;
 }
 
 :root[data-theme="light"] {
@@ -25,6 +59,15 @@
 	--accent: #0f9e6a;
 	--accent-2: #1f7ad1;
 	--grid-line: rgba(0, 0, 0, 0.07);
+	--on-accent: #ffffff;
+	--c0: #0f9e6a;
+	--c1: #1f7ad1;
+	--c2: #d9822b;
+	--c3: #c2307a;
+	--c4: #7a4fd1;
+	--c5: #0f8f99;
+	--c6: #b8a300;
+	--c7: #d64a2a;
 	color-scheme: light;
 }
 
@@ -51,7 +94,7 @@ button {
 }
 
 button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); color: #04140d; border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 button.icon { padding: 0 6px; border: none; background: none; color: var(--muted); }
 button.icon:hover { color: var(--text); }
 

@@ -3,12 +3,13 @@
 
 import { axisStyle, cssVar, eng, frameThrottle, plotSize } from "./util.js";
 
-const SCATTER_COLORS = {
-	success: "#ff3b5c",
-	expected: "#37e2a0",
-	"no-reply": "#4cb4ff",
-	other: "#ffb547",
-	error: "#b48cff"
+// glitch-result classes -> theme colours
+const SCATTER_VARS = {
+	success: "--err",
+	expected: "--c0",
+	"no-reply": "--c1",
+	other: "--c2",
+	error: "--c4"
 };
 
 const drawScatter = (canvas, tr, ctx) => {
@@ -58,7 +59,7 @@ const drawScatter = (canvas, tr, ctx) => {
 
 	let legendX = pad.l + 50;
 	tr.series.forEach((s, i) => {
-		const color = SCATTER_COLORS[s.label] || ctx.color(i);
+		const color = SCATTER_VARS[s.label] ? cssVar(SCATTER_VARS[s.label]) : ctx.color(i);
 		g.fillStyle = color;
 		g.globalAlpha = 0.75;
 		s.y.forEach((y, j) => {
