@@ -54,7 +54,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
-| Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ⬜ | `spectrum` sink: RBW → FFT size (window ENBW), window choice, traces clear/write + max hold + min hold + average (count, power/log averaging), detector (peak/sample/avg) |
+| Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
 | TCP/UDP IQ streaming in/out | ⬜ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP (interop: GNU Radio, SDR++, rtl_tcp-style clients) |
 | libvolk | ⬜ | Not yet: the hot spots are per-symbol Python loops (carrier recovery, modem demod), and VOLK through ctypes wouldn't help. Move those loops into liquid/numpy/a small C helper first, then use VOLK kernels there |
 | Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |

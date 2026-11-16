@@ -337,26 +337,87 @@ class Python(Block):
 
 # sinks --------------------------------------------------------------------
 
+# window name -> (coefficients(n), equivalent noise bandwidth in bins)
+def _cosine_window(coeffs):
+    def make(n):
+        k = np.arange(n) / n * 2 * np.pi
+        return sum(((-1) ** i) * a * np.cos(i * k) for i, a in enumerate(coeffs))
+    return make
+
+
+WINDOWS = {
+    "rect": (lambda n: np.ones(n), 1.0),
+    "hann": (np.hanning, 1.5),
+    "blackmanharris": (_cosine_window([0.35875, 0.48829, 0.14128, 0.01168]), 2.0044),
+    "flattop": (_cosine_window([0.21557895, 0.41663158, 0.277263158, 0.083578947, 0.006947368]), 3.7702),
+}
+
+
 class Spectrum(Throttled):
-    doc = "FFT -> trace <device>_<id> (dBFS); add a waterfall pane on it"
-    params = {"fft": (1024, ""), "average": (8, "frames"), "fps": (10, ""), "center": (0.0, "Hz added to x axis")}
+    doc = ("spectrum analyzer -> trace <device>_<id> (dBFS): RBW or FFT size, window, "
+           "traces live / max / min / avg (power average over `average` frames), display points with peak/sample detector")
+    params = {"rbw": (0.0, "resolution bandwidth Hz (0 = use fft)"), "fft": (1024, "FFT size when rbw is 0"),
+              "window": ("hann", "hann|blackmanharris|flattop|rect"), "traces": (["live"], "any of live, max, min, avg"),
+              "average": (8, "frames in the avg trace (exponential, power domain)"), "points": (0, "display points (0 = all bins)"),
+              "detector": ("peak", "peak|sample when reducing to points"), "fps": (10, ""), "center": (0.0, "Hz added to x axis")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.buf = np.zeros(0, np.complex64)
+        self.hold = {}
+        self.logged_n = None
+
+    def fft_size(self, rate):
+        window, enbw = WINDOWS[self.p["window"]]
+        rbw = float(self.p["rbw"])
+        if rbw > 0:
+            # RBW = ENBW * rate / N  ->  N, rounded up to a power of two
+            return int(2 ** np.ceil(np.log2(max(16, enbw * rate / rbw))))
+        return int(self.p["fft"])
+
+    def reduce(self, values, points, detector):
+        if not points or points >= len(values):
+            return values
+        edges = np.linspace(0, len(values), points + 1).astype(int)
+        if detector == "sample":
+            return values[edges[:-1]]
+        return np.maximum.reduceat(values, edges[:-1])
 
     def work(self, x, rate):
-        self.buf = np.concatenate([getattr(self, "buf", np.zeros(0, np.complex64)), x])[-int(self.p["fft"]) * int(self.p["average"]):]
+        n = self.fft_size(rate)
+        self.buf = np.concatenate([self.buf, x.astype(np.complex64)])[-n * 64:]
         if not self.due():
             return None
-        n = int(self.p["fft"])
         frames = len(self.buf) // n
         if not frames:
             return None
-        window = np.hanning(n)
-        blocks = self.buf[-frames * n:].reshape(frames, n)
-        if np.isrealobj(blocks):
-            blocks = blocks.astype(np.complex64)
-        power = np.mean(np.abs(np.fft.fftshift(np.fft.fft(blocks * window, axis=1), axes=1)) ** 2, axis=0)
-        db = 10 * np.log10(power / np.sum(window) ** 2 + 1e-20)
+        make_window, enbw = WINDOWS[self.p["window"]]
+        window = make_window(n)
+        blocks = self.buf[:frames * n].reshape(frames, n)
+        # keep the incomplete tail frame for next time
+        self.buf = self.buf[frames * n:]
+        spectra = np.abs(np.fft.fftshift(np.fft.fft(blocks * window, axis=1), axes=1)) ** 2 / np.sum(window) ** 2
+        alpha = 1.0 / max(1, int(self.p["average"]))
+        if self.hold.get("n") != n:
+            self.hold = {"n": n, "max": spectra[0], "min": spectra[0], "avg": spectra[0]}
+        for frame in spectra:
+            self.hold["max"] = np.maximum(self.hold["max"], frame)
+            self.hold["min"] = np.minimum(self.hold["min"], frame)
+            self.hold["avg"] = self.hold["avg"] + alpha * (frame - self.hold["avg"])
+        curves = {"live": spectra[-1], "max": self.hold["max"], "min": self.hold["min"], "avg": self.hold["avg"]}
+        labels = {"live": "live", "max": "max hold", "min": "min hold", "avg": "avg %d" % int(self.p["average"])}
+        points = int(self.p["points"])
         freqs = float(self.p["center"]) + np.fft.fftshift(np.fft.fftfreq(n, 1 / rate))
-        lab.trace(self.id, freqs.tolist(), [{"label": "dBFS", "y": np.round(db, 2).tolist()}], "Hz", "dBFS")
+        if points and points < n:
+            freqs = freqs[np.linspace(0, n, points + 1).astype(int)[:-1]]
+        series = []
+        for name in self.p["traces"]:
+            db = 10 * np.log10(self.reduce(curves[name], points, self.p["detector"]) + 1e-20)
+            series.append({"label": labels[name], "y": np.round(db, 2).tolist()})
+        lab.trace(self.id, freqs.tolist(), series, "Hz", "dBFS")
+        if self.logged_n != n:
+            self.logged_n = n
+            lab.log("%s: fft %d, rbw %.1f Hz (%s)" % (self.id, n, enbw * rate / n, self.p["window"]))
         return None
 
 
