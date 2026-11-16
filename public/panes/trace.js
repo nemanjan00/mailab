@@ -1,8 +1,12 @@
 // x/y plot of captured traces: spectra, VNA sweeps, scope & logic captures
-// (uPlot), and scatter datasets such as glitch campaigns (canvas).
+// (uPlot, with markers + readings table), and canvas modes: glitch scatter,
+// constellation, eye diagram.
 
-import { axisStyle, eng, frameThrottle, plotSize } from "./util.js";
+import { axisStyle, eng, frameThrottle } from "./util.js";
 import { CANVAS_MODES } from "./plot2d.js";
+import { computeReadings, drawMarkers, readingsTable } from "./markers.js";
+
+const LEGEND_HEIGHT = 28;
 
 export default {
 	mount: (body, initial, ctx) => {
@@ -10,7 +14,34 @@ export default {
 		let plot = null;
 		let canvas = null;
 		let signature = "";
+		let readings = [];
+		let plotEl = null;
+		let tableEl = null;
 		body.classList.add("fill");
+
+		const hasMarkers = () => (pane.config.markers || []).length > 0 || Number(pane.config.peaks) > 0;
+
+		// plot gets whatever the readings table leaves
+		const size = () => {
+			const tableHeight = tableEl ? tableEl.offsetHeight : 0;
+			return { width: Math.max(50, body.clientWidth), height: Math.max(40, body.clientHeight - LEGEND_HEIGHT - tableHeight) };
+		};
+
+		const saveMarkers = (markers) => {
+			return ctx.api("PATCH", "/panes/" + pane.id, { config: { markers: markers } });
+		};
+
+		const refreshReadings = (trs) => {
+			if (!tableEl) {
+				return;
+			}
+			readings = hasMarkers() ? computeReadings(trs, pane.config) : [];
+			const before = tableEl.offsetHeight;
+			tableEl.innerHTML = readingsTable(readings);
+			if (plot && tableEl.offsetHeight !== before) {
+				plot.setSize(size());
+			}
+		};
 
 		const names = () => [].concat(pane.config.traces || pane.config.trace || []);
 
@@ -22,6 +53,8 @@ export default {
 				plot = null;
 			}
 			canvas = null;
+			plotEl = null;
+			tableEl = null;
 			body.innerHTML = "";
 		};
 
@@ -58,12 +91,39 @@ export default {
 			if (rightAxis) {
 				axes.push(Object.assign({}, axis, { scale: "y2", side: 1, grid: { show: false } }));
 			}
+			plotEl = document.createElement("div");
+			tableEl = document.createElement("div");
+			tableEl.className = "readings-wrap";
+			body.appendChild(plotEl);
+			body.appendChild(tableEl);
+			refreshReadings(trs);
 			plot = new uPlot(Object.assign({
 				scales: { x: { time: false, distr: pane.config.logX ? 3 : 1 }, y: scaleY, y2: { auto: true } },
 				axes: axes,
 				series: series,
-				cursor: { drag: { x: true, y: false } }
-			}, plotSize(body, true)), tables.length === 1 ? tables[0] : uPlot.join(tables), body);
+				cursor: { drag: { x: true, y: false } },
+				hooks: {
+					draw: [(u) => {
+						drawMarkers(u, readings);
+					}]
+				}
+			}, size()), tables.length === 1 ? tables[0] : uPlot.join(tables), plotEl);
+			// shift-click: marker at the cursor's x
+			plot.over.addEventListener("click", (event) => {
+				if (!event.shiftKey) {
+					return;
+				}
+				const x = plot.posToVal(plot.cursor.left, "x");
+				saveMarkers((pane.config.markers || []).concat([{ mode: "x", x: x }]));
+			});
+			tableEl.addEventListener("click", (event) => {
+				const button = event.target.closest("button[data-remove]");
+				if (!button) {
+					return;
+				}
+				const index = Number(button.dataset.remove);
+				saveMarkers((pane.config.markers || []).filter((_m, i) => i !== index));
+			});
 		};
 
 		const render = frameThrottle(() => {
@@ -106,6 +166,7 @@ export default {
 					tables.push([tr.x, s.y]);
 				});
 			});
+			refreshReadings(trs);
 			plot.setData(tables.length === 1 ? tables[0] : uPlot.join(tables));
 		});
 
@@ -139,7 +200,7 @@ export default {
 			},
 			resize: () => {
 				if (plot) {
-					plot.setSize(plotSize(body, true));
+					plot.setSize(size());
 				}
 				if (canvas) {
 					render();

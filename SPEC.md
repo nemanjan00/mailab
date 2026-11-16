@@ -37,7 +37,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | markdown panes (+ KaTeX) | 🟡 | done: rendering, editing, AI `note` tool. Planned: live values inside notes (`{{channel}}`, `{{= expr}}`) |
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
 | Kaitai view | ⬜ | parse binary blobs with a `.ksy` → tree (reuses the JSON tree) |
-| Readings table for spectrum markers | ⬜ | markers on trace panes (peak, delta, manual), table of freq/level/Δ |
+| Readings table for spectrum markers | ✅ | trace pane `markers` (peak / fixed x / Δ to another marker), `peaks: N` auto peaks, shift-click adds, × removes |
 | findus map preview | ⬜ | binned delay × length heatmap of glitch results (success rate per cell), like findus' own web view |
 | audio output | ✅ | audio pane plays lab audio streams (WebAudio); flowgraph `audio` sink |
 | webcam / Linux video input: live stream + snapshot | ✅ | V4L2 (ffmpeg) device: stream into an image/video pane, `snapshot` returns the image to the AI. Also the EVGA XR1 HDMI capture on `lab` |
@@ -54,6 +54,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
+| TCP/UDP IQ streaming in/out | ⬜ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP (interop: GNU Radio, SDR++, rtl_tcp-style clients) |
 | libvolk | ⬜ | Not yet: the hot spots are per-symbol Python loops (carrier recovery, modem demod), and VOLK through ctypes wouldn't help. Move those loops into liquid/numpy/a small C helper first, then use VOLK kernels there |
 | Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |
 
@@ -98,7 +99,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 ## 6. Order of work from here
 
 1. ~~Webcam / V4L2 stream + snapshot~~ ✅ (XR1 capture: use `camera` on `lab`; P2 Pro thermal still open)
-2. Spectrum markers + readings table
+2. ~~Spectrum markers + readings table~~ ✅
 3. Kaitai view (+ blobs: minipro dumps, captures)
 4. findus map preview (heatmap)
 5. Markdown live values
@@ -162,3 +163,4 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 51. uhubctl, hub power control
 52. nvtop
 53. update spec as I go
+54. tcp/udp stream iq in/out

@@ -17,7 +17,14 @@ const TYPES = {
 	},
 	trace: {
 		description: "x/y plot of traces: spectrum, VNA, scope/logic capture, glitch scatter, constellation, eye diagram (drawn by the trace's mode)",
-		config: { traces: "[trace names]", logX: "bool", yMin: "", yMax: "" }
+		config: {
+			traces: "[trace names]",
+			logX: "bool",
+			yMin: "",
+			yMax: "",
+			markers: "[{mode: \"peak\" | \"x\", x, trace, series, ref}] markers with a readings table (ref = index of another marker for Δ); users shift-click to add",
+			peaks: "N: also mark the N highest peaks"
+		}
 	},
 	waterfall: {
 		description: "waterfall (spectrogram) built from successive updates of one trace",

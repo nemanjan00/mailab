@@ -290,3 +290,7 @@ details > summary { cursor: pointer; display: inline; }
 
 .imgpane { position: relative; }
 .imgpane .snap { position: absolute; right: 8px; bottom: 8px; opacity: 0.85; }
+
+/* marker readings */
+.readings-wrap { max-height: 40%; overflow: auto; border-top: 1px solid var(--line); }
+table.readings td, table.readings th { padding: 2px 8px; font-size: 12px; }
