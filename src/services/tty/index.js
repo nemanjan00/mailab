@@ -8,7 +8,7 @@ const fs = require("fs");
 const tty = require("tty");
 const EventEmitter = require("events");
 const execFileSync = require("child_process").execFileSync;
-const wrapper = require("queue-promised").wrapper;
+const serialize = require("../../utils/mutex").serialize;
 
 const DEFAULT_BAUD = 115200;
 
@@ -113,9 +113,7 @@ const acquire = (path, options) => {
 		return entry.port;
 	}
 	const port = open(path, opts);
-	const lock = wrapper((fn) => {
-		return fn();
-	}, 1);
+	const lock = serialize();
 	port.exclusive = (fn) => {
 		return lock(fn);
 	};

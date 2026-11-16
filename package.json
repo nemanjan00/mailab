@@ -43,7 +43,6 @@
 		"marked": "^18.2.1",
 		"mathjs": "^15.2.0",
 		"node-proxmark3": "^0.0.12",
-		"queue-promised": "^0.0.31",
 		"serialport": "^13.0.0",
 		"uplot": "^1.6.32",
 		"ws": "^8.23.0",

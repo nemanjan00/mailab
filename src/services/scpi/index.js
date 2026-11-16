@@ -4,7 +4,7 @@
 
 const net = require("net");
 const fs = require("fs");
-const wrapper = require("queue-promised").wrapper;
+const serialize = require("../../utils/mutex").serialize;
 
 const DEFAULT_TCP_PORT = 5555;
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -164,7 +164,7 @@ const open = (options) => {
 				return link.read(timeoutMs);
 			});
 		};
-		const serialized = wrapper(exchange, 1);
+		const serialized = serialize(exchange);
 
 		return {
 			write: (command) => {

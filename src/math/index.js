@@ -7,6 +7,16 @@ const mathjs = require("mathjs");
 
 const math = mathjs.create(mathjs.all);
 
+// mailab's own entry points, kept before the sandbox below disables them
+// inside expressions (mathjs security guidance)
+const parse = math.parse;
+const compile = math.compile;
+const evaluate = math.evaluate;
+
+// largest matrix/array an expression may create (elements): beyond this a
+// single expression could exhaust memory and take the whole lab down
+const MAX_ELEMENTS = 1000000;
+
 const flat = (values) => {
 	if (mathjs.isMatrix(values)) {
 		return values.toArray().flat(Infinity);
@@ -58,6 +68,119 @@ math.import({
 	}
 });
 
+// ---- sandbox ------------------------------------------------------------
+
+const disabled = (name) => {
+	return () => {
+		throw new Error(name + " is disabled in lab expressions");
+	};
+};
+
+const elements = (size) => {
+	return [].concat(size).flat(Infinity).reduce((n, d) => n * Number(d), 1);
+};
+
+const sizeOf = (value) => {
+	if (mathjs.isMatrix(value)) {
+		return value.size();
+	}
+	if (Array.isArray(value)) {
+		return mathjs.size(value).valueOf();
+	}
+	return [1];
+};
+
+const capped = (name, count) => {
+	if (!Number.isFinite(count) || count > MAX_ELEMENTS) {
+		throw new Error(name + ": result too large (" + count + " elements, max " + MAX_ELEMENTS + ")");
+	}
+};
+
+// wrap a function, checking the result size it would produce from its arguments first
+const guard = (name, estimate) => {
+	const original = math[name];
+	return mathjs.typed(name, {
+		"...any": (args) => {
+			capped(name, estimate(args));
+			return original.apply(null, args);
+		}
+	});
+};
+
+// size arguments may be numbers, an array of numbers, or a matrix of numbers
+const dims = (args) => {
+	const numeric = args.filter((a) => typeof a === "number" || Array.isArray(a) || mathjs.isMatrix(a));
+	if (!numeric.length) {
+		return 1;
+	}
+	if (numeric.length === 1 && typeof numeric[0] !== "number") {
+		return elements(mathjs.isMatrix(numeric[0]) ? numeric[0].toArray() : numeric[0]);
+	}
+	return elements(numeric.filter((a) => typeof a === "number"));
+};
+
+const rangeCount = (args) => {
+	if (typeof args[0] === "string") {
+		const parts = args[0].split(":").map(Number);
+		return Math.abs((parts[parts.length === 3 ? 2 : 1] - parts[0]) / (parts.length === 3 ? parts[1] : 1)) + 1;
+	}
+	const step = args.length >= 3 && typeof args[2] === "number" ? args[2] : 1;
+	return Math.abs((Number(args[1]) - Number(args[0])) / (step || 1)) + 1;
+};
+
+// result size of an element-wise op with broadcasting: max of each dimension
+const broadcast = (args) => {
+	const shapes = args.map(sizeOf);
+	const rank = Math.max.apply(null, shapes.map((sh) => sh.length));
+	const out = Array.from({ length: rank }, (_, i) => {
+		return Math.max.apply(null, shapes.map((sh) => sh[sh.length - rank + i] || 1));
+	});
+	return elements(out);
+};
+
+math.import({
+	import: disabled("import"),
+	createUnit: disabled("createUnit"),
+	evaluate: disabled("evaluate"),
+	parse: disabled("parse"),
+	compile: disabled("compile"),
+	simplify: disabled("simplify"),
+	derivative: disabled("derivative"),
+	resolve: disabled("resolve"),
+	reviver: disabled("reviver"),
+	zeros: guard("zeros", dims),
+	ones: guard("ones", dims),
+	identity: guard("identity", (args) => {
+		const n = args.filter((a) => typeof a === "number");
+		return n.length > 1 ? n[0] * n[1] : (n[0] || 1) * (n[0] || 1);
+	}),
+	random: guard("random", (args) => (Array.isArray(args[0]) || mathjs.isMatrix(args[0]) ? dims([args[0]]) : 1)),
+	randomInt: guard("randomInt", (args) => (Array.isArray(args[0]) || mathjs.isMatrix(args[0]) ? dims([args[0]]) : 1)),
+	range: guard("range", rangeCount),
+	resize: guard("resize", (args) => dims([args[1]])),
+	reshape: guard("reshape", (args) => dims([args[1]])),
+	concat: guard("concat", (args) => args.filter((a) => typeof a !== "number").reduce((n, a) => n + elements(sizeOf(a)), 0)),
+	kron: guard("kron", (args) => elements(sizeOf(args[0])) * elements(sizeOf(args[1]))),
+	// element-wise ops broadcast N×1 with 1×N into N×N
+	add: guard("add", broadcast),
+	subtract: guard("subtract", broadcast),
+	dotMultiply: guard("dotMultiply", broadcast),
+	dotDivide: guard("dotDivide", broadcast),
+	dotPow: guard("dotPow", broadcast),
+	// matrix products: rows(a) * cols(b) for the outer-product case
+	multiply: guard("multiply", (args) => {
+		if (args.length !== 2) {
+			return 1;
+		}
+		const a = sizeOf(args[0]);
+		const b = sizeOf(args[1]);
+		if (a.length === 2 && b.length === 2) {
+			return a[0] * b[1];
+		}
+		return Math.max(elements(a), elements(b));
+	})
+}, { override: true });
+
 const MAX_RESULT_ITEMS = 2000;
 
 const toPlain = (value) => {
@@ -80,7 +203,7 @@ const toPlain = (value) => {
 };
 
 const symbols = (expression) => {
-	const names = math.parse(expression)
+	const names = parse(expression)
 		.filter((node) => {
 			return node.isSymbolNode;
 		})
@@ -94,7 +217,7 @@ const mathModule = {
 	symbols: symbols,
 
 	tex: (expression) => {
-		return math.parse(expression).toTex({ parenthesis: "keep", implicit: "hide" });
+		return parse(expression).toTex({ parenthesis: "keep", implicit: "hide" });
 	},
 
 	/**
@@ -103,7 +226,7 @@ const mathModule = {
 	 * @returns {{value: *, text: string}}
 	 */
 	evaluate: (expression, scope) => {
-		const result = math.evaluate(expression, Object.assign({}, scope));
+		const result = evaluate(expression, Object.assign({}, scope));
 		return {
 			value: toPlain(result),
 			text: math.format(result, { precision: 6 })
@@ -115,7 +238,7 @@ const mathModule = {
 	 * @returns {{expression: string, inputs: string[], evaluate: function(Object): number}}
 	 */
 	compile: (expression) => {
-		const compiled = math.compile(expression);
+		const compiled = compile(expression);
 		return {
 			expression: expression,
 			inputs: symbols(expression),

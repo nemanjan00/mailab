@@ -43,7 +43,10 @@ const create = (options, io, preset) => {
 				io.log("poll failed: " + err.message, "warn");
 			})
 			.then(() => {
-				timer = setTimeout(loop, options.pollMs || DEFAULT_POLL_MS);
+				// stop() may have run while this poll was in flight
+				if (!stopped) {
+					timer = setTimeout(loop, options.pollMs || DEFAULT_POLL_MS);
+				}
 			});
 	};
 

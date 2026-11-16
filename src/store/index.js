@@ -22,6 +22,7 @@ const create = (dir) => {
 		},
 
 		saveNow: (state) => {
+			clearTimeout(timer);
 			fs.mkdirSync(dir, { recursive: true });
 			const tmp = file + ".tmp";
 			fs.writeFileSync(tmp, JSON.stringify(state, null, "\t"));
@@ -36,6 +37,8 @@ const create = (dir) => {
 			timer = setTimeout(() => {
 				store.saveNow(snapshot());
 			}, SAVE_DELAY_MS);
+			// a pending save must not keep the process alive (shutdown saves synchronously)
+			timer.unref();
 		}
 	};
 

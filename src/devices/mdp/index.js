@@ -4,7 +4,7 @@
 // bridge is opened once per port and every exchange re-targets its radio link.
 
 const path = require("path");
-const wrapper = require("queue-promised").wrapper;
+const serialize = require("../../utils/mutex").serialize;
 const config = require("../../config");
 const args = require("../../utils/args");
 
@@ -33,9 +33,7 @@ const acquireBridge = (host, port, owner) => {
 		const entry = {
 			opening: host.bridge.open(port),
 			owners: [],
-			lock: wrapper((fn) => {
-				return fn();
-			}, 1),
+			lock: serialize(),
 			linkKey: null
 		};
 		entry.opening.catch(() => {
@@ -162,7 +160,10 @@ const create = (options, io) => {
 				io.log("poll failed: " + err.message, "warn");
 			})
 			.then(() => {
-				timer = setTimeout(poll, options.pollMs || DEFAULT_POLL_MS);
+				// stop() may have run while this poll was in flight
+				if (!stopped) {
+					timer = setTimeout(poll, options.pollMs || DEFAULT_POLL_MS);
+				}
 			});
 	};
 

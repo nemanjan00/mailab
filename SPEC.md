@@ -26,6 +26,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Tablet interface: numeric entry popover | ⬜ | SDK `numberField`: tap a value → popover keypad (digits, `.`, `±`, ⌫) + unit buttons (Hz/kHz/MHz/GHz, dBm/dB, mV/V, mA/A, µs/ms/s), like an instrument front panel; touch-friendly sizes; used in panes and dialogs |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
 | Auth hardening (reviewer feedback, rounds 2–3) | ✅ | `?token=` only as a login link (→ HttpOnly SameSite=Strict cookie + redirect), never accepted on API/MCP/WS; token table is a `Map` (inherited keys like `constructor`/`__proto__` were accepted as tokens: fixed); writes need role `rw` exactly (REST + MCP); non-loopback `HOST` without tokens refuses to start (`MAILAB_ALLOW_OPEN=1` overrides; Docker README uses tokens); open mode accepts only loopback/`MAILAB_ALLOWED_HOSTS` Host headers and same-origin requests, which blocks DNS rebinding (REST, MCP, WS). Verified against a live server |
+| Math sandbox (reviewer feedback, round 4) | ✅ | inside expressions `import`, `createUnit`, `evaluate`, `parse`, `compile`, `simplify`, `derivative`, `resolve`, `reviver` are disabled (a read-only user could redefine units for everyone); matrix constructors/growth (`zeros`, `ones`, `identity`, `random*`, `range`, `resize`, `reshape`, `concat`, `kron`, outer `multiply`, broadcasting `add`/`subtract`/`.*`/`./`/`.^`) are capped at 1M elements (memory exhaustion would stop PSU polling). Tests |
+| Process hygiene | ✅ | device poll loops re-check `stopped` before rescheduling (a poll in flight during stop() rescheduled itself); locks use a timer-free promise mutex (`src/utils/mutex`) instead of queue-promised, whose wrapper left a 1 ms setTimeout loop running forever after a call (CPU burn; upstream bug to report); debounced saves and the WS push loop are unref'd. Jest exits cleanly |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
 | HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
 | Collab chat (web UI + MCP) with MCP push notifications | ✅ | chat pane (markdown/KaTeX) + `chat_send`/`chat_read`, persisted; push: stdio channel bridge `bin/channel.js` (`notifications/claude/channel`, verified end to end: push in, reply out); HTTP sessions get `notifications/message`. Claude Code channels are stdio-only research preview |
@@ -79,6 +81,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
+| UART in/out | ⬜ | flowgraph `uart_encode` (bytes/text → async serial bits: start/stop, parity, 5–8 data bits, baud) and `uart_decode` (bits/logic → bytes, framing/parity errors), plus a serial terminal pane over the `serial` driver |
 | SDR level trigger | ✅ | flowgraph `level_trigger` (power squelch): gates the stream above threshold_db with pretrigger/hold, logs + counts bursts, saves each as IQ blob + envelope trace. Verified on gated GFSK bursts |
 | Graphing calculator / matplotlib-like plots | ✅ | `graph` pane (editable expressions, range, live refresh; edits saved to the pane config) + MCP `plot` → trace (`plot` mode, canvas, matplotlib-style): functions of x, parametric `x(t); y(t)`, data expressions (`db(mag(fft(ch)))`) against index. Data expressions without samples now say so instead of plotting nothing. Next: log scales, axis labels per series, subplots |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
@@ -252,3 +255,6 @@ Next:
 91. tablet interface (input field, on click opens popover, click digit input and units, e.g. dBm)
 92. modal that gives help on how to add as mcp
 93. ngscopeclient decoders and blocks
+94. reviewer: read-only users can redefine math (createUnit); zeros(30000,30000) could exhaust memory
+95. uart in/out
+96. goal: implement everything from spec and test everything you can (write tests and manual verify)

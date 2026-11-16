@@ -24,3 +24,31 @@ describe("math", () => {
 		expect(math.tex("sqrt(x)")).toContain("\\sqrt");
 	});
 });
+
+describe("math sandbox", () => {
+	test("expressions can't redefine units or reach the parser", () => {
+		["createUnit(\"V\", \"2 m\", {override: true})", "import({x: 1})", "evaluate(\"1+1\")", "parse(\"x\")",
+			"compile(\"x\")", "simplify(\"x+x\")", "derivative(\"x^2\", \"x\")", "resolve(\"x\")"].forEach((expr) => {
+			expect(() => math.evaluate(expr, {})).toThrow(/disabled in lab expressions/);
+		});
+		// units stay intact for everyone
+		expect(math.evaluate("1 V + 2 V", {}).text).toBe("3 V");
+		expect(() => math.evaluate("to(1 V, m)", {})).toThrow(/Units do not match/);
+	});
+
+	test("expressions can't allocate huge matrices", () => {
+		["zeros(30000, 30000)", "ones([5000, 5000])", "identity(5000)", "range(1, 1e9)", "range(\"1:1e9\")",
+			"random([3000, 3000])", "resize([1], [5000, 5000])",
+			"multiply(reshape(range(0, 2000), [2000, 1]), reshape(range(0, 2000), [1, 2000]))",
+			"reshape(range(0, 2000), [2000, 1]) .* reshape(range(0, 2000), [1, 2000])",
+			"reshape(range(0, 2000), [2000, 1]) + reshape(range(0, 2000), [1, 2000])"].forEach((expr) => {
+			expect(() => math.evaluate(expr, {})).toThrow(/result too large/);
+		});
+	});
+
+	test("normal lab math still works", () => {
+		expect(math.evaluate("sum(ones(100, 100))", {}).value).toBe(10000);
+		expect(math.evaluate("a .* a + 1", { a: [1, 2, 3] }).value).toEqual([2, 5, 10]);
+		expect(math.compile("v * i").evaluate({ v: 2, i: 3 })).toBe(6);
+	});
+});
