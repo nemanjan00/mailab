@@ -83,10 +83,10 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
-| UART in/out | ⬜ | flowgraph `uart_encode` (bytes/text → async serial bits: start/stop, parity, 5–8 data bits, baud) and `uart_decode` (bits/logic → bytes, framing/parity errors), plus a serial terminal pane over the `serial` driver |
+| UART in/out | ✅ | flowgraph `uart_tx` (text/hex → line levels: start/stop, parity, data bits, oversampling, repeat) and `uart_rx` (logic/analog/bits at any oversampling → bytes; parity/framing errors; value + blob + per-line `uart` log entries for classifiers). Verified 8N1/8E1/8O2, noise, fractional oversampling; regression test. Serial consoles: `serial` driver + log pane command box |
 | SDR level trigger | ✅ | flowgraph `level_trigger` (power squelch): gates the stream above threshold_db with pretrigger/hold, logs + counts bursts, saves each as IQ blob + envelope trace. Verified on gated GFSK bursts |
 | Beamforming math | 🟡 | done: `steering(n, d, θ)`, `array_factor(n, d, steer, θ)`, `array_factor_db` (ULA, d in λ, degrees; −100 dB floor) in all math; beam patterns verified in the graph pane (dB vs angle, polar with `equal` aspect). Next: UCA, DoA (delay-and-sum, MUSIC) once multi-channel coherent SDR input exists (bladeRF 2×2, KrakenSDR) |
-| Boardview: PCB analysis / schematic tracing | ⬜ | pane with imported board photos, layer scans and PDFs (pdf.js) as aligned layers; draw traces/pads/components/test points/nets on top, highlight nets; DM858 continuity → net connections; probe points ↔ scope channels; netlist export; annotations as values the AI can read and extend |
+| Boardview: PCB analysis / schematic tracing | ⬜ | pane with imported board photos, layer scans and PDFs (pdf.js) as aligned layers; draw traces/pads/components/test points/nets on top, highlight nets; DM858 continuity → net connections; probe points ↔ scope channels; netlist export; annotations as values the AI can read and extend. Sample material: `~/rib/docs` (Motorola GM600 service-manual schematic PDFs, renders, EEPROM dumps; vendor files stay local, never committed) |
 | Graphing calculator / matplotlib-like plots | ✅ | `graph` pane (editable expressions, range, live refresh; edits saved to the pane config) + MCP `plot` → trace (`plot` mode, canvas, matplotlib-style): functions of x, parametric `x(t); y(t)`, data expressions (`db(mag(fft(ch)))`) against index. Data expressions without samples now say so instead of plotting nothing; `ymin`/`ymax` limits and `equal` aspect (polar). Next: log scales, axis labels per series, subplots |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
 | TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
@@ -133,6 +133,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | binwalk | ✅ | `blob_analyze` + blob pane: signatures (offset/type/size/description) from binwalk 3 JSON. Next: extraction |
 | `file` (libmagic) | ✅ | type + MIME in `blob_analyze` and the blob pane |
 | File & bitstream entropy | ✅ | sliding-window Shannon entropy → trace `<blob>_entropy` + plot; high/low regions with a window-aware threshold (small-window bias); bit streams via the bitview/framer blobs |
+| Tigard | ⬜ | FT2232H multi-protocol board: port A UART (→ `serial` driver / console), port B JTAG/SWD/SPI/I2C via OpenOCD, flashrom (`ft2232_spi`) and pyftdi; target voltage select |
 | CatSniffer V3 (Electronic Cats) | ⬜ | multiprotocol sniffer (CC1352P7 + SX1262 + RP2040): flash firmwares (catnip) and run bridges: Sniffle (BLE), 802.15.4 (Zigbee/Thread), LoRa/sub-GHz; packets → values + pcap blobs, RSSI → channels |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
@@ -269,3 +270,5 @@ Next:
 100. catsniffer v3 fw and bridges (electroniccats.com/store/catsniffer-v3)
 101. beamforming math
 102. boardview like interface for pcb analysis, where something like pdf can be imported and drawn on, to trace schematics
+103. use ~/rib/docs PCB schematics as the sample for schematic and boardview reconstruction
+104. tigard
