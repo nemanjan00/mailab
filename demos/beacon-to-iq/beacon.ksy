@@ -20,18 +20,13 @@ seq:
     type: u2
   - id: capability
     type: u2
-  # tagged params fill everything up to the 4-byte FCS (substream so eos is clean)
   - id: tags
-    size: _io.size - _io.pos - 4
-    type: tag_list
+    type: tag
+    repeat: until
+    repeat-until: _io.pos >= _io.size - 4
   - id: fcs
     type: u4
 types:
-  tag_list:
-    seq:
-      - id: tags
-        type: tag
-        repeat: eos
   tag:
     seq:
       - id: number
