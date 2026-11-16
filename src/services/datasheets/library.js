@@ -164,7 +164,7 @@ const create = (dir) => {
 		 */
 		add: (data, info) => {
 			if (!pdf.isPdf(data)) {
-				return Promise.reject(Object.assign(new Error("not a PDF (" + data.length + " bytes starting " + JSON.stringify(data.slice(0, 16).toString("latin1")) + "): the link may lead to an HTML page, a login or a captcha; download it in a browser and import the file"), { status: 415 }));
+				return Promise.reject(Object.assign(new Error("not a PDF (" + data.length + " bytes" + (/^\s*<(!doctype|html|\?xml)/i.test(data.subarray(0, 64).toString("latin1")) ? ", looks like HTML" : "") + "): the link may lead to an HTML page, a login or a captcha; download it in a browser and import the file"), { status: 415 }));
 			}
 			load();
 			const sha256 = createHash("sha256").update(data).digest("hex");

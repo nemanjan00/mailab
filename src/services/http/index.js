@@ -12,6 +12,8 @@ const http = require("http");
 const https = require("https");
 const createHash = require("crypto").createHash;
 const pkg = require("../../../package.json");
+const config = require("../../config");
+const netguard = require("../../utils/netguard");
 
 const USER_AGENT = "mailab/" + pkg.version + " (hardware lab tool; low-volume lookups)";
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -50,8 +52,14 @@ const transport = (url, init, hops) => {
 	const redirects = hops || 0;
 	return new Promise((resolve, reject) => {
 		const u = new URL(url);
+		if (u.protocol !== "http:" && u.protocol !== "https:") {
+			throw Object.assign(new Error("only http(s) URLs: " + redact(url)), { status: 400 });
+		}
+		// every hop (redirects included) may only reach public addresses
+		const guard = netguard.create({ allow: config.get("MAILAB_HTTP_ALLOW") });
+		guard.check(u.hostname);
 		const lib = u.protocol === "http:" ? http : https;
-		const req = lib.request(u, { method: init.method, headers: init.headers, timeout: init.timeoutMs }, (res) => {
+		const req = lib.request(u, { method: init.method, headers: init.headers, timeout: init.timeoutMs, lookup: guard.lookup }, (res) => {
 			const location = res.headers.location;
 			if (res.statusCode >= 300 && res.statusCode < 400 && location && res.statusCode !== 300 && res.statusCode !== 304) {
 				res.resume();

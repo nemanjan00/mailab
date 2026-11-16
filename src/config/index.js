@@ -40,7 +40,9 @@ const DEFAULTS = {
 	DIGIKEY_CLIENT_ID: "",
 	DIGIKEY_CLIENT_SECRET: "",
 	// a SearXNG instance (JSON format enabled) for keyless web search
-	SEARXNG_URL: ""
+	SEARXNG_URL: "",
+	// web lookups (datasheets, FCC ID) only reach public addresses; local mirrors allowed here: "host,10.0.5.0/24"
+	MAILAB_HTTP_ALLOW: ""
 };
 
 // a DATA_DIR with control characters (e.g. ANSI colour codes from a
