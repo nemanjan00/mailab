@@ -1,0 +1,15 @@
+{
+  "description": "A text message as 16-QAM OFDM through a 30 dB channel: the filled ~16 MHz block spectrum and the equalized subcarrier constellation recovered by ofdm_demod.",
+  "prompt": "Modulate a text message with the OFDM transmitter, send it through a 30 dB channel, and show the OFDM spectrum and the equalized constellation.",
+  "blocks": [
+    {"id": "tx", "type": "ofdm_mod", "params": {"input": "text:hello OFDM ", "scheme": "qam16", "rate": 20e6}},
+    {"id": "air", "type": "channel", "params": {"snr_db": 30}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 256, "traces": ["avg"], "average": 16}},
+    {"id": "rx", "type": "ofdm_demod", "params": {"scheme": "qam16"}}
+  ],
+  "links": [["tx", "air"], ["air", "spec"], ["air", "rx"]],
+  "panes": [
+    {"type": "trace", "title": "OFDM spectrum", "config": {"traces": ["fg_spec"]}},
+    {"type": "trace", "title": "Equalized subcarrier constellation", "config": {"traces": ["fg_rx_const"]}}
+  ]
+}

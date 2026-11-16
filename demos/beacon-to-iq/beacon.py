@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Bytes -> IQ -> spectrum, in a handful of MCP calls.
+"""Bytes -> real OFDM -> spectrum + recovered constellation, in a few MCP calls.
 
 Crafts an 802.11 beacon frame, stores it as a lab blob (parsed by a Kaitai
-struct in the kaitai pane), modulates the bytes as QAM256 and loops them
-back through the `channel` block to a spectrum and a recovered constellation.
+struct in the kaitai pane), then modulates the bytes with a real 802.11a/g-style
+OFDM transmitter (`ofdm_mod`: 64-pt IFFT, 48 data + 4 pilot subcarriers, cyclic
+prefix, STF/LTF preamble, scrambled QAM) and loops the IQ back through the
+`channel` block into `ofdm_demod`, which packet-detects, corrects the carrier
+offset, equalizes from the LTF, tracks the pilots and recovers the bytes. The
+panes show the OFDM spectrum (the ~filled block), the equalized subcarrier
+constellation (a clean QAM grid) and the recovered frame.
 
-This is a DSP demo: it does NOT transmit, and single-carrier QAM256 is not
-real 802.11 (which is OFDM), so no access point would decode it. Over-the-air
-transmit is a separate, approval-gated, band-limited path (see the RF safety
-notes in the README); this stays entirely in a loopback channel.
+This is a DSP demo: it does NOT transmit. The OFDM waveform is faithful enough
+to look and demod like 802.11 OFDM, but it omits the convolutional code,
+interleaver and SIGNAL field, so it is not a bit-compatible 802.11 frame. Over-
+the-air transmit is a separate, approval-gated, band-limited path (see the RF
+safety notes in the README); this stays entirely in a loopback channel.
 
     python3 demos/beacon-to-iq/beacon.py [http://127.0.0.1:3000] [token]
 
@@ -55,36 +61,37 @@ def main():
     ksy = open(os.path.join(here, "beacon.ksy")).read()
     print("beacon frame: %d bytes  %s" % (len(frame), frame.hex()))
 
+    # 16-QAM OFDM: 48 data subcarriers x 4 bits = 192 bits per OFDM symbol
+    scheme = "qam16"
+    bits_per_sym = 48 * 4
+    n_sym = -(-len(frame) * 8 // bits_per_sym)   # ceil
+
     # 1. the crafted bytes as a blob (the kaitai pane parses them into fields)
     mcp("blob_write", {"name": "beacon", "hex": frame.hex()})
 
-    # 2. one flowgraph: bytes -> 16-QAM -> loopback channel -> spectrum + a
-    #    *recovered* constellation. The receive chain mirrors the modem toolkit:
-    #    agc (normalise amplitude) -> symbol_sync (timing) -> carrier_recovery
-    #    (phase) so the scatter lands on the 16-QAM reference grid. 16-QAM is a
-    #    real 802.11 MCS and 54 bytes = 108 symbols fill its 16 points cleanly
-    #    (QAM256 would only sample ~54 of its 256 points from one short frame).
+    # 2. one flowgraph: beacon bytes -> real OFDM -> loopback channel ->
+    #    OFDM spectrum, and ofdm_demod -> equalized constellation + recovered bits
     mcp("device_add", {"id": "fg", "driver": "flowgraph", "options": {"graph": {
         "blocks": [
-            {"id": "src", "type": "bits", "params": {"pattern": "hex:" + frame.hex(), "bitrate": 20000, "preamble": "aaaa", "sync": "2dd4"}},
-            {"id": "tx", "type": "mod", "params": {"scheme": "qam16", "sps": 8}},
-            {"id": "air", "type": "channel", "params": {"snr_db": 28}},
-            {"id": "spec", "type": "spectrum", "params": {}},
-            {"id": "agc", "type": "agc", "params": {}},
-            {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
-            {"id": "pll", "type": "carrier_recovery", "params": {"scheme": "qam16"}},
-            {"id": "con", "type": "constellation", "params": {}},
+            {"id": "tx", "type": "ofdm_mod", "params": {"input": "hex:" + frame.hex(), "scheme": scheme, "n_sym": n_sym, "rate": 20e6}},
+            {"id": "air", "type": "channel", "params": {"snr_db": 40}},
+            {"id": "spec", "type": "spectrum", "params": {"fft": 256, "traces": ["avg"], "average": 16}},
+            {"id": "rx", "type": "ofdm_demod", "params": {"scheme": scheme, "n_sym": n_sym}},
+            {"id": "bits", "type": "bitview", "params": {"bits": len(frame) * 8}},
         ],
-        "links": [["src", "tx"], ["tx", "air"], ["air", "spec"], ["air", "agc"], ["agc", "sync"], ["sync", "pll"], ["pll", "con"]],
+        "links": [["tx", "air"], ["air", "spec"], ["air", "rx"], ["rx", "bits"]],
     }}})
 
-    # 3. panes: the parsed frame, the spectrum, the constellation, the graph
-    mcp("pane_add", {"type": "kaitai", "title": "beacon frame", "config": {"blob": "beacon", "ksy": ksy}, "x": 0, "y": 0, "w": 6, "h": 7})
-    mcp("pane_add", {"type": "trace", "title": "spectrum (16-QAM at baseband)", "config": {"trace": "fg_spec"}, "x": 6, "y": 0, "w": 6, "h": 4})
-    mcp("pane_add", {"type": "trace", "title": "constellation (after loopback)", "config": {"trace": "fg_con"}, "x": 6, "y": 4, "w": 6, "h": 3})
-    mcp("pane_add", {"type": "flowgraph", "title": "beacon -> 16-QAM -> loopback", "config": {"device": "fg"}, "x": 0, "y": 7, "w": 12, "h": 4})
+    # 3. panes: parsed frame, OFDM spectrum, equalized constellation, channel est, recovered bytes, graph
+    mcp("pane_add", {"type": "kaitai", "title": "beacon frame", "config": {"blob": "beacon", "ksy": ksy}, "x": 0, "y": 0, "w": 6, "h": 8})
+    mcp("pane_add", {"type": "trace", "title": "OFDM spectrum (48 data + 4 pilots, 64-pt FFT)", "config": {"trace": "fg_spec"}, "x": 6, "y": 0, "w": 6, "h": 4})
+    mcp("pane_add", {"type": "trace", "title": "equalized subcarrier constellation (16-QAM)", "config": {"trace": "fg_rx_const"}, "x": 6, "y": 4, "w": 6, "h": 4})
+    mcp("pane_add", {"type": "json", "title": "recovered bytes (after OFDM demod)", "config": {"value": "fg_bits"}, "x": 0, "y": 8, "w": 3, "h": 3})
+    mcp("pane_add", {"type": "trace", "title": "LTF channel estimate |H|", "config": {"trace": "fg_rx_chan"}, "x": 3, "y": 8, "w": 3, "h": 3})
+    mcp("pane_add", {"type": "flowgraph", "title": "beacon -> OFDM -> loopback -> demod", "config": {"device": "fg"}, "x": 6, "y": 8, "w": 6, "h": 3})
 
-    print("built: open", URL, "- the beacon bytes flow bits -> QAM256 -> channel -> spectrum/constellation")
+    print("built: open", URL, "- beacon bytes -> OFDM -> channel -> ofdm_demod recovers them;",
+          "spectrum + equalized constellation + channel estimate are live")
 
 
 if __name__ == "__main__":

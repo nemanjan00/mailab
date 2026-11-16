@@ -16,6 +16,7 @@ Where samples come from: test signals, files, SDRs, lab audio.
 - [`audio_file`](audio_file/README.md): plays an audio file (WAV/FLAC/MP3/..., via ffmpeg) as real samples
 - [`soapy`](soapy/README.md): live IQ from a SoapySDR receiver (RTL-SDR, HackRF, bladeRF...)
 - [`audio_in`](audio_in/README.md): a lab audio stream (browser mic, another graph) into the graph
+- [`ofdm_mod`](ofdm_mod/README.md): 802.11a/g-style OFDM transmitter: 64-pt IFFT, 48 data + 4 pilot subcarriers, STF/LTF preamble
 
 ## Channel and impairments
 
@@ -50,6 +51,7 @@ Bits and audio to IQ and back: modulators, demodulators, timing and carrier reco
 - [`discriminator`](discriminator/README.md): FSK / FM discriminator, symbols as ±1
 - [`clock_recovery`](clock_recovery/README.md): Gardner timing recovery for FSK / OOK / real symbols
 - [`slicer`](slicer/README.md): symbols to bits (linear schemes or 2/4-level real), with EVM
+- [`ofdm_demod`](ofdm_demod/README.md): 802.11a/g-style OFDM receiver: packet detect, CFO correct, LTF equalize, pilots, demap, descramble
 
 ## Digital: bits, framing, BER, UART, protocol decode
 

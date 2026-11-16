@@ -1,0 +1,3 @@
+{"type":"goal_created","goalId":"mwjvy5ad-5v0qub","objective":"Implement every ⬜ (not-started) row in SPEC.md to working code with tests, finishing the in-flight OFDM restore first, and update SPEC.md status/notes per row; physical hardware verification stays noted as pending where devices are unreachable. Includes an env-only full-safety bypass for the isolated RF chamber / non-persistent image.","sisyphus":false,"autoContinue":true,"at":"2026-11-16T23:19:23.461Z"}
+{"type":"task_list_set","goalId":"mwjvy5ad-5v0qub","taskCount":17,"blockCompletion":false,"at":"2026-11-16T23:19:23.461Z"}
+{"type":"task_started","goalId":"mwjvy5ad-5v0qub","taskId":"ofdm-finish","at":"2026-11-16T23:19:35.207Z"}

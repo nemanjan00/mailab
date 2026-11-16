@@ -1,0 +1,16 @@
+{
+  "description": "OFDM loopback at 25 dB SNR: ofdm_mod recovers its own text bytes (bitview), with the equalized 16-QAM subcarrier constellation and the LTF channel estimate.",
+  "prompt": "Send an OFDM-modulated hex packet through a 25 dB channel and demodulate it back to bytes, showing the constellation and the channel estimate.",
+  "blocks": [
+    {"id": "tx", "type": "ofdm_mod", "params": {"input": "hex:48656c6c6f204f46444d21", "scheme": "qam16", "rate": 20e6}},
+    {"id": "air", "type": "channel", "params": {"snr_db": 25}},
+    {"id": "rx", "type": "ofdm_demod", "params": {"scheme": "qam16"}},
+    {"id": "bits", "type": "bitview", "params": {"bits": 192}}
+  ],
+  "links": [["tx", "air"], ["air", "rx"], ["rx", "bits"]],
+  "panes": [
+    {"type": "trace", "title": "Equalized constellation", "config": {"traces": ["fg_rx_const"]}},
+    {"type": "trace", "title": "LTF channel estimate |H|", "config": {"traces": ["fg_rx_chan"]}},
+    {"type": "json", "title": "Recovered bits", "config": {"value": "fg_bits"}}
+  ]
+}

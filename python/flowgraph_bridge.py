@@ -25,6 +25,7 @@ import audio_blocks
 import liquid_dsp as dsp
 import mailab_bridge as lab
 import modem
+import ofdm
 import protocol_decode as pdec
 
 TICK = 0.02
@@ -1436,6 +1437,8 @@ BLOCKS = {
 }
 # realtime audio blocks (filters, dynamics, noise reduction, neural denoise): python/audio_blocks.py
 BLOCKS.update(audio_blocks.BLOCKS)
+# 802.11a/g-style OFDM modem (loopback): python/ofdm.py
+BLOCKS.update(ofdm.BLOCKS)
 
 
 # ---- graph ----------------------------------------------------------------------
