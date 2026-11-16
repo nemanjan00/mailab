@@ -118,7 +118,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 |---|---|---|
 | Miniware MDP-P906 (mdp-p906) | 🟡 | driver done, not run on hardware |
 | sigrok, own libsigrok fork (Sipeed SLogic) | 🟡 | capture/decode/stream; demo driver verified |
-| ISDT MP305 (pymp305) | 🟡 | python bridge |
+| ISDT MP305 (pymp305) | 🟡 in progress (agent) | python bridge on pymp305 0.5.3 (PyPI's latest; GitHub is at 0.6.3, unpublished). Updating to 0.6.3 (pinned to the git commit until it's on PyPI): 0xC2 state poll by default (no 2 s 0xBD stall), modes (DC / USB-PD source / programmable), USB-PD advertise-set + PD output, programmable sequences read/write/run, `set_output` reapply + OCP/CC, BLE transport (MP305BLE), system settings; power-on paths behind the approval policy; mp305 voltage/current limits |
 | Rigol DM858E | 🟡 | SCPI preset |
 | Rigol MHO900 | 🟡 | SCPI capture/measure/screenshot. Unit at http://10.69.1.89/: LAN SCPI doesn't answer yet; 55555 is ADB |
 | MHO900 signal generator | ⬜ | `:SOURce` commands in the mho900 preset |
@@ -173,7 +173,7 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. In progress (agents): hex editor, OpenCV vision, audio DSP/denoise; torch (CUDA 13.4) into the managed venv
+1. In progress (agents): MP305 → pymp305 0.6.3, hex editor, OpenCV vision, audio DSP/denoise; torch (CUDA 13.4) into the managed venv
 2. Finish the qrp/SDK migration of the remaining panes; recordings pane; sweep heatmap
 3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
 4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, InfiRay P2 Pro, JTAGulator, J-Link, BMP, OpenOCD, Tigard (port B), CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
@@ -327,3 +327,4 @@ Next:
 141. compress (audio dynamics)
 142. install torch, venv
 143. reviewer: the new HTTP client reached the LAN (datasheet_fetch to 127.0.0.1 hit /admin/config; error echoed 16 bytes) → SSRF guard in the DNS lookup on every hop, allow-list for mirrors
+144. https://github.com/nemanjan00/pymp305 (again: GitHub 0.6.3 vs PyPI 0.5.3 → update the driver)
