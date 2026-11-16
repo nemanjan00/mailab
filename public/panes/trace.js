@@ -1,6 +1,7 @@
 // x/y plot of captured traces: spectra, VNA sweeps, scope & logic captures
 // (uPlot, with markers + readings table), and canvas modes: glitch scatter,
 // constellation, eye diagram.
+import uPlot from "uplot";
 
 import { axisStyle, eng, frameThrottle } from "./util.js";
 import { CANVAS_MODES, drawMap } from "./plot2d.js";

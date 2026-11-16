@@ -18,9 +18,11 @@ RUN pip3 install --no-cache-dir --break-system-packages pymp305 findus
 
 WORKDIR /app
 COPY package.json yarn.lock ./
-# --ignore-scripts: skip the husky `prepare` hook (no git, no dev deps here)
-RUN yarn install --production --frozen-lockfile --ignore-scripts && yarn cache clean
+# --ignore-scripts: skip the husky `prepare` hook (no git in the image)
+RUN yarn install --frozen-lockfile --ignore-scripts
 COPY . .
+# bundle the web UI (esbuild is a dev dependency), then drop dev dependencies
+RUN yarn build && yarn install --production --frozen-lockfile --ignore-scripts && yarn cache clean
 
 ENV HOST=0.0.0.0 \
 	PORT=3000 \
@@ -28,4 +30,4 @@ ENV HOST=0.0.0.0 \
 VOLUME /data
 EXPOSE 3000
 
-CMD ["yarn", "web"]
+CMD ["npx", "forever", "src"]

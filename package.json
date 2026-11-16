@@ -7,13 +7,14 @@
 	"author": "Nemanja Nedeljkovic <nemanjan00@gmail.com>",
 	"license": "MIT",
 	"scripts": {
-		"web": "forever src",
-		"watch": "nodemon src",
+		"web": "yarn build && forever src",
+		"watch": "esbuild public/app.js --bundle --format=esm --outdir=public/build --sourcemap --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --watch=forever & nodemon src",
 		"lint": "eslint src/ bin/ public/",
 		"test": "jest",
 		"test:watch": "jest --watch",
 		"prepare": "husky",
-		"channel": "node bin/channel.js"
+		"channel": "node bin/channel.js",
+		"build": "esbuild public/app.js --bundle --format=esm --outdir=public/build --sourcemap --minify --loader:.woff2=file --loader:.woff=file --loader:.ttf=file"
 	},
 	"jest": {
 		"testEnvironment": "node",
@@ -30,6 +31,7 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.32.2",
+		"@nemanjan00/qrp": "^0.13.1",
 		"express": "^5.3.0",
 		"forever": "^4.0.3",
 		"gridstack": "^14.1.0",
@@ -51,6 +53,7 @@
 		"@babel/core": "^8.1.2",
 		"@babel/eslint-parser": "^8.1.2",
 		"@eslint/js": "^10.0.1",
+		"esbuild": "^0.28.2",
 		"eslint": "^10.15.0",
 		"globals": "^17.14.0",
 		"husky": "^9.1.7",

@@ -21,7 +21,7 @@ MCP server + live web UI for a hardware lab the AI operates. See README.md
 - `src/utils/args`: strict parsing for anything that switches hardware (`parseSwitch`, `parseNumber`); python side: `parse_switch`
 - `bin/channel.js`: stdio MCP "channel" bridge pushing lab chat into Claude Code (channels are stdio-only)
 - `src/web`: express REST (`/api`), WebSocket push (`/ws`), stateless Streamable HTTP MCP (`/mcp`)
-- `public/`: browser ES modules (no build). `app.js` handles grid, state and ws; `panes/<type>.js` export `{mount(body, pane, ctx)}`
+- `public/`: browser ES modules bundled by esbuild (`yarn build` → `public/build/`, gitignored; `yarn watch` rebuilds). Libraries (qrp, uPlot, GridStack, KaTeX, marked) and CSS are npm imports. `app.js` handles grid, state and ws; `panes/<type>.js` export `{mount(body, pane, ctx)}`. UI is moving to qrp (`@nemanjan00/qrp`): reactive `state()` + `el`/`list`/`when`, imperative charts composed in
 - `python/`: `mailab_bridge.py` helper protocol (sample/trace/point/value/blob/audio/options), device bridges, `liquid_dsp.py` (ctypes, stateful blocks), `flowgraph_bridge.py` (GNU Radio-style blocks: sources, DSP, sinks; `python` block = scriptable), `harogic_bridge.py` (vendor lib via ctypes; layouts checked against the header)
 
 ## Data model

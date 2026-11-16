@@ -1,4 +1,5 @@
 // Live time-series chart of one or more channels (uPlot).
+import uPlot from "uplot";
 
 import { axisStyle, frameThrottle, plotSize, eng } from "./util.js";
 

@@ -22,8 +22,8 @@ live web UI where you watch (and steer) what it does.
 
 ```sh
 yarn install
-yarn watch          # dev (nodemon), http://127.0.0.1:3000
-yarn web            # prod (forever)
+yarn watch          # dev: esbuild --watch + nodemon, http://127.0.0.1:3000
+yarn web            # prod: build the UI bundle, then forever
 ```
 
 Connect an AI over MCP (Streamable HTTP):

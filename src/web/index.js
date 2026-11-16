@@ -14,12 +14,6 @@ const kaitai = require("../kaitai");
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
 const ROOT = path.join(__dirname, "..", "..");
-const VENDOR = {
-	uplot: "node_modules/uplot/dist",
-	gridstack: "node_modules/gridstack/dist",
-	katex: "node_modules/katex/dist",
-	marked: "node_modules/marked/lib"
-};
 
 // wrap a handler returning a value/promise into an express route
 const route = (handler) => {
@@ -278,9 +272,6 @@ const create = (lab, options) => {
 	app.use("/api", auth.middleware((req) => {
 		return req.method === "GET" || READ_POSTS.indexOf(req.path) !== -1;
 	}), api(lab));
-	Object.keys(VENDOR).forEach((name) => {
-		app.use("/vendor/" + name, express.static(path.join(ROOT, VENDOR[name])));
-	});
 	app.use(express.static(path.join(ROOT, "public")));
 
 	const server = http.createServer(app);

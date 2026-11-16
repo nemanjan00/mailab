@@ -15,7 +15,7 @@ const RULES = {
 
 module.exports = [
 	{
-		ignores: ["node_modules/", "data/"]
+		ignores: ["node_modules/", "data/", "public/build/"]
 	},
 	js.configs.recommended,
 	{
@@ -29,11 +29,12 @@ module.exports = [
 		rules: RULES
 	},
 	{
-		// browser ES modules; uPlot, katex, marked, GridStack come from <script> tags
+		// browser ES modules, bundled by esbuild
 		files: ["public/**/*.js"],
+		ignores: ["public/build/**"],
 		languageOptions: {
 			sourceType: "module",
-			globals: Object.assign({}, globals.browser, { uPlot: "readonly", katex: "readonly", marked: "readonly", GridStack: "readonly" })
+			globals: globals.browser
 		},
 		rules: RULES
 	}

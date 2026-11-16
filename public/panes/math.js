@@ -1,5 +1,6 @@
 // Live math: a mathjs expression over channels, rendered as LaTeX with its
 // result, re-evaluated on the server every refreshMs.
+import katex from "katex";
 
 import { escapeHtml } from "./util.js";
 

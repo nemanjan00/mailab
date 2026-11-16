@@ -1,4 +1,6 @@
 // Markdown notes with KaTeX math ($inline$, $$display$$). Double-click to edit.
+import katex from "katex";
+import { marked } from "marked";
 
 const renderMath = (tex, display) => {
 	try {

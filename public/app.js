@@ -1,22 +1,29 @@
 // mailab web UI: keeps a live copy of lab state, mounts panes on a grid and
-// syncs layout edits back. Panes are modules in /panes, one per pane type.
+// syncs layout edits back. Panes are modules in ./panes, one per pane type.
+// Bundled with esbuild (yarn build) into public/build/.
 
-import chart from "/panes/chart.js";
-import value from "/panes/value.js";
-import trace from "/panes/trace.js";
-import waterfall from "/panes/waterfall.js";
-import image from "/panes/image.js";
-import markdown from "/panes/markdown.js";
-import mathPane from "/panes/math.js";
-import log from "/panes/log.js";
-import activity from "/panes/activity.js";
-import devices from "/panes/devices.js";
-import channels from "/panes/channels.js";
-import audio from "/panes/audio.js";
-import json from "/panes/json.js";
-import flowgraph from "/panes/flowgraph.js";
-import kaitai from "/panes/kaitai.js";
-import chat from "/panes/chat.js";
+import { GridStack } from "gridstack";
+import "gridstack/dist/gridstack.min.css";
+import "uplot/dist/uPlot.min.css";
+import "katex/dist/katex.min.css";
+import "./style.css";
+
+import chart from "./panes/chart.js";
+import value from "./panes/value.js";
+import trace from "./panes/trace.js";
+import waterfall from "./panes/waterfall.js";
+import image from "./panes/image.js";
+import markdown from "./panes/markdown.js";
+import mathPane from "./panes/math.js";
+import log from "./panes/log.js";
+import activity from "./panes/activity.js";
+import devices from "./panes/devices.js";
+import channels from "./panes/channels.js";
+import audio from "./panes/audio.js";
+import json from "./panes/json.js";
+import flowgraph from "./panes/flowgraph.js";
+import kaitai from "./panes/kaitai.js";
+import chat from "./panes/chat.js";
 
 const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat };
 const HISTORY_SECONDS = 600;

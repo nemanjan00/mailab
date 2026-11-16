@@ -20,6 +20,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Charts, live preview | ✅ | chart, trace, waterfall, value panes |
 | Multiple instances of every device | ✅ | auto ids, port registry, shared CI-V bus and MDP radio bridge, unit selection (serial/path/port/conn) |
 | Multi-call scripts ("script" = multi-MCP-call) for better timing | ✅ | `batch` tool: steps with `at`/`delayMs`/`repeat`/`intervalMs`, `$name.path` result references, loops, ~1 ms accuracy |
+| Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
+| Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | zero-dep, no-build reactive framework (Proxy state + real DOM). Migrating incrementally: lab state → `state()`, list panes declarative, canvas/uPlot panes stay imperative inside qrp components |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
 | HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
@@ -193,3 +195,5 @@ Next:
 67. https://github.com/nemanjan00/shell-session-mcp
 68. https://github.com/nemanjan00/cw-scope as reference, not direct integration
 69. also reference https://github.com/nemanjan00/diversity-classifier
+70. you are vanilla js? mayne nemanjan00/qrp
+71. esbundle
