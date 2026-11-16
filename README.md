@@ -34,6 +34,18 @@ claude mcp add --transport http mailab http://127.0.0.1:3000/mcp
 
 Then ask it something like *"add the sim device, chart it and tell me the RMS"*.
 
+### Docker
+
+```sh
+docker build -t mailab .
+docker run --privileged --network host -v /dev:/dev -v mailab-data:/data mailab
+```
+
+The image includes sigrok-cli, liquid-dsp, SoapySDR (HackRF/bladeRF/RTL-SDR),
+hackrf tools, ffmpeg/v4l-utils, uhubctl, pymp305 and findus. Not included:
+the SLogic libsigrok fork, vendor SDKs (Harogic), the Proxmark3 client, and
+the mdp-p906/ci-v checkouts (mount them and set `MDP_HOST_PATH` / `CIV_PATH`).
+
 ### Configuration (env)
 
 | Var | Default | |

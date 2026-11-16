@@ -54,6 +54,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
+| Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ⬜ | `spectrum` sink: RBW → FFT size (window ENBW), window choice, traces clear/write + max hold + min hold + average (count, power/log averaging), detector (peak/sample/avg) |
 | TCP/UDP IQ streaming in/out | ⬜ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP (interop: GNU Radio, SDR++, rtl_tcp-style clients) |
 | libvolk | ⬜ | Not yet: the hot spots are per-symbol Python loops (carrier recovery, modem demod), and VOLK through ctypes wouldn't help. Move those loops into liquid/numpy/a small C helper first, then use VOLK kernels there |
 | Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |
@@ -82,6 +83,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | Bus Pirate | ⬜ | BPIO2, using the buspirate skill |
 | XGecu programmers (minipro) | ⬜ | `minipro` CLI: identify, read/write/verify chips; dumps as blobs for the Kaitai view |
 | Glasgow | ⬜ | `glasgow` CLI applets |
+| RTL-SDR | 🟡 | via `soapy` driver / flowgraph `soapy` source with `driver=rtlsdr` (SoapyRTLSDR in the Docker image). Planned: `rtl_power` wideband sweep driver, `rtl_tcp` interop through the net IQ blocks |
 | Harogic HTRA spectrum analyzer | 🟡 | `harogic` driver: sweep → `spectrum` trace via vendor `libhtraapi` (ctypes, struct layouts checked against `htra_api.h` with the C compiler). Library from SAStudio4 on `lab` (desktop shortcut → `~/sastudio/SAStudio4_x86_64_4.4.55.50`). Device not on `lab`'s USB at the time; not run yet. Next: IQ streaming (IQS) as a flowgraph source |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
@@ -94,6 +96,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | `git init`, commit as you go, remote `git@github.com:nemanjan00/mailab.git` | ✅ |
 | husky pre-commit (lint-staged + jest) | ✅ |
 | HW.md with the hardware TODO | ✅ |
+| Docker build | ✅ | `node:24-trixie-slim` + sigrok, liquid-dsp 1.7, SoapySDR (hackrf/bladerf/rtlsdr), ffmpeg, uhubctl, pymp305, findus; smoke-tested (flowgraph EVM via MCP, camera). Run with `--privileged --network host -v /dev:/dev`. Not included: the SLogic libsigrok fork, Harogic SDK, PM3 client |
 | implement-js conventions (CommonJS, tabs, promise chains, `src/services`, `bin/`, forever/nodemon) | ✅ |
 
 ## 6. Order of work from here
@@ -164,3 +167,6 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 52. nvtop
 53. update spec as I go
 54. tcp/udp stream iq in/out
+55. docker build
+56. fft, multi trace, rbw, averaging...
+57. rtl sdr
