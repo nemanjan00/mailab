@@ -23,18 +23,41 @@ const blocked = new net.BlockList();
 BLOCKED_V4.forEach((b) => blocked.addSubnet(b[0], b[1], "ipv4"));
 BLOCKED_V6.forEach((b) => blocked.addSubnet(b[0], b[1], "ipv6"));
 
-// IPv4 hidden in IPv6: ::ffff:a.b.c.d (mapped), ::a.b.c.d (compatible), 64:ff9b::/96 (NAT64)
-const embeddedV4 = (ip) => {
-	const lower = ip.toLowerCase();
-	const dotted = /^(?:::ffff:|::|64:ff9b::)(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
+// "2002::1" -> [0x2002, 0, 0, 0, 0, 0, 0, 1]; a trailing dotted quad becomes two groups
+const groups = (ip) => {
+	let text = ip.toLowerCase().replace(/%.*$/, "");
+	const dotted = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
 	if (dotted) {
-		return dotted[1];
+		const b = dotted.slice(1).map(Number);
+		text = text.slice(0, dotted.index) + ((b[0] << 8) | b[1]).toString(16) + ":" + ((b[2] << 8) | b[3]).toString(16);
 	}
-	const hex = /^(?:::ffff:|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(lower);
-	if (hex) {
-		const hi = parseInt(hex[1], 16);
-		const lo = parseInt(hex[2], 16);
-		return [hi >> 8, hi & 255, lo >> 8, lo & 255].join(".");
+	const halves = text.split("::");
+	const head = halves[0] ? halves[0].split(":") : [];
+	const tail = halves.length > 1 && halves[1] ? halves[1].split(":") : [];
+	const fill = halves.length > 1 ? Array(8 - head.length - tail.length).fill("0") : [];
+	return head.concat(fill, tail).map((g) => parseInt(g, 16));
+};
+
+const v4From = (hi, lo) => [hi >> 8, hi & 255, lo >> 8, lo & 255].join(".");
+
+// IPv4 hidden in IPv6: ::ffff:0:0/96 (mapped), ::/96 (compatible), 64:ff9b::/96 (NAT64),
+// 2002::/16 (6to4: a relay would forward to the embedded IPv4 in groups 1-2)
+const embeddedV4 = (ip) => {
+	const g = groups(ip);
+	if (g.length !== 8 || g.some((x) => Number.isNaN(x))) {
+		return null;
+	}
+	if (g[0] === 0x2002) {
+		return v4From(g[1], g[2]);
+	}
+	const prefix96 = g.slice(0, 6);
+	const zeros = (list) => list.every((x) => x === 0);
+	if ((zeros(prefix96.slice(0, 5)) && (prefix96[5] === 0xffff || prefix96[5] === 0)) || (g[0] === 0x64 && g[1] === 0xff9b && zeros(g.slice(2, 6)))) {
+		// :: and ::1 themselves are handled by the IPv6 block list
+		if (zeros(g.slice(0, 6)) && g[6] === 0) {
+			return null;
+		}
+		return v4From(g[6], g[7]);
 	}
 	return null;
 };
