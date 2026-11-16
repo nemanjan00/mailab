@@ -275,3 +275,84 @@ def find_sync(bits, word, max_errors=0):
     windows = np.lib.stride_tricks.sliding_window_view(bits, n)
     errors = np.count_nonzero(windows != word, axis=1)
     return [int(i) for i in np.nonzero(errors <= max_errors)[0]]
+
+
+# ---- UART ---------------------------------------------------------------------
+
+PARITY = ("none", "even", "odd")
+
+
+def uart_encode(data, bits=8, parity="none", stop=1, idle=2):
+    """bytes -> line levels at one sample per bit: idle high, start 0, data LSB
+    first, optional parity, stop bits high, `idle` extra high bits per byte."""
+    if parity not in PARITY:
+        raise ValueError("parity must be none, even or odd")
+    out = []
+    for byte in bytes(data):
+        frame = [0] + [(byte >> i) & 1 for i in range(bits)]
+        if parity != "none":
+            ones = sum(frame[1:])
+            frame.append(ones % 2 if parity == "even" else 1 - ones % 2)
+        frame += [1] * (stop + idle)
+        out += frame
+    return np.array(out, dtype=np.uint8)
+
+
+class UartDecoder:
+    """Line levels (oversampled by sps, real or 0/1) -> bytes with error flags.
+    Threshold adapts to the signal (works on analog captures too)."""
+
+    def __init__(self, sps=1.0, bits=8, parity="none", stop=1, invert=False):
+        self.sps, self.bits, self.parity, self.stop, self.invert = float(sps), bits, parity, stop, invert
+        self.buf = np.zeros(0, dtype=np.float32)
+        self.lo = None
+        self.hi = None
+        self.started = False
+
+    def process(self, x):
+        """-> list of (byte, error or None)"""
+        x = np.asarray(x, dtype=np.float32)
+        if self.invert:
+            x = -x
+        if len(x):
+            lo, hi = float(np.min(x)), float(np.max(x))
+            self.lo = lo if self.lo is None else min(self.lo * 0.99 + lo * 0.01, lo)
+            self.hi = hi if self.hi is None else max(self.hi * 0.99 + hi * 0.01, hi)
+        if not self.started and len(x):
+            # the line idles high before the first byte: assume it, so a frame
+            # at the very start still has a falling edge
+            x = np.concatenate([np.full(int(np.ceil(self.sps)) + 1, self.hi if self.hi is not None else np.max(x), dtype=np.float32), x])
+            self.started = True
+        self.buf = np.concatenate([self.buf, x])
+        if self.lo is None or self.hi - self.lo < 1e-9:
+            return []
+        level = (self.buf > (self.lo + self.hi) / 2).astype(np.uint8)
+        frame_bits = 1 + self.bits + (0 if self.parity == "none" else 1) + self.stop
+        span = int(np.ceil(frame_bits * self.sps))
+        out = []
+        i = 1
+        while i + span < len(level):
+            # falling edge = start bit
+            if level[i - 1] == 1 and level[i] == 0:
+                sample = lambda k: level[int(i + (k + 0.5) * self.sps)]
+                if sample(0) != 0:
+                    i += 1
+                    continue
+                data = [int(sample(1 + b)) for b in range(self.bits)]
+                byte = sum(bit << b for b, bit in enumerate(data))
+                error = None
+                k = 1 + self.bits
+                if self.parity != "none":
+                    p = int(sample(k))
+                    expect = sum(data) % 2 if self.parity == "even" else 1 - sum(data) % 2
+                    if p != expect:
+                        error = "parity"
+                    k += 1
+                if any(sample(k + s) != 1 for s in range(self.stop)):
+                    error = error or "framing"
+                out.append((byte, error))
+                i += int(frame_bits * self.sps)
+            else:
+                i += 1
+        self.buf = self.buf[max(0, i - 1):]
+        return out

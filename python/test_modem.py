@@ -85,9 +85,29 @@ def test_sync():
     print("ok sync")
 
 
+def test_uart():
+    msg = b"hello mailab\r\nboot ok v1.2\r\n"
+    for parity, stop, sps in [("none", 1, 8.0), ("even", 1, 8.0), ("odd", 2, 8.0), ("none", 1, 10.4)]:
+        bits = M.uart_encode(msg, parity=parity, stop=stop)
+        n = int(len(bits) * sps)
+        t = np.arange(n) / sps
+        line = bits[np.minimum(t.astype(int), len(bits) - 1)].astype(np.float32) * 3.3 + rng.normal(0, 0.15, n)
+        d = M.UartDecoder(sps=sps, parity=parity, stop=stop)
+        got = []
+        for i in range(0, len(line), 97):
+            got += d.process(line[i:i + 97])
+        assert bytes(b for b, _ in got) == msg, (parity, stop, sps)
+        assert not [e for _, e in got if e]
+    bits = M.uart_encode(b"A", parity="even")
+    bits[9] ^= 1
+    assert M.UartDecoder(1, parity="even").process(np.concatenate([[1, 1], bits, [1, 1, 1]]))[0] == (65, "parity")
+    print("ok uart")
+
+
 if __name__ == "__main__":
     test_linear()
     test_gardner_path()
     test_cpfsk()
     test_ook()
     test_sync()
+    test_uart()

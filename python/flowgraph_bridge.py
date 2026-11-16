@@ -623,6 +623,77 @@ class LevelTrigger(Block):
         return None
 
 
+class UartTx(Block):
+    kind = "source"
+    doc = "UART transmitter: text/hex -> line levels (idle high) at baud * sps; repeats every repeat_ms"
+    params = {"text": ("hello mailab\r\n", "text to send (or use hex)"), "hex": ("", "bytes as hex"), "baud": (9600, ""),
+              "bits": (8, "data bits"), "parity": ("none", "none|even|odd"), "stop": (1, "stop bits"),
+              "sps": (8, "samples per bit (1 = bit stream)"), "repeat_ms": (500, "0 = send once")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        data = bytes.fromhex(self.p["hex"]) if self.p["hex"] else self.p["text"].encode().decode("unicode_escape").encode("latin1")
+        frame = modem.uart_encode(data, int(self.p["bits"]), self.p["parity"], int(self.p["stop"]))
+        self.frame = np.repeat(frame, int(self.p["sps"])).astype(np.float32)
+        self.rate = float(self.p["baud"]) * int(self.p["sps"])
+        self.queue = self.frame.copy()
+        self.t = time.monotonic()
+        self.next_send = self.t + float(self.p["repeat_ms"]) / 1000
+
+    def produce(self):
+        now = time.monotonic()
+        n = int((now - self.t) * self.rate)
+        if n <= 0:
+            return None
+        self.t += n / self.rate
+        if not len(self.queue) and float(self.p["repeat_ms"]) > 0 and now >= self.next_send:
+            self.queue = self.frame.copy()
+            self.next_send = now + float(self.p["repeat_ms"]) / 1000
+        out = np.ones(n, dtype=np.float32)
+        take = min(n, len(self.queue))
+        out[:take] = self.queue[:take]
+        self.queue = self.queue[take:]
+        return out, self.rate
+
+
+class UartRx(Block):
+    kind = "sink"
+    doc = ("UART receiver on line levels (logic or analog, any oversampling) or bits: bytes -> value <device>_<id> "
+           "(text + hex), blob, and each text line into the device log (for classifiers/notifications); error count channel")
+    params = {"baud": (9600, ""), "bits": (8, ""), "parity": ("none", "none|even|odd"), "stop": (1, ""), "invert": (False, "")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.decoder = None
+        self.line = b""
+        self.history = b""
+        self.errors = 0
+
+    def work(self, x, rate):
+        if self.decoder is None:
+            sps = rate / float(self.p["baud"])
+            self.decoder = modem.UartDecoder(sps, int(self.p["bits"]), self.p["parity"], int(self.p["stop"]), bool(self.p["invert"]))
+        got = self.decoder.process(np.real(x))
+        if not got:
+            return None
+        for byte, error in got:
+            if error:
+                self.errors += 1
+            self.line += bytes([byte])
+            if byte == 10:
+                text = self.line.decode("utf8", "replace").rstrip("\r\n")
+                if text:
+                    lab.log(self.id + ": " + text, "uart")
+                self.line = b""
+        data = bytes(b for b, _ in got)
+        self.history = (self.history + data)[-4096:]
+        lab.value(self.id, {"text": self.history.decode("utf8", "replace")[-1024:], "hex": self.history[-64:].hex(),
+                            "bytes": len(self.history), "errors": self.errors})
+        lab.blob(self.id, self.history)
+        lab.sample(self.id + "_errors", self.errors, "")
+        return None
+
+
 class Python(Block):
     doc = "scriptable block: params.code defines work(x, rate) -> y or (y, rate); np, dsp and state are in scope"
     params = {"code": ("def work(x, rate):\n    return x * 2", "python source")}
@@ -1075,7 +1146,7 @@ BLOCKS = {
     "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
     "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,
-    "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger,
+    "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger, "uart_tx": UartTx, "uart_rx": UartRx,
 }
 
 
