@@ -24,6 +24,9 @@ const matches = (sub, ev) => {
 	if (sub.rule && ev.rule !== sub.rule) {
 		return false;
 	}
+	if (sub.watch && ev.watch !== sub.watch) {
+		return false;
+	}
 	if (sub.template && ev.template !== sub.template) {
 		return false;
 	}

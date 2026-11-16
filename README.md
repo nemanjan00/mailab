@@ -186,6 +186,28 @@ number of captures per browser. getUserMedia needs a secure context:
 `http://localhost` works (tunnel with `ssh -L 3000:localhost:3000 lab` from a
 laptop), a phone needs https (e.g. a reverse proxy with a certificate).
 
+## Vision (OpenCV)
+
+`python/vision_bridge.py` runs OpenCV (opencv-python-headless, pinned, installed
+into the managed venv on first use) as one long-running process for every lab
+image: camera frames (`<cam>_frame`), browser capture frames, screenshots,
+photos uploaded with `image_write` or `PUT /api/images/<name>`.
+
+- `vision_run`: a pipeline of ops on one image (crop, resize, gray, threshold,
+  adaptive, blur, morph, canny, warp, align (ORB + homography onto a
+  reference), contours, template (multi-scale), color, led, seven_seg, ocr
+  (tesseract CLI), aruco (scale + pose), scale, measure (px / mm), diff, stats).
+  Overlays go to `<image>_annotated`; `output` stores the processed image.
+- `vision_watch`: regions of interest on an image stream, each of a kind (led,
+  seven_seg, value_ocr, color, motion, template), evaluated whenever the image
+  updates (fps cap, frames dropped while busy) into channels `<watch>_<roi>`;
+  state changes ("LED turned red", display shows "Err") and `above`/`below`
+  crossings become lab notifications `{type: "vision"}` pushed to MCP sessions.
+  Watches persist with the lab. The `vision` pane is the ROI editor.
+
+OCR needs the `tesseract` binary plus language data (uses `eng`, else the
+first installed language).
+
 ## Collaboration
 
 - `MAILAB_TOKENS="alice:secret:human,claude:secret2:rw,viewer:secret3:ro"` turns on
@@ -226,7 +248,8 @@ laptop), a phone needs https (e.g. a reverse proxy with a certificate).
 | `safety_overview`, `rule_add`, `rule_remove` | server-side safety rules (conditions on channels → actions) and the approval policy |
 | `device_add/remove/start/stop`, `device_command`, `device_log` | instruments, including the flowgraph (`device_command fg blocks` lists its block catalog) |
 | `channel_read`, `channel_write` | time series (stats + downsampled data) |
-| `trace_read`, `trace_write`, `image_get` | captures, spectra, screenshots |
+| `trace_read`, `trace_write`, `image_get`, `image_write` | captures, spectra, screenshots, uploaded images |
+| `vision_ops`, `vision_run`, `vision_watch`, `vision_unwatch`, `vision_watches` | OpenCV on lab images: pipelines, ROI watches on image streams → channels + notifications |
 | `math_eval`, `math_derive`, `math_remove`, `plot` | analysis and the graphing calculator |
 | `value_read`, `value_write`, `blob_write`, `blob_read`, `blob_analyze`, `kaitai_parse` | JSON values, binary blobs, analysis, Kaitai parsing |
 | `blob_peek`, `blob_poke`, `blob_patch`, `blob_search`, `blob_replace`, `blob_checksum`, `blob_slice`, `blob_diff` | hex editing: typed reads / writes (u8…u64, f32/f64, LE/BE), poke / insert / delete / fill with undo ops, search & replace (hex `??` wildcards, text, regex), CRC-8/16/32 variants, sums, hashes, entropy; the `hex` pane is the same for people |

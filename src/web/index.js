@@ -17,6 +17,7 @@ const datasheets = require("../services/datasheets");
 const vncProxy = require("./vnc");
 const blobEdit = require("../blobs/edit");
 const checksum = require("../utils/checksum");
+const vision = require("../vision");
 
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
@@ -84,6 +85,26 @@ const api = (lab) => {
 			res.status(404).json({ error: err.message });
 		}
 	});
+	// raw image upload (references, photos to analyze, frames for vision watches)
+	router.put("/images/:name", express.raw({ type: "*/*", limit: "32mb" }), route((req) => {
+		const mime = vision.sniffMime(req.body);
+		if (mime.indexOf("image/") !== 0) {
+			throw new Error("not an image (png, jpeg, gif, bmp, webp)");
+		}
+		lab.setImage(req.params.name, req.body, mime);
+		return { name: req.params.name, bytes: req.body.length, mime: mime };
+	}));
+	// vision: watches (ROI editor pane) and one-off pipelines
+	router.get("/vision/ops", route(() => ({ ops: vision.OPS, kinds: vision.KINDS })));
+	router.get("/vision/watches", route(() => lab.vision.list()));
+	router.get("/vision/watches/:name", route((req) => lab.vision.describe(req.params.name)));
+	router.put("/vision/watches/:name", route((req) => lab.vision.add(Object.assign({}, req.body, { name: req.params.name }))));
+	router.delete("/vision/watches/:name", route((req) => lab.vision.remove(req.params.name)));
+	router.post("/vision/run", route((req) => lab.vision.run(req.body || {}).then((out) => {
+		const reply = Object.assign({}, out);
+		delete reply.png;
+		return reply;
+	})));
 	router.get("/values/:name", route((req) => {
 		return lab.getValue(req.params.name);
 	}));

@@ -25,6 +25,8 @@ const pathModule = require("path");
 const panesModule = require("../panes");
 const storeModule = require("../store");
 const udevModule = require("../udev");
+const visionModule = require("../vision");
+const visionService = require("../services/vision");
 const usbService = require("../services/usb");
 
 const LOG_SIZE = 2000;
@@ -104,7 +106,8 @@ const create = (options) => {
 			safety: lab.safety.snapshot(),
 			classifier: { templates: lab.classifier.snapshot() },
 			trends: lab.trends.snapshot(),
-			udev: lab.udev.snapshot()
+			udev: lab.udev.snapshot(),
+			vision: lab.vision.snapshot()
 		};
 	};
 
@@ -175,6 +178,7 @@ const create = (options) => {
 	let stopTrends = null;
 	let stopRecordings = null;
 	let stopUdev = null;
+	let stopVision = null;
 
 	const lab = {
 		events: events,
@@ -816,6 +820,7 @@ const create = (options) => {
 			if (options.watchUsb !== false) {
 				stopUdev = lab.udev.start();
 			}
+			stopVision = lab.vision.start();
 			if (!saved.panes) {
 				DEFAULT_PANES.forEach(panes.add);
 			}
@@ -888,6 +893,7 @@ const create = (options) => {
 				lab.safety.load(state.safety || {});
 				lab.classifier.load((state.classifier && state.classifier.templates) || []);
 				lab.udev.load(state.udev || []);
+				lab.vision.load(state.vision || []);
 				if (state.trends && state.trends.patterns) {
 					lab.trends.setPatterns(state.trends.patterns);
 				}
@@ -915,6 +921,10 @@ const create = (options) => {
 			if (stopUdev) {
 				stopUdev();
 			}
+			if (stopVision) {
+				stopVision();
+			}
+			lab.visionBridge.stop().catch(() => null);
 			return Promise.all(Object.keys(instances).map((id) => {
 				const inst = instances[id];
 				if (!inst.instance) {
@@ -943,6 +953,22 @@ const create = (options) => {
 		notify: (ev) => lab.notify(ev),
 		onChange: changed
 	}, saved.udev);
+	// OpenCV bridge (started on first use); tests inject a fake one
+	lab.visionBridge = options.visionBridge || visionService.create({ log: (text, level) => lab.log("vision", text, level) });
+	lab.vision = visionModule.create({
+		bridge: lab.visionBridge,
+		getImage: lab.getImage,
+		setImage: lab.setImage,
+		sample: (name, value, meta) => lab.pushSample(name, value, Object.assign({ source: "vision" }, meta)),
+		setValue: (name, value) => lab.setValue(name, value, "vision"),
+		notify: (ev) => lab.notify(ev),
+		onImage: (handler) => {
+			events.on("image", handler);
+			return () => events.removeListener("image", handler);
+		},
+		onChange: changed,
+		log: (text, level) => lab.log("vision", text, level)
+	}, saved.vision);
 
 	return lab;
 };

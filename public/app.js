@@ -38,10 +38,9 @@ import capture from "./panes/capture.js";
 import board from "./panes/board.js";
 import datasheets from "./panes/datasheets.js";
 import vnc from "./panes/vnc.js";
+import vision from "./panes/vision.js";
 
-
-
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc, hex };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc, hex, vision };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;

@@ -7,6 +7,7 @@ describe("pyenv", () => {
 		expect(pyenv.importName("pyserial>=3.5")).toBe("serial");
 		expect(pyenv.importName("foo-bar[extra]~=1.0")).toBe("foo_bar");
 		expect(pyenv.importName("numpy")).toBe("numpy");
+		expect(pyenv.importName("opencv-python-headless==4.14.0.94")).toBe("cv2");
 	});
 
 	test("every driver requirement is pinned", () => {
