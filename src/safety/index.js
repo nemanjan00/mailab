@@ -24,7 +24,8 @@ const DEFAULT_POLICY = [
 	{ command: "ptt", when: "on", reason: "keys a transmitter" },
 	{ command: "campaign", reason: "arms a glitch campaign" },
 	{ command: "glitch", reason: "fires a glitch" },
-	{ command: "pair", reason: "pairs a radio module" }
+	{ command: "pair", reason: "pairs a radio module" },
+	{ command: "usb_power", reason: "switches power on a USB hub port (the device on it drops off the bus)" }
 ];
 
 const truthy = (value) => {

@@ -5,7 +5,7 @@ const processDriver = require("../process");
 
 module.exports = processDriver.pythonPreset({
 	// pip packages, installed into the mailab-managed venv on first use
-	requires: ["findus", "pyserial"],
+	requires: ["findus==1.14.1", "pyserial==3.5"],
 	name: "picoglitcher",
 	description: "PicoGlitcher fault injection (findus). Results go to scatter dataset \"glitch\"",
 	script: "picoglitcher_bridge.py",

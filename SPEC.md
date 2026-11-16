@@ -139,8 +139,9 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | File & bitstream entropy | ✅ | sliding-window Shannon entropy → trace `<blob>_entropy` + plot; high/low regions with a window-aware threshold (small-window bias); bit streams via the bitview/framer blobs |
 | Tigard | ⬜ | FT2232H multi-protocol board: port A UART (→ `serial` driver / console), port B JTAG/SWD/SPI/I2C via OpenOCD, flashrom (`ft2232_spi`) and pyftdi; target voltage select |
 | CatSniffer V3 (Electronic Cats) | ⬜ | multiprotocol sniffer (CC1352P7 + SX1262 + RP2040): flash firmwares (catnip) and run bridges: Sniffle (BLE), 802.15.4 (Zigbee/Thread), LoRa/sub-GHz; packets → values + pcap blobs, RSSI → channels |
-| USB tree view with hub power toggles | ⬜ | live tree of hubs → ports → devices (like ~/projects/proxyslave), per-port power toggles via uhubctl on capable hubs; identify which lab device sits where |
-| USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
+| USB tree view with hub power toggles | ✅ | `usb` pane + `usb_tree` / `GET /api/usb`: inventory ported from proxyslave's logic (`src/inventory/usb`: PCI controllers by class → buses → ports from sysfs names, interfaces with bound drivers, network interfaces + IPv4, hub port count from `-port` entries, usb.ids/pci.ids names, speed); plus /dev nodes (tty, video, hidraw) and which lab device uses each node. Empty ports are shown only on switchable hubs |
+| USB hub power control (uhubctl) | ✅ | on/off/cycle toggles on ppps hubs; `usb_power` MCP tool needs a person's approval (default policy); REST only for the human role; inputs validated. uhubctl missing → the pane says so. Not run against a real ppps hub yet |
+| udev-like notifications (in-app rules) | ✅ | not system udev: `udev_rule_add` / `udev_rules` / `udev_rule_remove` (+ REST `/api/udev`, form in the usb pane). USB inventory polled every 2 s; add / remove / change (drivers or /dev nodes bound) events matching a rule (globs on vid, pid, product, manufacturer, serial, driver, node, path) raise `{type: "udev"}` lab notifications, pushed to MCP sessions (the creating session is subscribed automatically; `subscribe` types `udev`, filter `rule`) and shown in the UI. Rules are part of lab state/profiles |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
 
@@ -161,15 +162,14 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. USB tree view + uhubctl hub power toggles
-2. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
-3. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry
-4. MHO900 siggen; Soapy TX block with an allow-TX + power gate
-5. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, OpenOCD, flashrom, minipro, Tigard, CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
-6. Boardview (PDF/photo layers, schematic tracing; ~/rib/docs sample)
-7. Shared terminals (shell-session-mcp), protokai, OpenCV, analog video, journal, timebase, ngscopeclient-style decoders, beamforming DoA
-8. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
-9. Deployment on `lab`: waiting on your decision
+1. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
+2. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry
+3. MHO900 siggen; Soapy TX block with an allow-TX + power gate
+4. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, OpenOCD, flashrom, minipro, Tigard, CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
+5. Boardview (PDF/photo layers, schematic tracing; ~/rib/docs sample)
+6. Shared terminals (shell-session-mcp), protokai, OpenCV, analog video, journal, timebase, ngscopeclient-style decoders, beamforming DoA
+7. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
+8. Deployment on `lab`: waiting on your decision
 
 ## Appendix: requests in order (this session)
 
@@ -287,3 +287,8 @@ Next:
 112. seriazable lab state, savable and loadable
 113. just rm and commit, no history alteration (for the stray test file)
 114. update spec
+115. reviewer: pin the drivers' Python requirements to versions
+116. not from scratch: port the USB inventory logic from ~/projects/proxy/slave
+117. udev notifications: the AI can define "udev rules" (in-app, not real udev rules) to be notified on specific USB events
+118. make sure to update spec with any of my requirements
+119. use agents to do features in parallel

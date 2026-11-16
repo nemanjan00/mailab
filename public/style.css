@@ -372,3 +372,11 @@ dialog.help p { margin: 6px 0; }
 .c-text { padding: 0; }
 label.upload { cursor: pointer; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; }
 dialog.help a { color: var(--accent-2); }
+
+/* usb tree */
+.usbtree { font-size: 13px; overflow: auto; height: 100%; }
+.usb-row { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.usb-root { background: var(--panel-2); }
+.usb-port { min-width: 26px; }
+.usb-nodes { color: var(--c1); }
+.usb-ctl { margin-left: auto; display: inline-flex; gap: 4px; }

@@ -4,7 +4,7 @@ const processDriver = require("../process");
 
 module.exports = processDriver.pythonPreset({
 	// pip packages, installed into the mailab-managed venv on first use
-	requires: ["pymp305", "hidapi"],
+	requires: ["pymp305==0.5.3", "hidapi==0.15.0"],
 	name: "mp305",
 	description: "ISDT MP305A/B bench supply (USB-HID, pymp305). Channels: v, i, p, temp",
 	script: "mp305_bridge.py",

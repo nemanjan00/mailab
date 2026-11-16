@@ -21,6 +21,9 @@ const matches = (sub, ev) => {
 	if (sub.device && ev.device !== sub.device) {
 		return false;
 	}
+	if (sub.rule && ev.rule !== sub.rule) {
+		return false;
+	}
 	if (sub.template && ev.template !== sub.template) {
 		return false;
 	}

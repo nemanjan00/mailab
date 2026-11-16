@@ -173,6 +173,16 @@ const api = (lab) => {
 		human(req);
 		return lab.importState(req.body);
 	}));
+	router.get("/usb", route(() => lab.usbTree()));
+	router.post("/usb/power", route((req) => {
+		human(req);
+		const usb = require("../services/usb");
+		lab.recordActivity({ who: (req.who && req.who.name) || "local", tool: "usb_power", args: JSON.stringify(req.body), ok: true });
+		return usb.setPower(req.body.hub, req.body.port, req.body.action);
+	}));
+	router.get("/udev", route(() => lab.udev.list()));
+	router.post("/udev", route((req) => lab.udev.add(req.body || {})));
+	router.delete("/udev/:id", route((req) => lab.udev.remove(req.params.id)));
 	router.get("/classifier", route(() => lab.classifier.status({ limit: 200 })));
 	router.post("/classifier/templates", route((req) => lab.classifier.addTemplate(req.body)));
 	router.delete("/classifier/templates/:name", route((req) => lab.classifier.removeTemplate(req.params.name)));

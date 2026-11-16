@@ -49,6 +49,14 @@ const venvPython = () => path.join(venvDir(), "bin", "python");
 // import name for a pip package when they differ
 const IMPORT_NAMES = { hidapi: "hid", pyserial: "serial" };
 
+// "pymp305==0.5.3" -> "pymp305": requirements are pinned, imports aren't
+const distName = (requirement) => String(requirement).split(/[<>=!~;[\s]/)[0];
+
+const importName = (requirement) => {
+	const name = distName(requirement);
+	return IMPORT_NAMES[name] || name.replace(/-/g, "_");
+};
+
 const pyenv = {
 	managed: managed,
 
@@ -87,7 +95,7 @@ const pyenv = {
 				return venvPython();
 			}
 			// import check: system site packages count as installed
-			const imports = wanted.map((p) => IMPORT_NAMES[p] || p.replace(/-/g, "_"));
+			const imports = wanted.map(importName);
 			const probe = "import importlib.util, sys\nmissing = [n for n in sys.argv[1:] if importlib.util.find_spec(n) is None]\nprint(' '.join(missing))";
 			return new Promise((resolve, reject) => {
 				const child = spawn(venvPython(), ["-c", probe].concat(imports));
@@ -109,6 +117,8 @@ const pyenv = {
 			});
 		});
 	}),
+
+	importName: importName,
 
 	_venvDir: venvDir
 };

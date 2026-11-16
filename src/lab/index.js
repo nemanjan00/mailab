@@ -21,6 +21,8 @@ const profilesModule = require("../profiles");
 const pathModule = require("path");
 const panesModule = require("../panes");
 const storeModule = require("../store");
+const udevModule = require("../udev");
+const usbService = require("../services/usb");
 
 const LOG_SIZE = 2000;
 const ACTIVITY_SIZE = 500;
@@ -82,7 +84,8 @@ const create = (options) => {
 			chat: chat.slice(-CHAT_PERSISTED),
 			safety: lab.safety.snapshot(),
 			classifier: { templates: lab.classifier.snapshot() },
-			trends: lab.trends.snapshot()
+			trends: lab.trends.snapshot(),
+			udev: lab.udev.snapshot()
 		};
 	};
 
@@ -136,6 +139,7 @@ const create = (options) => {
 
 	let stopSafety = null;
 	let stopTrends = null;
+	let stopUdev = null;
 
 	const lab = {
 		events: events,
@@ -710,6 +714,9 @@ const create = (options) => {
 			lab.safety.restore();
 			stopSafety = lab.safety.start();
 			stopTrends = lab.trends.start();
+			if (options.watchUsb !== false) {
+				stopUdev = lab.udev.start();
+			}
 			if (!saved.panes) {
 				DEFAULT_PANES.forEach(panes.add);
 			}
@@ -727,6 +734,31 @@ const create = (options) => {
 				}
 				return lab.startDevice(d.id);
 			}));
+		},
+
+		// ---- USB ------------------------------------------------------------
+
+		/**
+		 * USB tree with power status and which lab device uses which /dev node.
+		 */
+		usbTree: () => {
+			const usb = usbService;
+			const users = {};
+			Object.keys(instances).forEach((id) => {
+				const o = instances[id].options || {};
+				[o.path, o.port, o.device, o.conn].filter((v) => typeof v === "string" && v.startsWith("/dev/")).forEach((dev) => {
+					(users[dev] = users[dev] || []).push(id);
+				});
+			});
+			const link = (n) => {
+				const out = Object.assign({}, n, { labDevices: [].concat(...n.nodes.map((dev) => users[dev] || [])) });
+				if (n.ports) {
+					out.ports = n.ports.map((p) => ({ port: p.port, device: p.device ? link(p.device) : null }));
+				}
+				return out;
+			};
+			const inv = usb.inventory();
+			return usb.power().then((power) => ({ controllers: inv.controllers, tree: inv.buses.map(link), power: power }));
 		},
 
 		// ---- whole-lab state (profiles) --------------------------------------
@@ -754,6 +786,7 @@ const create = (options) => {
 				panes.replaceAll(state.panes || []);
 				lab.safety.load(state.safety || {});
 				lab.classifier.load((state.classifier && state.classifier.templates) || []);
+				lab.udev.load(state.udev || []);
 				if (state.trends && state.trends.patterns) {
 					lab.trends.setPatterns(state.trends.patterns);
 				}
@@ -773,6 +806,9 @@ const create = (options) => {
 			}
 			if (stopTrends) {
 				stopTrends();
+			}
+			if (stopUdev) {
+				stopUdev();
 			}
 			return Promise.all(Object.keys(instances).map((id) => {
 				const inst = instances[id];
@@ -794,6 +830,11 @@ const create = (options) => {
 	lab.profiles = profilesModule.create(lab, pathModule.join(options.dataDir, "profiles"));
 	lab.classifier = classifyModule.create(lab, saved.classifier);
 	lab.classifier.changed = changed;
+	lab.udev = udevModule.create({
+		scan: () => usbService.inventory().buses,
+		notify: (ev) => lab.notify(ev),
+		onChange: changed
+	}, saved.udev);
 
 	return lab;
 };

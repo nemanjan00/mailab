@@ -100,7 +100,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "usb_tree", "udev_rules", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -510,6 +510,57 @@ const create = (lab, context) => {
 		return lab.getChat({ since: a.since, last: a.last || 50 });
 	});
 
+	// ---- USB --------------------------------------------------------------------
+
+	tool("usb_tree", "USB tree: buses → hubs → ports → devices (vid:pid, product, serial, /dev nodes, which lab device uses it) and per-port power status of switchable hubs (uhubctl)", {}, () => lab.usbTree());
+
+	tool("usb_power", "Switch a USB hub port: on, off or cycle (power-cycle a hung device). Hub = uhubctl location (e.g. \"1-2\"). Waits for a person's approval", {
+		hub: z.string(),
+		port: z.number(),
+		action: z.enum(["on", "off", "cycle"])
+	}, (a) => {
+		const usb = require("../services/usb");
+		const rule = lab.safety.needsApproval("usb", "usb", "usb_power", a);
+		const go = () => usb.setPower(a.hub, a.port, a.action);
+		if (!rule) {
+			return go();
+		}
+		return lab.safety.requestApproval({ who: actor(), device: "usb", command: "usb_power", args: a, reason: rule.reason }).then(go);
+	});
+
+	tool("udev_rules", "mailab udev rules (in-app, not system udev): USB devices appearing/disappearing that raise lab notifications", {}, () => lab.udev.list());
+
+	tool("udev_rule_add", "Add an in-app udev rule: get notified when a matching USB device is added, removed or changes (drivers / /dev nodes bound). "
+		+ "All match fields are optional globs (case-insensitive): vid, pid (hex, e.g. \"1d50\"), product, manufacturer, serial, driver (e.g. \"cdc_acm\"), "
+		+ "node (e.g. \"/dev/ttyACM*\"), path (sysfs port path, e.g. \"8-1.3.*\"). Events are {type: \"udev\", rule, action, usb: {path, vid, pid, product, serial, drivers, nodes}}; "
+		+ "this session is subscribed to its rule's events automatically (others: subscribe types [\"udev\"] or notifications_read)", {
+		name: z.string().optional(),
+		action: z.enum(["add", "remove", "change"]).optional().describe("default: any"),
+		match: z.object({
+			vid: z.string().optional(),
+			pid: z.string().optional(),
+			product: z.string().optional(),
+			manufacturer: z.string().optional(),
+			serial: z.string().optional(),
+			driver: z.string().optional(),
+			node: z.string().optional(),
+			path: z.string().optional()
+		}).optional()
+	}, (a) => {
+		const rule = lab.udev.add({ name: a.name, action: a.action, match: a.match || {} });
+		if (ctx.session) {
+			ctx.session.subs.push({ id: "s" + (ctx.session.subs.length + 1), types: ["udev"], rule: rule.id });
+		}
+		return rule;
+	});
+
+	tool("udev_rule_remove", "Remove an in-app udev rule", { id: z.string() }, (a) => {
+		if (ctx.session) {
+			ctx.session.subs = ctx.session.subs.filter((sub) => sub.rule !== a.id);
+		}
+		return lab.udev.remove(a.id);
+	});
+
 	// ---- lab profiles ---------------------------------------------------------
 
 	tool("lab_profiles", "Saved lab setups (profiles)", {}, () => lab.profiles.list());
@@ -579,8 +630,9 @@ const create = (lab, context) => {
 	tool("classifier_remove", "Remove a classifier template", { name: z.string() }, (a) => lab.classifier.removeTemplate(a.name));
 
 	tool("subscribe", "Get lab events pushed to this MCP session as notifications/message: types rule, approval, trigger, cluster (new unclassified "
-		+ "line clusters, debounced), match (template matches), line. Optional filters: device, template, pattern (regex on the line)", {
-		types: z.array(z.enum(["rule", "approval", "trigger", "cluster", "match", "line"])),
+		+ "line clusters, debounced), match (template matches), line, udev (USB events matching an in-app udev rule). Optional filters: device, template, rule (udev rule id), pattern (regex on the line)", {
+		types: z.array(z.enum(["rule", "approval", "trigger", "cluster", "match", "line", "udev"])),
+		rule: z.string().optional(),
 		device: z.string().optional(),
 		template: z.string().optional(),
 		pattern: z.string().optional()
