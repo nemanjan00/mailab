@@ -17,7 +17,8 @@ module.exports = processDriver.pythonPreset({
 	},
 	commands: {
 		tune: "{freq, rate, gain, fft, average}",
-		capture: "{samples, path} save raw cf32 IQ"
+		capture: "{samples, path} save raw cf32 IQ",
+		demod: "{offset, mode: fm|am|usb|lsb, seconds, audio_rate, deviation, path} liquid-dsp demod -> WAV + traces audio, audio_spectrum"
 	},
 	args: (options) => {
 		return processDriver.toFlags(options, ["args", "freq", "rate", "gain", "fft", "average", "fps"]);

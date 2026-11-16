@@ -90,6 +90,43 @@ def capture(args):
     return {"path": path, "samples": len(iq), "rate": cfg["rate"], "freq": cfg["freq"]}
 
 
+@bridge.command("demod", "{offset, mode: fm|am|usb|lsb, seconds, audio_rate, deviation, path} demodulate (liquid-dsp) -> WAV + traces audio, audio_spectrum")
+def demod(args):
+    import wave
+    import liquid_dsp as dsp
+
+    rate = cfg["rate"]
+    audio_rate = float(args.get("audio_rate", 48000))
+    mode = args.get("mode", "fm")
+    iq = read(int(rate * float(args.get("seconds", 2))))
+    bb = dsp.resample(dsp.shift(iq, float(args.get("offset", 0)), rate), audio_rate / rate)
+    if mode == "fm":
+        audio = dsp.fm_demod(bb, float(args.get("deviation", 5000)), audio_rate)
+    else:
+        kind = {"am": dsp.AM_DSB, "usb": dsp.AM_USB, "lsb": dsp.AM_LSB}[mode]
+        audio = dsp.am_demod(bb, kind)
+        audio = audio - np.mean(audio)
+    audio = audio / (np.max(np.abs(audio)) or 1)
+
+    path = args.get("path", "/tmp/mailab_demod_%d.wav" % int(time.time()))
+    with wave.open(path, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(int(audio_rate))
+        out.writeframes((audio * 32767).astype("<i2").tobytes())
+
+    # the AI can't listen, but it can look: waveform + audio spectrum
+    shown = audio[: int(audio_rate * 0.1)]
+    lab.trace("audio", (np.arange(len(shown)) / audio_rate).tolist(), [{"label": mode, "y": np.round(shown, 4).tolist()}], "s", "")
+    spec = np.abs(np.fft.rfft(audio * np.hanning(len(audio))))
+    freqs = np.fft.rfftfreq(len(audio), 1 / audio_rate)
+    spec_db = 20 * np.log10(spec / (np.max(spec) or 1) + 1e-9)
+    step = max(1, len(freqs) // 2000)
+    lab.trace("audio_spectrum", freqs[::step].tolist(), [{"label": "dB", "y": np.round(spec_db[::step], 2).tolist()}], "Hz", "dB")
+    peak = int(np.argmax(spec[1:]) + 1)
+    return {"path": path, "samples": len(audio), "audio_rate": audio_rate, "peak_audio_hz": float(freqs[peak])}
+
+
 bridge.every(1 / opts.fps, tick)
 try:
     bridge.run()
