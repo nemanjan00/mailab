@@ -52,12 +52,16 @@ const create = (options, io) => {
 	};
 
 	const launch = () => {
-		const args = [
+		let select = [];
+		if (settings.serial) {
+			select = ["-d", String(settings.serial)];
+		}
+		const args = select.concat([
 			"-f", settings.startMhz + ":" + settings.stopMhz,
 			"-w", String(settings.binWidth),
 			"-l", String(settings.lna),
 			"-g", String(settings.vga)
-		];
+		]);
 		io.log("hackrf_sweep " + args.join(" "), "tx");
 		bins = [];
 		lastLow = -1;
@@ -108,6 +112,7 @@ module.exports = {
 	name: "hackrf",
 	description: "HackRF One wideband sweep (hackrf_sweep): trace \"spectrum\", peak_freq/peak_db",
 	options: {
+		serial: "board serial (hackrf_info) when several HackRFs are connected",
 		startMhz: "default 1",
 		stopMhz: "default 6000",
 		binWidth: "FFT bin width Hz (default 1e6)",

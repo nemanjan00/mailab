@@ -8,6 +8,7 @@ const fs = require("fs");
 const tty = require("tty");
 const EventEmitter = require("events");
 const execFileSync = require("child_process").execFileSync;
+const wrapper = require("queue-promised").wrapper;
 
 const DEFAULT_BAUD = 115200;
 
@@ -40,6 +41,9 @@ const open = (path, options) => {
 	});
 
 	port.write = (data) => {
+		if (!port.isOpen) {
+			return false;
+		}
 		fs.writeSync(fd, data);
 		return true;
 	};
@@ -87,7 +91,69 @@ const collect = (port, done, timeoutMs) => {
 	});
 };
 
+// path -> {port, owners: [ids], shared, lock}
+const registry = {};
+
+/**
+ * Open a port through the registry so several devices can use one bus
+ * (CI-V radios) and two devices can't fight over a port by accident.
+ * @param {string} path
+ * @param {{baud: number, shared: boolean, owner: string}} options
+ *   shared: allow other shared users of the same path (they must agree)
+ * @returns {EventEmitter} port, plus port.exclusive(fn) that serializes fn() across all users
+ */
+const acquire = (path, options) => {
+	const opts = options || {};
+	const entry = registry[path];
+	if (entry) {
+		if (!entry.shared || !opts.shared) {
+			throw new Error("port " + path + " is in use by " + entry.owners.join(", "));
+		}
+		entry.owners.push(opts.owner || "?");
+		return entry.port;
+	}
+	const port = open(path, opts);
+	const lock = wrapper((fn) => {
+		return fn();
+	}, 1);
+	port.exclusive = (fn) => {
+		return lock(fn);
+	};
+	registry[path] = { port: port, owners: [opts.owner || "?"], shared: Boolean(opts.shared) };
+	return port;
+};
+
+/**
+ * Release a port taken with acquire(); closes it when the last user leaves.
+ */
+const release = (path, owner) => {
+	const entry = registry[path];
+	if (!entry) {
+		return Promise.resolve();
+	}
+	const index = entry.owners.indexOf(owner || "?");
+	if (index !== -1) {
+		entry.owners.splice(index, 1);
+	}
+	if (entry.owners.length) {
+		return Promise.resolve();
+	}
+	delete registry[path];
+	return entry.port.close();
+};
+
+const inUse = () => {
+	const out = {};
+	Object.keys(registry).forEach((path) => {
+		out[path] = registry[path].owners.slice();
+	});
+	return out;
+};
+
 module.exports = {
 	open: open,
+	acquire: acquire,
+	release: release,
+	inUse: inUse,
 	collect: collect
 };

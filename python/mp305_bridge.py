@@ -7,10 +7,12 @@ from pymp305 import MP305
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--poll", type=float, default=0.25, help="telemetry period, seconds")
+parser.add_argument("--serial", default=None, help="USB serial number (several supplies connected)")
+parser.add_argument("--path", default=None, help="hidraw path")
 opts = parser.parse_args()
 
 bridge = lab.Bridge()
-psu = MP305.open()
+psu = MP305.open(path=opts.path.encode() if opts.path else None, serial=opts.serial)
 lab.log("connected: %s" % (psu.hardware_info(),))
 lab.status("running")
 
@@ -21,6 +23,11 @@ def poll():
     lab.sample("i", st.current, "A")
     lab.sample("p", st.power, "W")
     lab.sample("temp", st.temperature, "°C")
+
+
+@bridge.command("list", "connected MP305 units (path, serial)")
+def list_units(_args):
+    return [{k: (v.decode() if isinstance(v, bytes) else v) for k, v in d.items()} for d in MP305.list_devices()]
 
 
 @bridge.command("state", "read full telemetry")

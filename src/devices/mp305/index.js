@@ -7,15 +7,18 @@ module.exports = processDriver.pythonPreset({
 	description: "ISDT MP305A/B bench supply (USB-HID, pymp305). Channels: v, i, p, temp",
 	script: "mp305_bridge.py",
 	options: {
-		poll: "telemetry period in seconds (default 0.25)"
+		poll: "telemetry period in seconds (default 0.25)",
+		serial: "USB serial number, to pick one of several supplies",
+		path: "hidraw path (alternative to serial)"
 	},
 	commands: {
+		list: "connected units (path, serial)",
 		state: "full telemetry",
 		set_output: "{voltage, current, on} volts / amps",
 		output_off: "output off",
 		release: "give the front panel control back"
 	},
 	args: (options) => {
-		return processDriver.toFlags(options, ["poll"]);
+		return processDriver.toFlags(options, ["poll", "serial", "path"]);
 	}
 });

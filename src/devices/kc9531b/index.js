@@ -31,9 +31,12 @@ const create = (options, io) => {
 
 	return {
 		start: () => {
-			port = tty.open(options.path, { baud: options.baud || 115200 });
+			port = tty.acquire(options.path, { baud: options.baud || 115200, owner: io.id });
 			device = kc9531b(port);
-			const ready = options.frequency ? device.setFrequency(Number(options.frequency)) : Promise.resolve();
+			let ready = Promise.resolve();
+			if (options.frequency) {
+				ready = device.setFrequency(Number(options.frequency));
+			}
 			return ready
 				.then(() => {
 					return device.getDeviceModel();
@@ -53,7 +56,7 @@ const create = (options, io) => {
 			if (!port) {
 				return Promise.resolve();
 			}
-			return port.close();
+			return tty.release(options.path, io.id);
 		},
 
 		command: (name, args) => {

@@ -113,8 +113,8 @@ const create = (lab) => {
 
 	// ---- devices ---------------------------------------------------------
 
-	tool("device_add", "Add and start a device. id becomes the channel prefix.", {
-		id: z.string().describe("short identifier, letters/digits/_ (e.g. psu1, scope)"),
+	tool("device_add", "Add and start a device. Any driver can have several instances, each with its own id (the channel prefix) and options selecting the unit (port, host, serial...).", {
+		id: z.string().optional().describe("short identifier, letters/digits/_ (e.g. psu1, scope); default <driver>, <driver>2, ..."),
 		driver: z.string(),
 		options: json.optional()
 	}, (a) => {

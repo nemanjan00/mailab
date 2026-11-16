@@ -150,7 +150,7 @@ const create = (options, io) => {
 
 	return {
 		start: () => {
-			port = tty.open(options.path, { baud: 115200 });
+			port = tty.acquire(options.path, { baud: 115200, owner: io.id });
 			// a burst of NOPs resyncs the command parser
 			return exchange(Buffer.alloc(8, OP.NOP), 0)
 				.then(() => {
@@ -168,7 +168,7 @@ const create = (options, io) => {
 			if (!port) {
 				return Promise.resolve();
 			}
-			return port.close();
+			return tty.release(options.path, io.id);
 		},
 
 		command: (name, args) => {

@@ -72,7 +72,7 @@ const create = (options, io) => {
 
 	return {
 		start: () => {
-			port = tty.open(options.path, { baud: options.baud || 115200 });
+			port = tty.acquire(options.path, { baud: options.baud || 115200, owner: io.id });
 			return shell("version").then((lines) => {
 				io.log("connected: " + lines.join(" "));
 				running = options.continuous !== false;
@@ -85,7 +85,7 @@ const create = (options, io) => {
 			if (!port) {
 				return Promise.resolve();
 			}
-			return port.close();
+			return tty.release(options.path, io.id);
 		},
 
 		command: (name, args) => {

@@ -264,11 +264,13 @@ const create = (options) => {
 		// ---- devices ----------------------------------------------------
 
 		/**
-		 * @param {string} id device id, becomes the channel prefix (<id>_<field>)
+		 * @param {string} [requestedId] device id, becomes the channel prefix
+		 *   (<id>_<field>); empty = <driver>, <driver>2, ...
 		 * @param {string} driverName
 		 * @param {Object} options driver options
 		 */
-		addDevice: (id, driverName, options) => {
+		addDevice: (requestedId, driverName, options) => {
+			const id = requestedId || lab.nextDeviceId(driverName);
 			if (!channelsModule.isValidName(id)) {
 				throw new Error("invalid device id: " + id + " (letters, digits, _)");
 			}
@@ -282,6 +284,20 @@ const create = (options) => {
 			return lab.startDevice(id);
 		},
 
+		/**
+		 * First free id for another instance of a driver: sim, sim2, sim3 ...
+		 */
+		nextDeviceId: (driverName) => {
+			const base = channelsModule.sanitizeName(driverName);
+			let n = 1;
+			let id = base;
+			while (instances[id]) {
+				n++;
+				id = base + n;
+			}
+			return id;
+		},
+
 		startDevice: (id) => {
 			const inst = lab.getDevice(id);
 			const driver = devices.get(inst.driver);
@@ -289,6 +305,8 @@ const create = (options) => {
 				return id + "_" + channelsModule.sanitizeName(name);
 			};
 			const io = {
+				// device id, e.g. for owning shared ports
+				id: id,
 				sample: (name, value, meta) => {
 					const m = meta || {};
 					lab.pushSample(field(name), value, { t: m.t, unit: m.unit, source: id });
@@ -338,8 +356,19 @@ const create = (options) => {
 				}, (err) => {
 					io.status("error", err.message);
 					lab.log(id, "start failed: " + err.message, "error");
+					// release whatever the driver grabbed (ports, shared bridges)
+					const failed = inst.instance;
+					inst.instance = null;
 					changed();
-					return lab.describeDevice(id);
+					let cleanup = Promise.resolve();
+					if (failed) {
+						cleanup = Promise.resolve().then(failed.stop).catch(() => {
+							return null;
+						});
+					}
+					return cleanup.then(() => {
+						return lab.describeDevice(id);
+					});
 				});
 		},
 

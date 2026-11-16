@@ -411,10 +411,10 @@ document.getElementById("add-device").addEventListener("click", () => {
 		};
 		ctx.dialog("Add device", [
 			{ name: "driver", type: "select", options: drivers.map((d) => d.name), hint: describe },
-			{ name: "id", label: "id (channel prefix)", value: "" },
+			{ name: "id", label: "id (channel prefix; empty = automatic)", value: "" },
 			{ name: "options", type: "textarea", value: "{}" }
 		], (values) => {
-			return api("POST", "/devices", { id: values.id || values.driver, driver: values.driver, options: parseJson(values.options) });
+			return api("POST", "/devices", { id: values.id, driver: values.driver, options: parseJson(values.options) });
 		});
 	});
 });

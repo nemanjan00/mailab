@@ -1,10 +1,47 @@
-// Icom radios over CI-V (nemanjan00/ci-v, loaded from CIV_PATH since it is not
-// on npm). Channels: freq, swr (while transmitting).
+// Icom radios over CI-V (nemanjan00/ci-v, npm "icom-ci-v"). Several radios can
+// share one CI-V bus/port: give each device the same path and its own
+// radioAddress (replies are routed by address). Channels: freq, squelch, swr_meter.
 
+const EventEmitter = require("events");
 const config = require("../../config");
 const tty = require("../../services/tty");
 
 const DEFAULT_POLL_MS = 500;
+
+// npm package when installed, else a local clone (CIV_PATH)
+const loadCiv = (civPath) => {
+	if (civPath) {
+		return require(civPath);
+	}
+	try {
+		return require("icom-ci-v");
+	} catch (_err) {
+		return require(config.get("CIV_PATH"));
+	}
+};
+
+// Per-radio view of a shared port. ci-v has no close(), so on stop the proxy
+// goes silent: its RX poll timer then writes nowhere and hears nothing.
+const proxy = (port) => {
+	const socket = new EventEmitter();
+	let active = true;
+	const onData = (data) => {
+		socket.emit("data", data);
+	};
+	port.on("data", onData);
+	socket.opening = false;
+	socket.write = (data) => {
+		if (active) {
+			port.write(data);
+		}
+		return active;
+	};
+	socket.detach = () => {
+		active = false;
+		port.off("data", onData);
+	};
+	return socket;
+};
 
 // CI-V replies are BCD; "1512" (SWR) returns [0x12, hi, lo] -> 0..255 meter value
 const bcd = (bytes) => {
@@ -14,8 +51,9 @@ const bcd = (bytes) => {
 };
 
 const create = (options, io) => {
-	const CIV = require(options.civPath || config.get("CIV_PATH"));
+	const CIV = loadCiv(options.civPath);
 	let port = null;
+	let socket = null;
 	let radio = null;
 	let timer = null;
 	let stopped = false;
@@ -38,11 +76,18 @@ const create = (options, io) => {
 
 	return {
 		start: () => {
-			port = tty.open(options.path, { baud: options.baud || 115200 });
-			radio = CIV(port);
+			port = tty.acquire(options.path, { baud: options.baud || 115200, owner: io.id, shared: true });
+			socket = proxy(port);
+			radio = CIV(socket);
 			if (options.radioAddress) {
 				radio.civ.radioAddress = Buffer.from(options.radioAddress, "hex");
 			}
+			radio.on("rx", () => {
+				io.sample("squelch", 1);
+			});
+			radio.on("rx_end", () => {
+				io.sample("squelch", 0);
+			});
 			radio.on("waveform", (data) => {
 				// TODO: decode scope waveform frames into a trace
 				io.log("waveform frame " + Buffer.from(data).length + " bytes", "debug");
@@ -57,7 +102,8 @@ const create = (options, io) => {
 			if (!port) {
 				return Promise.resolve();
 			}
-			return port.close();
+			socket.detach();
+			return tty.release(options.path, io.id);
 		},
 
 		command: (name, args) => {
@@ -101,13 +147,13 @@ const create = (options, io) => {
 
 module.exports = {
 	name: "civ",
-	description: "Icom radio over CI-V (IC-705 etc.). Channels: freq, swr_meter",
+	description: "Icom radio over CI-V (IC-705 etc.), several radios per bus. Channels: freq, squelch, swr_meter",
 	options: {
-		path: "serial port (required)",
+		path: "serial port (required); radios on one CI-V bus share it",
 		baud: "default 115200",
 		radioAddress: "CI-V address hex (default A4 = IC-705)",
 		pollMs: "frequency poll period (default 500)",
-		civPath: "path to the ci-v library (default CIV_PATH or ~/ci-v)"
+		civPath: "path to a ci-v checkout (default: npm icom-ci-v, else CIV_PATH)"
 	},
 	commands: {
 		get_frequency: "",

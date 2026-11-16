@@ -69,6 +69,25 @@ describe("web + mcp", () => {
 		});
 	});
 
+	test("several instances of one driver get their own ids and channels", () => {
+		return request(app).post("/api/devices").send({ driver: "sim", options: { rateHz: 100 } }).expect(200)
+			.then((res) => {
+				expect(res.body.id).toBe("sim");
+				return request(app).post("/api/devices").send({ driver: "sim", options: { rateHz: 100 } }).expect(200);
+			})
+			.then((res) => {
+				expect(res.body.id).toBe("sim2");
+				return new Promise((resolve) => {
+					setTimeout(resolve, 100);
+				});
+			})
+			.then(() => {
+				const names = lab.channels.list().map((c) => c.name);
+				expect(names).toEqual(expect.arrayContaining(["sim_sine", "sim2_sine"]));
+				return Promise.all([lab.removeDevice("sim"), lab.removeDevice("sim2")]);
+			});
+	});
+
 	test("sim device feeds channels; derived channel follows", () => {
 		return request(app).post("/api/devices").send({ id: "sim", driver: "sim", options: { rateHz: 200 } }).expect(200)
 			.then(() => {

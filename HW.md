@@ -95,6 +95,28 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 - [ ] Persist campaigns (findus has its own SQLite DB; import it as a dataset)
 - [ ] Safety: confirm the target and voltage before glitching
 
+## Multiple instances
+
+Every driver can run several times: one device per unit, each with its own
+id (the channel prefix; leave it empty for `<driver>`, `<driver>2`, ...).
+
+| Driver | How to pick the unit |
+|---|---|
+| serial, kc9531b, tinysa, litevna | `path` (the port registry refuses a port that's already in use) |
+| civ | same `path` for radios on one CI-V bus, a different `radioAddress` each |
+| mdp | same `port` for modules on one radio bridge, a different `address` each |
+| scpi, dm858, mho900 | `host` / `path` |
+| sigrok | `conn` (USB `bus.address`, e.g. `1.12`) |
+| hackrf | `serial` |
+| soapy | `args`, e.g. `driver=bladerf,serial=...` |
+| mp305 | `serial` or `path` (`list` command shows them) |
+| proxmark3 | `port` |
+| picoglitcher | `port` |
+
+- [ ] Verify two MDP modules on one bridge (link re-targeting per request)
+- [ ] Verify two radios on one CI-V bus
+- [ ] Use `/dev/serial/by-id/...` paths so instances survive replugging
+
 ## Cross-cutting
 - [ ] udev rules / stable device paths (`/dev/serial/by-id/...`) in the docs
 - [ ] Device auto-detection (USB VID:PID → suggested driver)

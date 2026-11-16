@@ -40,7 +40,7 @@ const create = (options, io) => {
 
 	return {
 		start: () => {
-			port = tty.open(options.path, { baud: options.baud });
+			port = tty.acquire(options.path, { baud: options.baud, owner: io.id });
 			port.on("data", onData);
 			port.on("error", (err) => {
 				io.status("error", err.message);
@@ -52,7 +52,8 @@ const create = (options, io) => {
 			if (!port) {
 				return Promise.resolve();
 			}
-			return port.close();
+			port.off("data", onData);
+			return tty.release(options.path, io.id);
 		},
 
 		command: (name, args) => {
