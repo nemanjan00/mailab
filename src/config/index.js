@@ -26,10 +26,20 @@ const DEFAULTS = {
 	MAILAB_MANAGE_PYTHON: "1"
 };
 
+// a DATA_DIR with control characters (e.g. ANSI colour codes from a
+// coloured `ls`) becomes a junk relative directory: refuse it early
+const checkPath = (key, value) => {
+	const control = String(value).split("").some((c) => c.charCodeAt(0) < 32);
+	if (/DIR$/.test(key) && control) {
+		throw new Error(key + " contains control characters: " + JSON.stringify(value));
+	}
+	return value;
+};
+
 const config = {
 	get: (key) => {
 		if (process.env[key] !== undefined) {
-			return process.env[key];
+			return checkPath(key, process.env[key]);
 		}
 		return DEFAULTS[key];
 	},

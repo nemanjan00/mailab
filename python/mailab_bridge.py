@@ -72,6 +72,11 @@ def event(name, data=None):
     emit({"type": "event", "name": name, "data": data or {}})
 
 
+def panel(name, layout, title=None, w=6, h=6):
+    """publish (or update) this device's custom pane; layout from mailab_ui"""
+    emit({"type": "panel", "name": name, "title": title, "layout": layout, "w": w, "h": h})
+
+
 def log(text, level="info"):
     emit({"type": "log", "text": str(text), "level": level})
 

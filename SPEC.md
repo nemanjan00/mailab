@@ -20,7 +20,6 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Charts, live preview | ✅ | chart, trace, waterfall, value panes |
 | Multiple instances of every device | ✅ | auto ids, port registry, shared CI-V bus and MDP radio bridge, unit selection (serial/path/port/conn) |
 | Multi-call scripts ("script" = multi-MCP-call) for better timing | ✅ | `batch` tool: steps with `at`/`delayMs`/`repeat`/`intervalMs`, `$name.path` result references, loops, ~1 ms accuracy |
-| Python UI SDK: custom panes | ⬜ | declarative pane spec (rows/columns of SDK elements: value readout, button → device command, slider, numeric field, chart, table, text) rendered by a `custom` pane; `python/mailab_ui.py` builders so bridges ship their own control panels; MCP `pane_add type custom` for the AI |
 | GUI SDK for readable panes | 🟡 | `public/sdk/`: `pane()` (reactive config, auto-dispose), `table`, `feed`, `iconButton`, `empty`, `toolbar`, `field`, `widget` (uPlot/canvas composed in, disposed with the scope). Panes on it: devices, channels, activity, chat. Next: log, value, json, kaitai, flowgraph, image, audio; then chart/trace via `widget` |
 | Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
 | Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | app store is qrp `state()` (lab state, activity/chat feeds, live values at 4 Hz in `batch`); 4 panes migrated via the SDK; imperative panes still work against the same store |
@@ -42,6 +41,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Binary diff for blobs | ✅ | `blob_diff` + blob pane `compare`: merged changed ranges, side-by-side hex with highlights. Next: map changed ranges to Kaitai fields |
 | mailab-managed Python venv | ✅ | `src/services/pyenv`: venv in `DATA_DIR/python` (system site packages for apt SoapySDR/liquid), created on first use; Python drivers declare `requires` (flowgraph/soapy/harogic: numpy; mp305: pymp305, hidapi; picoglitcher: findus, pyserial), installed on device start if not importable, progress in the device log; serialized pip; opt-out `MAILAB_MANAGE_PYTHON=0` / `PYTHON`. Verified: venv creation, system numpy reuse, pymp305+hidapi install. Helpers that crash now show `error` + their last stderr line |
 | Test automation for python | ✅ | `python/test_modem.py` is pytest-style (4 tests) and runs from jest (`src/devices/flowgraph/__tests__/modem.test.js`), so the pre-commit hook covers the BER regression; skipped when numpy/liquid-dsp are missing |
+| Serializable lab state: save / load | ⬜ | named snapshots of the whole setup (devices + options, derived channels, panes, safety rules + policy, classifier templates, trend patterns) as files/downloads; load replaces the lab; MCP `lab_save`/`lab_load`/`lab_list`, UI menu |
+| Python UI SDK: custom panes | ✅ | `custom` pane renders a layout tree (row, col, text with `{{channel}}` live values, value, button, toggle, slider, number, chart, table, image); controls run device commands as the clicking person; `python/mailab_ui.py` builders + `lab.panel()` so bridges publish/update their own control panel; AI uses `pane_add type custom`. Verified: a python bridge's panel operated from the browser (setpoint 12 V + output on reached the device) |
 | Run on the lab host `nemanjan00@10.69.1.91` (`lab`) | ⬜ | Feather nRF52840, EVGA XR1 capture, sigrok, minipro and hackrf live there. Options: run mailab there, or add remote device agents. **Needs a decision** |
 
 ## 2. Panes / views
@@ -138,6 +139,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | File & bitstream entropy | ✅ | sliding-window Shannon entropy → trace `<blob>_entropy` + plot; high/low regions with a window-aware threshold (small-window bias); bit streams via the bitview/framer blobs |
 | Tigard | ⬜ | FT2232H multi-protocol board: port A UART (→ `serial` driver / console), port B JTAG/SWD/SPI/I2C via OpenOCD, flashrom (`ft2232_spi`) and pyftdi; target voltage select |
 | CatSniffer V3 (Electronic Cats) | ⬜ | multiprotocol sniffer (CC1352P7 + SX1262 + RP2040): flash firmwares (catnip) and run bridges: Sniffle (BLE), 802.15.4 (Zigbee/Thread), LoRa/sub-GHz; packets → values + pcap blobs, RSSI → channels |
+| USB tree view with hub power toggles | ⬜ | live tree of hubs → ports → devices (like ~/projects/proxyslave), per-port power toggles via uhubctl on capable hubs; identify which lab device sits where |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
@@ -278,3 +280,6 @@ Next:
 107. python headers for ui sdk elements, so it can build custom panes
 108. python venv?
 109. mailab managed (venv)
+110. usb tree view, like ~/projects/proxyslave, with togglable power hub toggles
+111. you made a typo? (a test lab.json committed under an ANSI-escaped directory name: removed, DATA_DIR guarded)
+112. seriazable lab state, savable and loadable

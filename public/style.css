@@ -357,3 +357,16 @@ dialog.help p { margin: 6px 0; }
 /* trends */
 .trend { height: 100%; display: flex; flex-direction: column; }
 .trend .widget { flex: 1; }
+
+/* custom panes */
+.custom { display: flex; flex-direction: column; gap: 8px; overflow: auto; height: 100%; }
+.c-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.c-col { display: flex; flex-direction: column; gap: 8px; }
+.c-value { min-width: 110px; padding: 6px 10px; background: var(--panel-2); border-radius: 6px; }
+.c-value .num { font: 600 20px var(--mono); color: var(--accent); }
+.c-control { display: inline-flex; align-items: center; gap: 6px; }
+.c-number { width: 90px !important; font-family: var(--mono); }
+.c-slider input { width: 160px; }
+.c-chart { position: relative; height: 180px; }
+.c-image { max-width: 100%; }
+.c-text { padding: 0; }

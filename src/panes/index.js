@@ -69,6 +69,10 @@ const TYPES = {
 		description: "editor for a flowgraph device: blocks, links, live rates and errors",
 		config: { device: "flowgraph device id" }
 	},
+	custom: {
+		description: "custom control panel: a layout tree of SDK elements (built by python bridges via mailab_ui.py, or by the AI)",
+		config: { layout: "{col: [{text: \"## PSU {{psu_v}}\"}, {row: [{value: \"psu_v\"}, {number: \"set V\", device: \"psu\", command: \"set_voltage\", arg: \"volts\", unit: \"V\"}]}, {toggle: \"output\", device: \"psu\", command: \"output\", arg: \"on\"}, {chart: [\"psu_v\"]}]}  elements: row col text value button toggle slider number chart table image" }
+	},
 	trend: {
 		description: "long-term trends (Grafana-like): recorded channels over 5 min … 30 days, mean line in a min/max band",
 		config: { channels: "[recorded channel names] (see trend_record)", range: "5m|1h|6h|24h|7d|30d (default 6h)" }

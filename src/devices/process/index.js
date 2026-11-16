@@ -15,6 +15,7 @@
 //   {"type": "options", "options": {...}}                    merged into the device options (persisted)
 //   {"type": "blob", "name": "dump", "data": "<base64>"}     binary data (dumps, frames)
 //   {"type": "event", "name": "burst", "data": {...}}         notify subscribers (triggers, detections)
+//   {"type": "panel", "name": "control", "layout": {...}}     publish a custom pane (python/mailab_ui.py)
 //   {"type": "result", "id": 1, "result": {...}} | {"type": "result", "id": 1, "error": "..."}
 // lab -> helper (stdin):
 //   {"id": 1, "command": "set_voltage", "args": {...}}
@@ -58,6 +59,9 @@ const create = (options, io) => {
 		},
 		audio: (msg) => {
 			io.audio(msg.name, msg.rate, msg.data);
+		},
+		panel: (msg) => {
+			io.panel(msg.name, msg.layout, { title: msg.title, w: msg.w, h: msg.h });
 		},
 		event: (msg) => {
 			io.event(msg.name, msg.data);

@@ -465,6 +465,34 @@ const create = (options) => {
 				blob: (name, data) => {
 					lab.setBlob(field(name), data, id);
 				},
+				// a device's custom pane: created once, then its layout follows the device
+				panel: (name, layout, opts) => {
+					const paneId = id + "-" + channelsModule.sanitizeName(name);
+					// commands without a device go to this one
+					const bind = (node) => {
+						if (Array.isArray(node)) {
+							return node.map(bind);
+						}
+						if (node && typeof node === "object") {
+							const out = {};
+							Object.keys(node).forEach((k) => {
+								out[k] = bind(node[k]);
+							});
+							if (out.command && !out.device) {
+								out.device = id;
+							}
+							return out;
+						}
+						return node;
+					};
+					const config = { layout: bind(layout) };
+					const o = opts || {};
+					if (panes.list().some((p) => p.id === paneId)) {
+						panes.update(paneId, { config: config });
+					} else {
+						panes.add({ id: paneId, type: "custom", title: o.title || id + " " + name, config: config, w: o.w || 6, h: o.h || 6 });
+					}
+				},
 				event: (name, data) => {
 					lab.notify(Object.assign({ type: "trigger", device: id, name: field(name) }, data || {}));
 				},
