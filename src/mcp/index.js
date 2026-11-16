@@ -100,7 +100,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -508,6 +508,41 @@ const create = (lab, context) => {
 		last: z.number().optional().describe("default 50")
 	}, (a) => {
 		return lab.getChat({ since: a.since, last: a.last || 50 });
+	});
+
+	// ---- long-term trends ----------------------------------------------------
+
+	tool("trend_read", "Long-term history of a recorded channel: min/max/mean buckets at the finest resolution that fits "
+		+ "(1 s for 6 h, 10 s for 3 days, 1 min for 30 days, 1 h for 2 years). from/to: ms since epoch or relative like \"-24h\", \"-30m\", \"-7d\"", {
+		channel: z.string(),
+		from: z.union([z.number(), z.string()]).optional().describe("default -1h"),
+		to: z.union([z.number(), z.string()]).optional().describe("default now"),
+		points: z.number().optional().describe("max buckets (default 300)")
+	}, (a) => {
+		const when = (v, fallback) => {
+			if (v === undefined) {
+				return fallback;
+			}
+			if (typeof v === "number") {
+				return v;
+			}
+			const m = /^-(\d+(?:\.\d+)?)([smhd])$/.exec(v);
+			if (!m) {
+				throw new Error("use ms since epoch or a relative time like -24h");
+			}
+			return Date.now() - Number(m[1]) * { s: 1000, m: 60000, h: 3600000, d: 86400000 }[m[2]];
+		};
+		const r = lab.trends.read(a.channel, { from: when(a.from, Date.now() - 3600000), to: when(a.to, Date.now()), points: a.points || 300 });
+		return Object.assign({ channel: a.channel, buckets: r.t.length }, r);
+	});
+
+	tool("trend_record", "Which channels are recorded long term (glob patterns, e.g. \"psu_*\", \"*_temp\"); give `patterns` to replace the list", {
+		patterns: z.array(z.string()).optional()
+	}, (a) => {
+		if (a.patterns) {
+			lab.trends.setPatterns(a.patterns);
+		}
+		return { patterns: lab.trends.getPatterns(), recording: lab.trends.channels() };
 	});
 
 	// ---- classifier & notifications ----------------------------------------

@@ -139,6 +139,14 @@ const api = (lab) => {
 		const decision = req.body.approve === true ? "approved" : "denied";
 		return lab.safety.decide(req.params.id, decision, (req.who && req.who.name) || "local");
 	}));
+	router.get("/trends/:channel", route((req) => lab.trends.read(req.params.channel, {
+		from: Number(req.query.from) || undefined, to: Number(req.query.to) || undefined, points: Number(req.query.points) || undefined
+	})));
+	router.get("/trends", route(() => ({ patterns: lab.trends.getPatterns(), recording: lab.trends.channels() })));
+	router.put("/trends", route((req) => {
+		lab.trends.setPatterns(req.body.patterns || []);
+		return { patterns: lab.trends.getPatterns() };
+	}));
 	router.get("/classifier", route(() => lab.classifier.status({ limit: 200 })));
 	router.post("/classifier/templates", route((req) => lab.classifier.addTemplate(req.body)));
 	router.delete("/classifier/templates/:name", route((req) => lab.classifier.removeTemplate(req.params.name)));

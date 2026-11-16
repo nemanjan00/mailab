@@ -69,6 +69,10 @@ const TYPES = {
 		description: "editor for a flowgraph device: blocks, links, live rates and errors",
 		config: { device: "flowgraph device id" }
 	},
+	trend: {
+		description: "long-term trends (Grafana-like): recorded channels over 5 min … 30 days, mean line in a min/max band",
+		config: { channels: "[recorded channel names] (see trend_record)", range: "5m|1h|6h|24h|7d|30d (default 6h)" }
+	},
 	classifier: {
 		description: "log classifier: templates with counts (numbers recorded as channels) and unclassified line clusters; turn clusters into templates",
 		config: {}

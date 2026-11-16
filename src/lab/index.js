@@ -16,6 +16,8 @@ const math = require("../math");
 const plotModule = require("../plot");
 const safetyModule = require("../safety");
 const classifyModule = require("../classify");
+const trendsModule = require("../trends");
+const pathModule = require("path");
 const panesModule = require("../panes");
 const storeModule = require("../store");
 
@@ -78,7 +80,8 @@ const create = (options) => {
 			panes: panes.list(),
 			chat: chat.slice(-CHAT_PERSISTED),
 			safety: lab.safety.snapshot(),
-			classifier: { templates: lab.classifier.snapshot() }
+			classifier: { templates: lab.classifier.snapshot() },
+			trends: lab.trends.snapshot()
 		};
 	};
 
@@ -131,6 +134,7 @@ const create = (options) => {
 	};
 
 	let stopSafety = null;
+	let stopTrends = null;
 
 	const lab = {
 		events: events,
@@ -156,6 +160,7 @@ const create = (options) => {
 			}
 			runDerived(name, t, depth || 0);
 			lab.safety.onSample(name);
+			lab.trends.sample(name, t, v);
 		},
 
 		drainPending: () => {
@@ -675,6 +680,7 @@ const create = (options) => {
 			lab.classifier.restore();
 			lab.safety.restore();
 			stopSafety = lab.safety.start();
+			stopTrends = lab.trends.start();
 			if (!saved.panes) {
 				DEFAULT_PANES.forEach(panes.add);
 			}
@@ -698,6 +704,9 @@ const create = (options) => {
 			if (stopSafety) {
 				stopSafety();
 			}
+			if (stopTrends) {
+				stopTrends();
+			}
 			return Promise.all(Object.keys(instances).map((id) => {
 				const inst = instances[id];
 				if (!inst.instance) {
@@ -714,6 +723,7 @@ const create = (options) => {
 
 	lab.safety = safetyModule.create(lab, saved.safety);
 	lab.safety.changed = changed;
+	lab.trends = trendsModule.create(pathModule.join(options.dataDir, "trends"), saved.trends);
 	lab.classifier = classifyModule.create(lab, saved.classifier);
 	lab.classifier.changed = changed;
 

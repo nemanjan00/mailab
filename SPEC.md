@@ -20,6 +20,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Charts, live preview | ✅ | chart, trace, waterfall, value panes |
 | Multiple instances of every device | ✅ | auto ids, port registry, shared CI-V bus and MDP radio bridge, unit selection (serial/path/port/conn) |
 | Multi-call scripts ("script" = multi-MCP-call) for better timing | ✅ | `batch` tool: steps with `at`/`delayMs`/`repeat`/`intervalMs`, `$name.path` result references, loops, ~1 ms accuracy |
+| Python UI SDK: custom panes | ⬜ | declarative pane spec (rows/columns of SDK elements: value readout, button → device command, slider, numeric field, chart, table, text) rendered by a `custom` pane; `python/mailab_ui.py` builders so bridges ship their own control panels; MCP `pane_add type custom` for the AI |
 | GUI SDK for readable panes | 🟡 | `public/sdk/`: `pane()` (reactive config, auto-dispose), `table`, `feed`, `iconButton`, `empty`, `toolbar`, `field`, `widget` (uPlot/canvas composed in, disposed with the scope). Panes on it: devices, channels, activity, chat. Next: log, value, json, kaitai, flowgraph, image, audio; then chart/trace via `widget` |
 | Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
 | Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | app store is qrp `state()` (lab state, activity/chat feeds, live values at 4 Hz in `batch`); 4 panes migrated via the SDK; imperative panes still work against the same store |
@@ -55,7 +56,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | markdown panes (+ KaTeX) | 🟡 | done: rendering, editing, AI `note` tool. Planned: live values inside notes (`{{channel}}`, `{{= expr}}`) |
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
 | Kaitai view | ✅ | lab blobs (devices/AI/upload) + server-side Kaitai (compiler in debug mode): field tree with byte ranges + hex dump with highlight; MCP `blob_write`/`blob_read`/`kaitai_parse` |
-| Grafana-like long-term trends | ⬜ | persistent, downsampled history per channel (min/max/mean buckets: 1 s → 1 min → 1 h tiers) on disk; trend pane with timeframe picker (5 min … 30 days), zoom, multiple channels/axes; e.g. battery charging curves over hours |
+| Grafana-like long-term trends | ✅ | `src/trends`: recorded channels (glob patterns; defaults `*_v *_i *_p *_temp *_vin cls_*`) → min/max/mean buckets at 1 s (6 h), 10 s (3 d), 1 min (30 d), 1 h (2 y), appended to `DATA_DIR/trends`, reloaded at boot; queries use the finest tier covering the range, merged to the point budget; late samples merge. Trend pane (5 min … 30 d, mean line in min/max band); MCP `trend_read` (relative times like -24h) / `trend_record`. Verified with a 24 h CC/CV battery charge, incl. restart |
 | Configurable MCP notifications / subscriptions | ✅ | central `lab.notify` (rule, approval, trigger, cluster digests, template matches, raw lines); MCP `subscribe` (types + device/template/regex filters) → `notifications/message` on the session (logging capability; verified end to end with the SDK client); `notifications_read` to poll; channel bridge pushes rule/approval/trigger/cluster (`MAILAB_SUBSCRIBE`). Fixing it showed HTTP chat notifications had been silently dropped (missing logging capability) |
 | Log classification (reference: diversity-classifier) | ✅ | `src/classify`: device lines (rx/uart/stdout/…) normalized (<num> <hex> <ip> <uuid>) into clusters; templates (`classifier_add`) count matches → `cls_<name>`, numbers recorded as `cls_<name>_1…` for charting; templates absorb their backlog; new clusters → debounced digest notifications; classifier pane (clusters → template in one click). Verified on live console traffic. Next: glitch reply classes from templates |
 | Shared terminals (shell-session-mcp) | ⬜ | github.com/nemanjan00/shell-session-mcp: PTY sessions (bash, gdb, openocd, serial consoles) as a `shell` device + terminal pane (xterm.js), driven by both the user and the AI; output pushes like its `notifications/message` events |
@@ -157,7 +158,6 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-3. Long-term trends (Grafana-like timeframes)
 4. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
 5. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry
 6. MHO900 siggen; Soapy TX block with an allow-TX + power gate
@@ -274,3 +274,5 @@ Next:
 104. tigard
 105. update spec
 106. reviewer: rule actions skip approval; restored locked rule replaceable via id collision; rule eval errors silent; same-machine agent can approve itself
+107. python headers for ui sdk elements, so it can build custom panes
+108. python venv?

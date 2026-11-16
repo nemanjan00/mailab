@@ -353,3 +353,7 @@ dialog.help p { margin: 6px 0; }
 .region.low { color: var(--c1); }
 .diff-rows { font-size: 12px; white-space: pre; margin-top: 6px; }
 .diff-row .hit { background: var(--c4); color: var(--on-accent); border-radius: 2px; }
+
+/* trends */
+.trend { height: 100%; display: flex; flex-direction: column; }
+.trend .widget { flex: 1; }
