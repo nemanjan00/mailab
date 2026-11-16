@@ -89,12 +89,13 @@ const create = (options, io) => {
 	const cli = options.cli || config.get("SIGROK_CLI");
 	let streamProc = null;
 
-	const run = (args) => {
+	// encoding "buffer" for binary output (-O binary)
+	const run = (args, encoding) => {
 		io.log(cli + " " + args.join(" "), "tx");
 		return new Promise((resolve, reject) => {
-			execFile(cli, args, { maxBuffer: MAX_OUTPUT_BYTES }, (err, stdout, stderr) => {
+			execFile(cli, args, { maxBuffer: MAX_OUTPUT_BYTES, encoding: encoding || "utf8" }, (err, stdout, stderr) => {
 				if (err) {
-					reject(new Error((stderr || err.message).trim()));
+					reject(new Error((String(stderr || "") || err.message).trim()));
 					return;
 				}
 				resolve(stdout);
@@ -205,6 +206,14 @@ const create = (options, io) => {
 					};
 				});
 			}
+			if (name === "capture_blob") {
+				// raw logic (one byte per sample per 8 channels) for the flowgraph decode command / block
+				const blobName = a.name || "logic";
+				return run(baseArgs(a).concat(acquisition(a), ["-O", "binary"]), "buffer").then((out) => {
+					io.blob(blobName, out);
+					return { blob: io.id + "_" + blobName, bytes: out.length, samplerate: a.samplerate || (options.config || {}).samplerate || null };
+				});
+			}
 			if (name === "decode") {
 				// e.g. decoders: ["uart:rx=D0:baudrate=115200"], annotations: "uart=rx-data"
 				const decoders = [].concat(a.decoders || []).reduce((acc, d) => {
@@ -242,6 +251,7 @@ module.exports = {
 		scan: "list connected sigrok devices",
 		show: "device options",
 		capture: "{samples | time, samplerate, channels, name} -> trace (x = seconds, logic channels stacked)",
+		capture_blob: "{samples | time, samplerate, channels, name} -> raw logic blob <device>_<name> (u8 per sample up to 8 channels, u16 above) for flowgraph decode {blob}",
 		decode: "{samples | time, samplerate, channels, decoders: [\"uart:rx=D0:baudrate=115200\"], annotations: \"uart=rx-data\"}"
 	},
 	create: create,

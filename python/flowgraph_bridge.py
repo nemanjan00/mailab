@@ -21,6 +21,7 @@ import numpy as np
 import liquid_dsp as dsp
 import mailab_bridge as lab
 import modem
+import protocol_decode as pdec
 
 TICK = 0.02
 
@@ -696,6 +697,79 @@ class UartRx(Block):
         return None
 
 
+class Decode(Throttled):
+    kind = "sink"
+    doc = ("protocol decoder on logic samples (bit k of each input word = channel k; analog/float input is thresholded "
+           "into channel 0): libsigrokdecode decoder scripts (uart spi i2c can onewire_link spiflash... any installed id, "
+           "stack for stacked decoders) or builtin numpy uart/spi/i2c/manchester. Annotations -> value <device>_<id> "
+           "(table of the last rows), event <device>_<id>, log lines per class, blob of decoded data bytes, count channel")
+    params = {"decoder": ("uart", "decoder id (sigrok id or builtin uart|spi|i2c|manchester)"),
+              "engine": ("auto", "auto (sigrok if installed, else builtin) | sigrok | builtin"),
+              "options": ({}, "decoder options, sigrok names, e.g. {baudrate: 9600, parity: 'even'} / {cpol, cpha} / {bitrate, convention}"),
+              "channels": ({}, "decoder channel -> input bit, e.g. {clk: 0, mosi: 1, cs: 3} (default per decoder)"),
+              "stack": ([], "stacked decoders, e.g. ['spiflash'] or [{id, options}]"),
+              "samplerate": (0, "Hz; 0 = the input stream rate"), "threshold": (None, "analog threshold (default adaptive)"),
+              "annotations": ([], "annotation classes kept (default all but per-bit ones)"),
+              "keep": (200, "rows kept in the value"), "fps": (4, "value/event updates per second")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.dec = None
+        self.rows = []
+        self.new = []
+        self.count = 0
+        self.data = b""
+        self.reported_error = None
+
+    def accept(self, ann):
+        wanted = self.p["annotations"]
+        if wanted:
+            return ann["class"] in wanted or "%s=%s" % (ann["decoder"], ann["class"]) in wanted
+        return not ann["class"].endswith("bit") and not ann["class"].endswith("-bits")
+
+    def work(self, x, rate):
+        if self.dec is None:
+            r = float(self.p["samplerate"]) or rate
+            self.dec = pdec.ProtocolDecoder(self.p["decoder"], r, options=self.p["options"], channels=self.p["channels"],
+                                            engine=self.p["engine"], stack=self.p["stack"], threshold=self.p["threshold"])
+            lab.log("%s: %s decoder %s at %g Hz, channels %s" % (self.id, self.dec.engine, self.p["decoder"], r, self.dec.channels))
+        self.consume(self.dec.feed(x))
+        return None
+
+    def consume(self, anns):
+        if self.dec.error and self.dec.error != self.reported_error:
+            self.reported_error = self.dec.error
+            lab.log("%s: decoder stopped: %s" % (self.id, self.dec.error), "error")
+        anns = [a for a in anns if self.accept(a)]
+        self.new += anns
+        self.count += len(anns)
+        self.data = (self.data + pdec.data_bytes(anns))[-65536:]
+        if self.new and self.due():
+            self.publish()
+
+    def publish(self):
+        new, self.new = self.new, []
+        self.rows = (self.rows + new)[-int(self.p["keep"]):]
+        by_class = {}
+        for a in new:
+            by_class.setdefault((a["decoder"], a["class"]), []).append(a["text"])
+        for (decoder, cls), texts in by_class.items():
+            lab.log("%s: %s %s: %s" % (self.id, decoder, cls, " ".join(texts[:64]) + (" …" if len(texts) > 64 else "")), "decode")
+        lab.value(self.id, {"decoder": self.p["decoder"], "engine": self.dec.engine, "count": self.count,
+                            "error": self.dec.error, "columns": ["t", "decoder", "class", "text", "ss", "es"], "rows": self.rows})
+        lab.event(self.id, {"decoder": self.p["decoder"], "new": len(new), "count": self.count,
+                            "last": [a["text"] for a in new[-8:]]})
+        lab.sample(self.id + "_count", self.count, "")
+        if self.data:
+            lab.blob(self.id, self.data)
+
+    def close(self):
+        if self.dec is not None:
+            self.consume(self.dec.flush())
+            if self.new:
+                self.publish()
+
+
 class Python(Block):
     doc = "scriptable block: params.code defines work(x, rate) -> y or (y, rate); np, dsp, modem, lab (sample/log/event/value/blob) and state are in scope"
     params = {"code": ("def work(x, rate):\n    return x * 2", "python source")}
@@ -989,10 +1063,13 @@ class Wav(Block):
 # network IQ ---------------------------------------------------------------
 
 def _decode_iq(data, fmt):
-    """raw bytes -> complex64; returns (samples, leftover bytes)"""
-    size = {"cf32": 8, "cs16": 4, "cu8": 2}[fmt]
+    """raw bytes -> complex64 (IQ formats) or logic words (u8/u16/u32 samples,
+    bits = packed MSB first); returns (samples, leftover bytes)"""
+    size = {"cf32": 8, "cs16": 4, "cu8": 2, "u8": 1, "u16": 2, "u32": 4, "bits": 1}[fmt]
     usable = len(data) - len(data) % size
     raw, rest = data[:usable], data[usable:]
+    if fmt in pdec.WORD_FORMATS:
+        return pdec.words_from_bytes(raw, fmt), rest
     if fmt == "cf32":
         return np.frombuffer(raw, dtype=np.complex64).copy(), rest
     if fmt == "cs16":
@@ -1003,6 +1080,8 @@ def _decode_iq(data, fmt):
 
 
 def _encode_iq(x, fmt):
+    if fmt in pdec.WORD_FORMATS:
+        return pdec.words_to_bytes(x, fmt)
     x = np.asarray(x, dtype=np.complex64)
     if fmt == "cf32":
         return x.tobytes()
@@ -1097,12 +1176,14 @@ class _NetEndpoint:
 
 
 NET_PARAMS = {"mode": ("tcp-server", "tcp-server|tcp-client|udp"), "host": ("127.0.0.1", "bind (server/udp in) or remote host"),
-              "port": (5600, ""), "format": ("cf32", "cf32|cs16|cu8 interleaved I/Q")}
+              "port": (5600, ""),
+              "format": ("cf32", "cf32|cs16|cu8 interleaved I/Q, or logic: u8|u16|u32 words per sample, bits (packed, MSB first)")}
 
 
 class NetSource(Block):
     kind = "source"
-    doc = "IQ in over TCP/UDP (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams"
+    doc = ("IQ in over TCP/UDP (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams; "
+           "or logic samples (u8/u16/u32/bits) for decode")
     params = dict(NET_PARAMS, rate=(1e6, "sample rate of the incoming stream"))
 
     def __init__(self, bid, params):
@@ -1149,6 +1230,7 @@ BLOCKS = {
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
     "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,
     "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger, "uart_tx": UartTx, "uart_rx": UartRx,
+    "decode": Decode,
 }
 
 
@@ -1345,6 +1427,54 @@ def run(args):
     return {"running": graph.running}
 
 
+def _external_words(args):
+    """{data (base64) | hex | bits ("0110…") | levels [..], format} -> words"""
+    if args.get("bits") is not None:
+        return np.array([int(c) for c in str(args["bits"]) if c in "01"], dtype=np.uint32)
+    if args.get("levels") is not None:
+        return np.asarray(args["levels"])
+    if args.get("hex") is not None:
+        raw = bytes.fromhex(str(args["hex"]))
+    elif args.get("data") is not None:
+        raw = base64.b64decode(args["data"])
+    else:
+        raise ValueError("give data (base64), hex, bits or levels")
+    return pdec.words_from_bytes(raw, args.get("format", "u8"))
+
+
+@bridge.command("feed", "{block, data|hex|bits|levels, format: u8|u16|u32|bits, rate} push external samples into a block (e.g. decode)")
+def feed(args):
+    if args.get("block") not in graph.blocks:
+        raise ValueError("unknown block: %s" % args.get("block"))
+    x = _external_words(args)
+    graph.push(args["block"], x, float(args["rate"]))
+    block = graph.blocks[args["block"]]
+    if isinstance(block, Decode) and block.new:
+        block.publish()
+    return {"samples": len(x), "error": graph.errors.get(args["block"])}
+
+
+@bridge.command("decode", "{decoder, samplerate, data|hex|bits|levels, format, options, channels, stack, engine, annotations, name?} "
+                "one-shot protocol decode of an external capture -> annotations (+ value/log <device>_<name>)")
+def decode_once(args):
+    x = _external_words(args)
+    anns = pdec.decode(x, float(args["samplerate"]), args.get("decoder", "uart"), options=args.get("options"),
+                       channels=args.get("channels"), engine=args.get("engine", "auto"), stack=args.get("stack"),
+                       threshold=args.get("threshold"))
+    wanted = args.get("annotations")
+    if wanted:
+        anns = [a for a in anns if a["class"] in wanted or "%s=%s" % (a["decoder"], a["class"]) in wanted]
+    data = pdec.data_bytes(anns)
+    if args.get("name"):
+        lab.value(args["name"], {"decoder": args.get("decoder", "uart"), "count": len(anns),
+                                 "columns": ["t", "decoder", "class", "text", "ss", "es"], "rows": anns[-2000:]})
+        lab.log("%s: %d annotations, %d data bytes" % (args["name"], len(anns), len(data)), "decode")
+        if data:
+            lab.blob(args["name"], data)
+    return {"engine": pdec.pick_engine(args.get("decoder", "uart"), args.get("engine", "auto")), "samples": len(x),
+            "count": len(anns), "annotations": anns[:5000], "data_hex": data.hex()}
+
+
 @bridge.command("stats", "per-block samples in/out, rate, last error")
 def get_stats(_args):
     return stats()
@@ -1352,6 +1482,10 @@ def get_stats(_args):
 
 def publish_stats():
     lab.emit({"type": "value", "name": "stats", "value": stats()})
+    # decode rows held back by the fps limit (e.g. the stream went quiet)
+    for block in graph.blocks.values():
+        if isinstance(block, Decode) and block.new:
+            block.publish()
 
 
 parser = argparse.ArgumentParser()
