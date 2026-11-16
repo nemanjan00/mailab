@@ -48,6 +48,7 @@ const create = (options) => {
 	const traces = {};
 	const images = {};
 	const values = {};
+	const blobs = {};
 	const logs = [];
 	const activity = [];
 	const derived = {};
@@ -269,6 +270,31 @@ const create = (options) => {
 		},
 
 		/**
+		 * Named binary data: memory dumps, captures, received frames.
+		 */
+		setBlob: (name, data, source) => {
+			const isNew = !blobs[name];
+			blobs[name] = { name: name, source: source || "", data: Buffer.from(data), t: Date.now() };
+			if (isNew) {
+				events.emit("state");
+			}
+			events.emit("blob", { name: name });
+		},
+
+		getBlob: (name) => {
+			if (!blobs[name]) {
+				throw new Error("unknown blob: " + name);
+			}
+			return blobs[name];
+		},
+
+		listBlobs: () => {
+			return Object.keys(blobs).sort().map((name) => {
+				return { name: name, source: blobs[name].source, bytes: blobs[name].data.length, t: blobs[name].t };
+			});
+		},
+
+		/**
 		 * Audio is streamed, not stored: chunks go straight to listening browsers.
 		 */
 		pushAudio: (name, rate, data) => {
@@ -368,6 +394,9 @@ const create = (options) => {
 				},
 				value: (name, value) => {
 					lab.setValue(field(name), value, id);
+				},
+				blob: (name, data) => {
+					lab.setBlob(field(name), data, id);
 				},
 				audio: (name, rate, data) => {
 					lab.pushAudio(field(name), rate, data);
@@ -532,6 +561,7 @@ const create = (options) => {
 				traces: lab.listTraces(),
 				images: lab.listImages(),
 				values: lab.listValues(),
+				blobs: lab.listBlobs(),
 				derived: lab.listDerived(),
 				panes: panes.list(),
 				paneTypes: panesModule.TYPES

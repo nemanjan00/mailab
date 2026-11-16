@@ -13,6 +13,7 @@
 //   {"type": "value", "name": "graph", "value": {...}}      any JSON document
 //   {"type": "audio", "name": "out", "rate": 24000, "data": "<base64 int16 LE>"}
 //   {"type": "options", "options": {...}}                    merged into the device options (persisted)
+//   {"type": "blob", "name": "dump", "data": "<base64>"}     binary data (dumps, frames)
 //   {"type": "result", "id": 1, "result": {...}} | {"type": "result", "id": 1, "error": "..."}
 // lab -> helper (stdin):
 //   {"id": 1, "command": "set_voltage", "args": {...}}
@@ -55,6 +56,9 @@ const create = (options, io) => {
 		},
 		audio: (msg) => {
 			io.audio(msg.name, msg.rate, msg.data);
+		},
+		blob: (msg) => {
+			io.blob(msg.name, Buffer.from(msg.data, "base64"));
 		},
 		options: (msg) => {
 			io.setOptions(msg.options);

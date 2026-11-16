@@ -296,3 +296,14 @@ details > summary { cursor: pointer; display: inline; }
 table.readings td, table.readings th { padding: 2px 8px; font-size: 12px; }
 .measurements { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 10px; font: 12px var(--mono); }
 .measurements > span { white-space: nowrap; }
+
+/* kaitai */
+.kaitai { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); height: 100%; }
+.k-tree { overflow: auto; border-right: 1px solid var(--line); }
+.k-hex { overflow: auto; padding: 8px 10px; font-size: 12px; white-space: pre; }
+.k-hex .hit { background: var(--c4); color: var(--on-accent); border-radius: 2px; }
+.k-range { color: var(--muted); cursor: pointer; font-size: 11px; }
+.k-range:hover, .k-range.on { color: var(--c1); }
+.err { color: var(--err); }
+@media (max-width: 700px) { .kaitai { grid-template-columns: 1fr; } }
+ul.tree li > details { display: inline; }

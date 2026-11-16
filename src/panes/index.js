@@ -58,6 +58,10 @@ const TYPES = {
 		description: "collapsible JSON view of a lab value",
 		config: { value: "value name, e.g. fg_stats", depth: "levels expanded (default 2)" }
 	},
+	kaitai: {
+		description: "parse a lab blob with a Kaitai Struct .ksy: field tree with byte ranges + hex dump (click a range to highlight)",
+		config: { blob: "blob name", ksy: ".ksy YAML source", depth: "levels expanded (default 2)" }
+	},
 	flowgraph: {
 		description: "editor for a flowgraph device: blocks, links, live rates and errors",
 		config: { device: "flowgraph device id" }

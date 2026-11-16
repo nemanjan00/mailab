@@ -9,6 +9,7 @@ const StreamableHTTPServerTransport = require("@modelcontextprotocol/sdk/server/
 const mcp = require("../mcp");
 const math = require("../math");
 const devices = require("../devices");
+const kaitai = require("../kaitai");
 
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
@@ -72,6 +73,21 @@ const api = (lab) => {
 	}));
 	router.put("/values/:name", route((req) => {
 		lab.setValue(req.params.name, req.body, "ui");
+	}));
+	router.get("/blobs/:name", (req, res) => {
+		try {
+			const blob = lab.getBlob(req.params.name);
+			res.type("application/octet-stream").send(blob.data);
+		} catch (err) {
+			res.status(404).json({ error: err.message });
+		}
+	});
+	router.put("/blobs/:name", express.raw({ type: "*/*", limit: "64mb" }), route((req) => {
+		lab.setBlob(req.params.name, req.body, "ui");
+		return { name: req.params.name, bytes: req.body.length };
+	}));
+	router.post("/kaitai", route((req) => {
+		return kaitai.parse(req.body.ksy, lab.getBlob(req.body.blob).data);
 	}));
 	router.get("/logs", route((req) => {
 		return lab.getLogs({ device: req.query.device, last: Number(req.query.last) || 300 });
@@ -195,6 +211,9 @@ const attachSockets = (server, lab, pushIntervalMs) => {
 		}, Math.max(0, wait));
 	});
 
+	lab.events.on("blob", (e) => {
+		broadcast({ type: "blob", name: e.name });
+	});
 	lab.events.on("value", (e) => {
 		broadcast({ type: "value", value: lab.getValue(e.name) });
 	});

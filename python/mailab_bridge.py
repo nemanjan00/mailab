@@ -63,6 +63,10 @@ def value(name, doc):
     emit({"type": "value", "name": name, "value": doc})
 
 
+def blob(name, data):
+    emit({"type": "blob", "name": name, "data": __import__("base64").b64encode(bytes(data)).decode()})
+
+
 def log(text, level="info"):
     emit({"type": "log", "text": str(text), "level": level})
 

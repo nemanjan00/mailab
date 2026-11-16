@@ -22,6 +22,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Multi-call scripts ("script" = multi-MCP-call) for better timing | ✅ | `batch` tool: steps with `at`/`delayMs`/`repeat`/`intervalMs`, `$name.path` result references, loops, ~1 ms accuracy |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
+| HTTP MCP for collaboration | 🟡 | done: Streamable HTTP MCP at `/mcp` (stateless, any number of clients). Planned: per-collaborator bearer tokens (+ read-only role), the client's name in the activity feed, opt-in non-localhost binding |
+| Collab chat (web UI + MCP) with MCP push notifications | ⬜ | shared chat between people (chat pane) and AIs (`chat_send`/`chat_read` tools); new messages pushed to connected AI sessions (stateful MCP sessions + Claude Code channel notifications) |
 | Run on the lab host `nemanjan00@10.69.1.91` (`lab`) | ⬜ | Feather nRF52840, EVGA XR1 capture, sigrok, minipro and hackrf live there. Options: run mailab there, or add remote device agents. **Needs a decision** |
 
 ## 2. Panes / views
@@ -36,7 +38,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | waterfall | ✅ | |
 | markdown panes (+ KaTeX) | 🟡 | done: rendering, editing, AI `note` tool. Planned: live values inside notes (`{{channel}}`, `{{= expr}}`) |
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
-| Kaitai view | ⬜ | parse binary blobs with a `.ksy` → tree (reuses the JSON tree) |
+| Kaitai view | ✅ | lab blobs (devices/AI/upload) + server-side Kaitai (compiler in debug mode): field tree with byte ranges + hex dump with highlight; MCP `blob_write`/`blob_read`/`kaitai_parse` |
 | Readings table for spectrum markers | ✅ | trace pane `markers` (peak / fixed x / Δ to another marker), `peaks: N` auto peaks, shift-click adds, × removes |
 | findus map preview | ⬜ | binned delay × length heatmap of glitch results (success rate per cell), like findus' own web view |
 | audio output | ✅ | audio pane plays lab audio streams (WebAudio); flowgraph `audio` sink |
@@ -54,6 +56,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
+| WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
 | TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
 | Scope: triggered display + max/min hold + averaging | ✅ | flowgraph `scope` sink: trigger rising/falling/none, level, auto/normal, pretrigger; traces live/max/min/avg; complex input → real/imag/mag |
@@ -87,6 +90,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | Glasgow | ⬜ | `glasgow` CLI applets |
 | RTL-SDR | 🟡 | via `soapy` driver / flowgraph `soapy` source with `driver=rtlsdr` (SoapyRTLSDR in the Docker image). Planned: `rtl_power` wideband sweep driver, `rtl_tcp` interop through the net IQ blocks |
 | Harogic HTRA spectrum analyzer | 🟡 | `harogic` driver: sweep → `spectrum` trace via vendor `libhtraapi` (ctypes, struct layouts checked against `htra_api.h` with the C compiler). Library from SAStudio4 on `lab` (desktop shortcut → `~/sastudio/SAStudio4_x86_64_4.4.55.50`). Device not on `lab`'s USB at the time; not run yet. Next: IQ streaming (IQS) as a flowgraph source |
+| DeepAce KC901K / KC908V | ⬜ | handheld RF analyzers, same vendor as the KC9531B (try its framing: 0xFE header + sum checksum); sweeps → spectrum trace |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher |
@@ -107,7 +111,6 @@ Done so far (in order): core, 21 drivers, flowgraph DSP, batch, multi-instance, 
 Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurements.
 
 Next:
-1. Kaitai view (+ blobs: minipro dumps, captures, net-received data)
 2. findus map preview (delay × length heatmap)
 3. Markdown live values (`{{channel}}`, `{{= expr}}`)
 4. MHO900 siggen; Soapy TX block with an allow-TX + power gate
@@ -180,3 +183,7 @@ Next:
 59. scope trigger preview... Vpp and similar measurements
 60. frequency too
 61. spec update
+62. websocket
+63. kc901k kc908v
+64. http mcp for collab
+65. mcp chat for collab, with web ui and mcp push notifications

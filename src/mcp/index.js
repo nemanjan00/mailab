@@ -5,6 +5,7 @@ const McpServer = require("@modelcontextprotocol/sdk/server/mcp.js").McpServer;
 const z = require("zod");
 const pkg = require("../../package.json");
 const batch = require("../batch");
+const kaitai = require("../kaitai");
 
 const MAX_POINTS = 500;
 const ARGS_PREVIEW = 160;
@@ -260,6 +261,47 @@ const create = (lab) => {
 	}, (a) => {
 		lab.setValue(a.name, a.value, "ai");
 		return { name: a.name };
+	});
+
+	tool("blob_write", "Store binary data as a blob (from base64 or hex), e.g. to parse with kaitai_parse or show in a kaitai pane", {
+		name: z.string(),
+		base64: z.string().optional(),
+		hex: z.string().optional()
+	}, (a) => {
+		let data;
+		if (a.base64 !== undefined) {
+			data = Buffer.from(a.base64, "base64");
+		} else if (a.hex !== undefined) {
+			data = Buffer.from(a.hex.replace(/\s+/g, ""), "hex");
+		} else {
+			throw new Error("give base64 or hex");
+		}
+		lab.setBlob(a.name, data, "ai");
+		return { name: a.name, bytes: data.length };
+	});
+
+	tool("blob_read", "Read part of a blob as hex", {
+		name: z.string(),
+		offset: z.number().optional(),
+		length: z.number().optional().describe("default 256, max 65536")
+	}, (a) => {
+		const blob = lab.getBlob(a.name);
+		const offset = a.offset || 0;
+		const length = Math.min(a.length || 256, 65536);
+		return { name: a.name, bytes: blob.data.length, offset: offset, hex: blob.data.slice(offset, offset + length).toString("hex") };
+	});
+
+	tool("kaitai_parse", "Parse a blob with a Kaitai Struct .ksy (YAML text): returns the field tree and each field's byte range", {
+		blob: z.string(),
+		ksy: z.string().describe(".ksy YAML source"),
+		ranges: z.boolean().optional().describe("include byte ranges (default true)")
+	}, (a) => {
+		return kaitai.parse(a.ksy, lab.getBlob(a.blob).data).then((result) => {
+			if (a.ranges === false) {
+				delete result.ranges;
+			}
+			return result;
+		});
 	});
 
 	tool("image_get", "Get an image (e.g. a scope screenshot) to look at", { name: z.string() }, (a) => {
