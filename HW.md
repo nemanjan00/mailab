@@ -31,7 +31,10 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 ## Per-instrument checklist
 
 ### mdp (MDP-P906)
-- [ ] Bring up with a paired module: `{"port": "/dev/ttyACM0"}` (pair first with the mdp CLI)
+- [x] `id` is required (the all-zero ID is unverified [INF]; an explicit `00000000` is allowed with a warning)
+- [x] `output` accepts only true/false/"on"/"off"; `set_voltage` limited to 0–30 V [INF rating] or lower `maxVolts`
+- [x] `set_current` disabled unless `allowSetCurrent: true`, until the unit is confirmed
+- [ ] Bring up with a paired module: `{"port": "/dev/ttyACM0", "id": "<radio_id.txt>"}` (pair first with the mdp CLI)
 - [ ] Poll returns several V/I samples per frame; work out their spacing and push them individually instead of averaging (TODO in `src/devices/mdp`)
 - [ ] Confirm the `set_current` unit (open question in mdp-p906 `STATE.md`)
 - [ ] Multiple modules: one device per module address
@@ -120,4 +123,7 @@ id (the channel prefix; leave it empty for `<driver>`, `<driver>2`, ...).
 ## Cross-cutting
 - [ ] udev rules / stable device paths (`/dev/serial/by-id/...`) in the docs
 - [ ] Device auto-detection (USB VID:PID → suggested driver)
-- [ ] Per-device safety limits (max voltage/current, TX allowed) enforced in the lab, not only in AI instructions
+- [x] Strict argument parsing for anything that switches hardware (`src/utils/args`, `parse_switch` in python bridges): no `Boolean("false") === true`
+- [x] mdp: voltage/current limits in the driver
+- [ ] Same limits for mp305 (`maxVolts`/`maxAmps`) and a TX allow-list for civ `ptt`
+- [ ] Lab-wide safety policy (per-device limits, "AI may transmit/power" switches) instead of per-driver options

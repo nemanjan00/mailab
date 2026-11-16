@@ -3,6 +3,7 @@
 // TODO: verify on hardware (written from the tinySA shell docs)
 
 const tty = require("../../services/tty");
+const parseSwitch = require("../../utils/args").parseSwitch;
 
 const PROMPT = "ch> ";
 const SCAN_TIMEOUT_MS = 30000;
@@ -97,7 +98,7 @@ const create = (options, io) => {
 				return Promise.resolve(settings);
 			}
 			if (name === "continuous") {
-				running = Boolean(args.on);
+				running = parseSwitch(args.on, "on");
 				loop();
 				return Promise.resolve({ running: running });
 			}

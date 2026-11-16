@@ -6,10 +6,16 @@
 const path = require("path");
 const wrapper = require("queue-promised").wrapper;
 const config = require("../../config");
+const args = require("../../utils/args");
 
 const DEFAULT_PORT = "/dev/ttyACM0";
 const DEFAULT_POLL_MS = 300;
 const HANDSHAKE_TRIES = 10;
+// P906 ratings: 30000 mV / 10000 mA fit the setpoint fields [INF, mdp-p906 PROTOCOL.md];
+// per-device maxVolts/maxAmps can only lower these
+const HW_MAX_VOLTS = 30;
+const HW_MAX_AMPS = 10;
+const ID_HELP = "the module's radio ID (hex4), printed by `mdp pair` and kept in mdp-p906 p906_backups/radio_id.txt";
 
 const loadHost = (hostPath) => {
 	const base = hostPath || config.get("MDP_HOST_PATH");
@@ -73,14 +79,26 @@ const average = (values) => {
 	}, 0) / values.length;
 };
 
+/**
+ * Resolve the per-device limit, which can only be stricter than the hardware's.
+ */
+const limit = (value, hardware, name) => {
+	if (value === undefined) {
+		return hardware;
+	}
+	return args.parseNumber(value, name, { min: 0, max: hardware });
+};
+
 const create = (options, io) => {
 	const host = loadHost(options.hostPath);
+	const maxVolts = limit(options.maxVolts, HW_MAX_VOLTS, "maxVolts");
+	const maxAmps = limit(options.maxAmps, HW_MAX_AMPS, "maxAmps");
 	const link = {
 		channel: options.channel || host.psu.DEFAULT_CHANNEL,
 		address: parseHex(options.address, host.psu.DEFAULT_ADDRESS),
 		order: options.order || 0,
 		slot: options.slot || 0,
-		id: parseHex(options.id, [0, 0, 0, 0]),
+		id: parseHex(options.id, null),
 		model: options.model || 2
 	};
 	const port = options.port || DEFAULT_PORT;
@@ -150,6 +168,15 @@ const create = (options, io) => {
 
 	return {
 		start: () => {
+			if (!link.id || link.id.length !== 4) {
+				return Promise.reject(new Error("option id is required: " + ID_HELP));
+			}
+			if (link.id.every((b) => {
+				return b === 0;
+			})) {
+				// mdp-p906 STATE.md: the firmware suggests polls accept it [INF], never tried on hardware
+				io.log("using all-zero module ID; this is unverified on hardware. If the module doesn't answer, set " + ID_HELP, "warn");
+			}
 			shared = acquireBridge(host, port, io.id);
 			return shared.opening
 				.then((bridge) => {
@@ -174,26 +201,48 @@ const create = (options, io) => {
 			return releaseBridge(port, io.id);
 		},
 
-		command: (name, args) => {
-			const actions = {
+		command: (name, params) => {
+			// validate everything before anything reaches the radio
+			const prepare = {
 				status: () => {
-					return psu.status();
+					return psu.status;
 				},
 				set_voltage: () => {
-					return psu.setVoltage(Math.round(Number(args.volts) * 1000));
+					const volts = args.parseNumber(params.volts, "volts", { min: 0, max: maxVolts, unit: "V" });
+					const millivolts = Math.round(volts * 1000);
+					return () => {
+						return psu.setVoltage(millivolts);
+					};
 				},
 				set_current: () => {
-					// unit not yet confirmed on hardware (mdp-p906 STATE.md)
-					return psu.setCurrent(Math.round(Number(args.amps) * 1000));
+					// mdp-p906 STATE.md: the setpoint unit is still open (mA, mA/2, 10 mA or 100 mA)
+					if (!options.allowSetCurrent) {
+						throw new Error("set_current is disabled until its unit is confirmed on hardware (mdp-p906 STATE.md); set device option allowSetCurrent: true to send it as mA anyway");
+					}
+					const amps = args.parseNumber(params.amps, "amps", { min: 0, max: maxAmps, unit: "A" });
+					const milliamps = Math.round(amps * 1000);
+					io.log("set_current " + milliamps + " mA: unit unconfirmed, check the module's screen", "warn");
+					return () => {
+						return psu.setCurrent(milliamps);
+					};
 				},
 				output: () => {
-					return psu.setOutput(Boolean(args.on));
+					const on = args.parseSwitch(params.on, "on");
+					return () => {
+						return psu.setOutput(on);
+					};
 				}
 			};
-			if (!actions[name]) {
+			if (!prepare[name]) {
 				return Promise.reject(new Error("unknown command: " + name));
 			}
-			return withLink(actions[name]).then((reply) => {
+			let op;
+			try {
+				op = prepare[name]();
+			} catch (err) {
+				return Promise.reject(err);
+			}
+			return withLink(op).then((reply) => {
 				return { ok: reply !== null, reply: reply };
 			});
 		}
@@ -207,16 +256,19 @@ module.exports = {
 		port: "bridge serial port (default /dev/ttyACM0); modules on one bridge share it",
 		address: "radio address hex5 (default e0d3c2b1a0)",
 		channel: "radio channel (default 78)",
-		id: "module radio id hex4",
+		id: "module radio ID hex4 (required): " + ID_HELP,
+		maxVolts: "voltage limit for this device, ≤ 30 V (default 30)",
+		maxAmps: "current limit for this device, ≤ 10 A (default 10)",
+		allowSetCurrent: "enable set_current although its unit is unconfirmed (default false)",
 		model: "model code (default 2)",
 		pollMs: "status poll period (default 300)",
 		hostPath: "path to mdp-p906/host (default MDP_HOST_PATH)"
 	},
 	commands: {
 		status: "raw status",
-		set_voltage: "{volts}",
-		set_current: "{amps} (unit unconfirmed on hardware)",
-		output: "{on: bool}"
+		set_voltage: "{volts} 0..maxVolts",
+		set_current: "{amps} 0..maxAmps; disabled unless allowSetCurrent (unit unconfirmed on hardware)",
+		output: "{on: true|false|\"on\"|\"off\"} anything else is rejected"
 	},
 	create: create
 };

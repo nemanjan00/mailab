@@ -3,6 +3,7 @@
 // TODO: verify on hardware; add SOL(T) calibration
 
 const tty = require("../../services/tty");
+const parseSwitch = require("../../utils/args").parseSwitch;
 
 const OP = { NOP: 0x00, READ: 0x10, READFIFO: 0x18, WRITE: 0x20, WRITE2: 0x21, WRITE8: 0x23 };
 const REG = {
@@ -180,7 +181,7 @@ const create = (options, io) => {
 				return Promise.resolve(settings);
 			}
 			if (name === "continuous") {
-				running = Boolean(args.on);
+				running = parseSwitch(args.on, "on");
 				loop();
 				return Promise.resolve({ running: running });
 			}

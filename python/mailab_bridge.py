@@ -25,6 +25,19 @@ import traceback
 _out_lock = threading.Lock()
 
 
+_SWITCH = {"on": True, "off": False, "true": True, "false": False}
+
+
+def parse_switch(value, name="value"):
+    """Strict on/off: bool or "on"/"off"/"true"/"false". bool("false") is True,
+    so never coerce hardware switches with bool()."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in _SWITCH:
+        return _SWITCH[value.strip().lower()]
+    raise ValueError('%s must be true/false or "on"/"off", got %r' % (name, value))
+
+
 def emit(msg):
     with _out_lock:
         sys.stdout.write(json.dumps(msg) + "\n")

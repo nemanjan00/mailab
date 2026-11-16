@@ -16,6 +16,28 @@ const INSTRUCTIONS = [
 	"Hardware can be damaged: confirm with the user before enabling power outputs, transmitting (ptt) or glitching unknown targets."
 ].join(" ");
 
+const PREVIEW_ARRAY_ITEMS = 6;
+const PREVIEW_STRING_CHARS = 80;
+
+// compact args for the activity feed: long arrays -> "[400 numbers]"
+const summarize = (value) => {
+	return JSON.stringify(value, (_key, v) => {
+		if (Array.isArray(v) && v.length > PREVIEW_ARRAY_ITEMS) {
+			let kind = "items";
+			if (v.every((x) => {
+				return typeof x === "number";
+			})) {
+				kind = "numbers";
+			}
+			return "[" + v.length + " " + kind + "]";
+		}
+		if (typeof v === "string" && v.length > PREVIEW_STRING_CHARS) {
+			return v.slice(0, PREVIEW_STRING_CHARS) + "…";
+		}
+		return v;
+	});
+};
+
 const downsample = (values, max) => {
 	if (values.length <= max) {
 		return values;
@@ -82,7 +104,7 @@ const create = (lab) => {
 	// register a tool whose handler returns a value or promise; records activity
 	const tool = (name, description, shape, handler) => {
 		server.registerTool(name, { description: description, inputSchema: shape }, (args) => {
-			const preview = JSON.stringify(args || {}).slice(0, ARGS_PREVIEW);
+			const preview = summarize(args || {}).slice(0, ARGS_PREVIEW);
 			return Promise.resolve()
 				.then(() => {
 					return handler(args || {});

@@ -36,9 +36,10 @@ def state(_args):
     return {k: v for k, v in vars(st).items() if isinstance(v, (int, float, str, bool))}
 
 
-@bridge.command("set_output", "{voltage, current, on} volts / amps / bool")
+@bridge.command("set_output", "{voltage, current, on} volts / amps / on: true|false|\"on\"|\"off\" (required)")
 def set_output(args):
-    psu.set_output(voltage=float(args["voltage"]), current=float(args["current"]), on=bool(args.get("on", True)))
+    on = lab.parse_switch(args["on"], "on")
+    psu.set_output(voltage=float(args["voltage"]), current=float(args["current"]), on=on)
     return {"ok": True}
 
 

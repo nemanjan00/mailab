@@ -5,6 +5,8 @@
 const EventEmitter = require("events");
 const config = require("../../config");
 const tty = require("../../services/tty");
+const parseSwitch = require("../../utils/args").parseSwitch;
+const parseNumber = require("../../utils/args").parseNumber;
 
 const DEFAULT_POLL_MS = 500;
 
@@ -114,12 +116,13 @@ const create = (options, io) => {
 					});
 				},
 				set_frequency: () => {
-					return radio.setFrequency(Math.round(Number(args.hz))).then(() => {
+					return radio.setFrequency(Math.round(parseNumber(args.hz, "hz", { min: 0, unit: "Hz" }))).then(() => {
 						return { ok: true };
 					});
 				},
 				ptt: () => {
-					if (args.on) {
+					// "false" must never key the transmitter
+					if (parseSwitch(args.on, "on")) {
 						return radio.transmit();
 					}
 					return radio.endTransmit();
