@@ -31,6 +31,10 @@ const run = (cmd, args, input) => {
 			err += d;
 		});
 		child.on("error", reject);
+		// `file -` reads only the head and exits: writing the rest of a large
+		// blob (a 16 MB flash dump) then fails with EPIPE, which would crash
+		// the server if unhandled. The exit code still decides the result.
+		child.stdin.on("error", () => {});
 		child.on("close", (code) => {
 			if (code !== 0) {
 				reject(new Error(cmd + ": " + (err.trim() || "exit " + code)));

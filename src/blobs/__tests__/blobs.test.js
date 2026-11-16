@@ -38,4 +38,11 @@ describe("blob analysis", () => {
 			}
 		});
 	}, 30000);
+
+	test("file identification of a large blob survives `file` closing stdin early (EPIPE)", () => {
+		// a blank 16 MB flash dump, like flashrom read
+		return blobs.fileType(Buffer.alloc(16 * 1024 * 1024, 0xff)).then((r) => {
+			expect(r).toHaveProperty("type");
+		});
+	}, 30000);
 });

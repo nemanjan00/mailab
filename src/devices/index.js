@@ -23,7 +23,11 @@ const DRIVERS = [
 	require("./flowgraph"),
 	require("./camera"),
 	require("./harogic"),
-	require("./replay")
+	require("./replay"),
+	require("./sysmon"),
+	require("./rtl_power"),
+	require("./flashrom"),
+	require("./minipro")
 ];
 
 const devices = {

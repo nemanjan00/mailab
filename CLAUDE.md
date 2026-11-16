@@ -22,6 +22,7 @@ MCP server + live web UI for a hardware lab the AI operates. See README.md
 - `src/kaitai`: server-side .ksy compile (debug mode) + parse → tree + byte ranges
 - `src/utils/args`: strict parsing for anything that switches hardware (`parseSwitch`, `parseNumber`); python side: `parse_switch`
 - `src/utils/units`, `src/utils/keypad`, `src/utils/placeholders`: pure CJS helpers the browser bundle imports too (engineering suffix parsing / unit buttons, keypad state, `{{channel|digits}}`); jest-tested. `public/sdk/number-field.js` (`numberField`) is the tablet keypad input for numeric setpoints
+- `src/utils/tool`: CLI-tool drivers (flashrom, minipro): `run` (execFile + arg arrays, stdin closed), `withTempDir`, `imageFrom` ({blob|file|data} via `io.getBlob`), `checkName`
 - `bin/channel.js`: stdio MCP "channel" bridge pushing lab chat into Claude Code (channels are stdio-only)
 - `src/web`: express REST (`/api`), WebSocket push (`/ws`), stateless Streamable HTTP MCP (`/mcp`)
 - `public/`: browser ES modules bundled by esbuild (`yarn build` → `public/build/`, gitignored; `yarn watch` rebuilds). Libraries (qrp, uPlot, GridStack, KaTeX, marked) and CSS are npm imports. `app.js` handles grid, state and ws; `panes/<type>.js` export `{mount(body, pane, ctx)}`. UI is moving to qrp (`@nemanjan00/qrp`): reactive `state()` + `el`/`list`/`when`, imperative charts composed in

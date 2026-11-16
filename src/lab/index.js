@@ -511,7 +511,7 @@ const create = (options) => {
 				blob: (name, data) => {
 					lab.setBlob(field(name), data, id);
 				},
-				// read any lab blob by its full name (external captures fed to decoders)
+				// any lab blob by its full name (captures fed to decoders, images to write/verify)
 				getBlob: (name) => {
 					return lab.getBlob(name).data;
 				},

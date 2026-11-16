@@ -8,7 +8,7 @@
 //
 // Approvals: an AI command matching the policy waits for a person to approve
 // it in the chat pane. Default policy: power outputs on, voltage above 5 V,
-// PTT, glitch campaigns, pairing.
+// PTT, glitch campaigns, pairing, chip write/erase (flashrom, minipro).
 
 const randomUUID = require("crypto").randomUUID;
 const math = require("../math");
@@ -25,7 +25,11 @@ const DEFAULT_POLICY = [
 	{ command: "campaign", reason: "arms a glitch campaign" },
 	{ command: "glitch", reason: "fires a glitch" },
 	{ command: "pair", reason: "pairs a radio module" },
-	{ command: "usb_power", reason: "switches power on a USB hub port (the device on it drops off the bus)" }
+	{ command: "usb_power", reason: "switches power on a USB hub port (the device on it drops off the bus)" },
+	{ driver: "flashrom", command: "write", reason: "overwrites a flash chip" },
+	{ driver: "flashrom", command: "erase", reason: "erases a flash chip" },
+	{ driver: "minipro", command: "write", reason: "overwrites a chip in the programmer" },
+	{ driver: "minipro", command: "erase", reason: "erases a chip in the programmer" }
 ];
 
 const truthy = (value) => {
