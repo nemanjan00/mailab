@@ -4,6 +4,7 @@
 const McpServer = require("@modelcontextprotocol/sdk/server/mcp.js").McpServer;
 const z = require("zod");
 const pkg = require("../../package.json");
+const batch = require("../batch");
 
 const MAX_POINTS = 500;
 const ARGS_PREVIEW = 160;
@@ -101,8 +102,12 @@ const toContent = (value) => {
 const create = (lab) => {
 	const server = new McpServer({ name: "mailab", version: pkg.version }, { instructions: INSTRUCTIONS });
 
+	// name -> handler, so batch can call tools directly
+	const handlers = {};
+
 	// register a tool whose handler returns a value or promise; records activity
 	const tool = (name, description, shape, handler) => {
+		handlers[name] = handler;
 		server.registerTool(name, { description: description, inputSchema: shape }, (args) => {
 			const preview = summarize(args || {}).slice(0, ARGS_PREVIEW);
 			return Promise.resolve()
@@ -327,6 +332,48 @@ const create = (lab) => {
 			changes.title = a.title;
 		}
 		return lab.panes.update(a.id, changes);
+	});
+
+	// ---- batch -----------------------------------------------------------
+
+	tool("batch", "Run several tool calls in one request with precise timing (~1 ms), instead of one round-trip per call. "
+		+ "Each step: {tool, args, name?, delayMs?, at?, repeat?, intervalMs?}. `at` = ms after batch start; `delayMs` = wait before the step; "
+		+ "`repeat`+`intervalMs` = run N times at a fixed rate. Use \"$name\" or \"$name.path\" in args to reuse an earlier step's result, "
+		+ "and loop: {var, values} to run all steps per value (\"$var\" in args). Returns per-call start time t (ms) and duration. "
+		+ "Example sweep: loop {var: \"v\", values: [1,2,3]}, steps [{tool: \"device_command\", args: {id: \"psu\", command: \"set_voltage\", args: {volts: \"$v\"}}}, {tool: \"channel_read\", delayMs: 50, args: {name: \"psu_i\", last: 1, maxPoints: 0}}]", {
+		steps: z.array(z.object({
+			tool: z.string(),
+			args: json.optional(),
+			name: z.string().optional(),
+			delayMs: z.number().optional(),
+			at: z.number().optional(),
+			repeat: z.number().optional(),
+			intervalMs: z.number().optional()
+		})),
+		loop: z.object({ var: z.string(), values: z.array(z.any()) }).optional(),
+		stopOnError: z.boolean().optional().describe("default true")
+	}, (a) => {
+		const invoke = (name, args) => {
+			if (name === "batch") {
+				return Promise.reject(new Error("batch cannot be nested"));
+			}
+			if (!handlers[name]) {
+				return Promise.reject(new Error("unknown tool: " + name));
+			}
+			const preview = "[batch] " + summarize(args).slice(0, ARGS_PREVIEW);
+			return Promise.resolve()
+				.then(() => {
+					return handlers[name](args);
+				})
+				.then((result) => {
+					lab.recordActivity({ tool: name, args: preview, ok: true });
+					return result;
+				}, (err) => {
+					lab.recordActivity({ tool: name, args: preview, ok: false, error: err.message });
+					throw err;
+				});
+		};
+		return batch.run(a.steps, { loop: a.loop, stopOnError: a.stopOnError }, invoke);
 	});
 
 	return server;
