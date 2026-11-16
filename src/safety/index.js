@@ -297,6 +297,54 @@ const create = (lab, saved) => {
 
 		listPending: () => Object.keys(pending).map((id) => pending[id].entry),
 
+		/**
+		 * Command runner for multi-step AI work (sweep, optimize). Every command
+		 * goes through the approval policy like device_command; `preapprove`
+		 * asks a person once for a whole plan instead of once per step.
+		 * @param {string} who actor shown in the approval request
+		 */
+		gate: (who) => {
+			// "device.command" pairs a person approved as part of a plan
+			const approved = {};
+			const ruleFor = (c) => safety.needsApproval(c.device, lab.getDevice(c.device).driver, c.command, c.args || {});
+			return {
+				/**
+				 * @param {{device: string, command: string, args: Object}[]} commands every command the plan may run
+				 * @param {string} label what the plan is ("sweep psu.set_voltage volts 1..12")
+				 * @returns {Promise<{needed: number}>} resolves when nothing needs approval or a person approved
+				 */
+				preapprove: (commands, label) => {
+					const hits = commands.map((c) => ({ c: c, rule: ruleFor(c) })).filter((h) => h.rule);
+					if (!hits.length) {
+						return Promise.resolve({ needed: 0 });
+					}
+					const pairs = hits.map((h) => h.c.device + "." + h.c.command).filter((p, i, all) => all.indexOf(p) === i);
+					const reasons = hits.map((h) => h.rule.reason || "approval required").filter((r, i, all) => all.indexOf(r) === i);
+					return safety.requestApproval({
+						who: who,
+						device: pairs.map((p) => p.split(".")[0]).filter((d, i, all) => all.indexOf(d) === i).join(","),
+						command: label,
+						args: { steps: commands.length, needApproval: hits.length, first: hits[0].c.args, last: hits[hits.length - 1].c.args },
+						reason: hits.length + " of " + commands.length + " steps: " + reasons.join("; ")
+					}).then(() => {
+						pairs.forEach((p) => {
+							approved[p] = true;
+						});
+						return { needed: hits.length };
+					});
+				},
+
+				run: (device, command, args) => {
+					const rule = ruleFor({ device: device, command: command, args: args });
+					if (!rule || approved[device + "." + command]) {
+						return lab.commandDevice(device, command, args || {});
+					}
+					return safety.requestApproval({ who: who, device: device, command: command, args: args || {}, reason: rule.reason || "approval required" })
+						.then(() => lab.commandDevice(device, command, args || {}));
+				}
+			};
+		},
+
 		// ---- persistence ------------------------------------------------------
 
 		changed: () => {},

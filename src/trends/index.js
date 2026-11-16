@@ -4,6 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const globToRegex = require("../utils/glob").toRegex;
 
 const TIERS = [
 	{ name: "1s", ms: 1000, keep: 6 * 3600 },
@@ -14,8 +15,6 @@ const TIERS = [
 const DEFAULT_PATTERNS = ["*_v", "*_i", "*_p", "*_temp", "*_vin", "cls_*"];
 const FLUSH_MS = 5000;
 const DEFAULT_POINTS = 1000;
-
-const globToRegex = (glob) => new RegExp("^" + glob.split("*").map((p) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
 
 /**
  * @param {string} dir DATA_DIR/trends

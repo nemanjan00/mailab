@@ -17,6 +17,8 @@ MCP server + live web UI for a hardware lab the AI operates. See README.md
 - `src/mcp`: MCP tools (identity-aware, read-only gating); every call is recorded via `lab.recordActivity`. `sessions.js`: stateful Streamable HTTP sessions (stateless fallback), `notifyAll` for push
 - `src/auth`: optional `MAILAB_TOKENS` (name:token:rw|ro), used by REST, `/mcp` and `/ws`
 - `src/batch`: multi-call scripts with ~1 ms timing (the `batch` tool)
+- `src/sweep`: `sweep` (1-2 parameter grid → table value + trace) and `optimize` (golden-section / hill-climb); device commands go through `lab.safety.gate(who)` (one approval per plan), never `lab.commandDevice` directly
+- `src/recordings`: record channel globs + traces/values/events/logs to `DATA_DIR/recordings/<name>.ndjson`; `src/devices/replay` plays one back (io.publish = unprefixed names)
 - `src/kaitai`: server-side .ksy compile (debug mode) + parse → tree + byte ranges
 - `src/utils/args`: strict parsing for anything that switches hardware (`parseSwitch`, `parseNumber`); python side: `parse_switch`
 - `src/utils/units`, `src/utils/keypad`, `src/utils/placeholders`: pure CJS helpers the browser bundle imports too (engineering suffix parsing / unit buttons, keypad state, `{{channel|digits}}`); jest-tested. `public/sdk/number-field.js` (`numberField`) is the tablet keypad input for numeric setpoints

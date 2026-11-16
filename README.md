@@ -148,6 +148,8 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | `pane_types`, `pane_add`, `pane_update`, `pane_remove`, `note` | the shared UI |
 | `chat_send`, `chat_read` | lab chat |
 | `batch` | many calls in one request, ~1 ms timing, loops, result references |
+| `sweep`, `optimize` | step 1-2 command parameters (linear/log/list) and tabulate channel readings; golden-section / hill-climb search for a min/max. One approval per plan when the policy matches |
+| `recording_start`, `recording_stop`, `recordings` | record channels (globs), traces, values, events and logs to ndjson; play back with the `replay` driver (prefix, speed, loop) |
 
 Every call shows up in the **AI activity** pane.
 
