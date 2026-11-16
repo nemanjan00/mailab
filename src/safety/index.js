@@ -9,7 +9,8 @@
 // Approvals: an AI command matching the policy waits for a person to approve
 // it in the chat pane. Default policy: power outputs on, voltage above 5 V,
 // PTT, glitch campaigns, pairing, chip write/erase (flashrom, minipro), MP305
-// mode / USB-PD / program changes, RfCat TX / replay / TX power.
+// mode / USB-PD / program changes, RfCat TX / replay / TX power, Cynthion
+// emulation / gateware / flash.
 
 const randomUUID = require("crypto").randomUUID;
 const math = require("../math");
@@ -40,7 +41,10 @@ const DEFAULT_POLICY = [
 	{ driver: "minipro", command: "erase", reason: "erases a chip in the programmer" },
 	{ driver: "rfcat", command: "tx", reason: "transmits on a sub-GHz radio (RfCat)" },
 	{ driver: "rfcat", command: "replay", reason: "retransmits a captured packet (RfCat)" },
-	{ driver: "rfcat", command: "power", reason: "changes the RfCat TX power" }
+	{ driver: "rfcat", command: "power", reason: "changes the RfCat TX power" },
+	{ driver: "cynthion", command: "emulate", reason: "connects an emulated USB device (Facedancer) to the target host; may load the facedancer gateware" },
+	{ driver: "cynthion", command: "gateware", reason: "reconfigures the Cynthion FPGA (facedancer also rewrites the SoC firmware flash region; custom bitstreams run as given)" },
+	{ driver: "cynthion", command: "flash", reason: "overwrites the Cynthion's configuration flash" }
 ];
 
 const policyKey = (p) => [p.driver || "", p.device || "", p.command, p.when || ""].join("|");
