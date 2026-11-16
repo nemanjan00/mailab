@@ -162,6 +162,7 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | `MAILAB_MANAGE_PYTHON` | `1` | `0` = don't manage a venv |
 | `MAILAB_MEDIA_DIRS` | – | extra dirs media tools and flowgraph file blocks may read/write (`DATA_DIR/media` always) |
 | `MAILAB_HTTP_ALLOW` | – | local mirrors web lookups may reach (hosts, CIDRs); everything else must be a public address |
+| `MAILAB_RF_REGION` | `eu` | radio TX allow-list for rfcat: `eu`, `us` or `none` (a lab setting: device options can only narrow it) |
 | `FCCID_MAX_BYTES` / `DATASHEET_MAX_BYTES` | 30 MB / 50 MB | download caps |
 | `MOUSER_API_KEY`, `NEXAR_CLIENT_ID`+`NEXAR_CLIENT_SECRET`, `DIGIKEY_CLIENT_ID`+`DIGIKEY_CLIENT_SECRET`, `SEARXNG_URL` | – | optional datasheet search providers (off while unset) |
 
