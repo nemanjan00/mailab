@@ -12,6 +12,7 @@ and per-block stats are published as lab values "<device>_graph" / "_stats".
 import argparse
 import base64
 import json
+import socket
 import time
 import wave
 
@@ -522,6 +523,158 @@ class Wav(Block):
         if hasattr(self, "w"):
             self.w.close()
 
+# network IQ ---------------------------------------------------------------
+
+def _decode_iq(data, fmt):
+    """raw bytes -> complex64; returns (samples, leftover bytes)"""
+    size = {"cf32": 8, "cs16": 4, "cu8": 2}[fmt]
+    usable = len(data) - len(data) % size
+    raw, rest = data[:usable], data[usable:]
+    if fmt == "cf32":
+        return np.frombuffer(raw, dtype=np.complex64).copy(), rest
+    if fmt == "cs16":
+        v = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    else:
+        v = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 127.5) / 127.5
+    return (v[0::2] + 1j * v[1::2]).astype(np.complex64), rest
+
+
+def _encode_iq(x, fmt):
+    x = np.asarray(x, dtype=np.complex64)
+    if fmt == "cf32":
+        return x.tobytes()
+    inter = np.empty(len(x) * 2, dtype=np.float32)
+    inter[0::2], inter[1::2] = x.real, x.imag
+    if fmt == "cs16":
+        return (np.clip(inter, -1, 1) * 32767).astype("<i2").tobytes()
+    return (np.clip(inter * 127.5 + 127.5, 0, 255)).astype(np.uint8).tobytes()
+
+
+class _NetEndpoint:
+    """tcp-server (one client at a time), tcp-client or udp; all non-blocking."""
+
+    def __init__(self, p, receiving):
+        self.mode, self.host, self.port = p["mode"], p["host"], int(p["port"])
+        self.conn = None
+        self.peer = None
+        if self.mode == "tcp-server":
+            self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.listener.bind((self.host, self.port))
+            self.listener.listen(1)
+            self.listener.setblocking(False)
+        elif self.mode == "udp":
+            self.conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.conn.setblocking(False)
+            if receiving:
+                self.conn.bind((self.host, self.port))
+            else:
+                self.peer = (self.host, self.port)
+        elif self.mode != "tcp-client":
+            raise ValueError("mode must be tcp-server, tcp-client or udp")
+
+    def ready(self):
+        if self.conn is not None:
+            return True
+        try:
+            if self.mode == "tcp-server":
+                self.conn, addr = self.listener.accept()
+                lab.log("net: client %s:%d connected" % addr)
+            else:
+                self.conn = socket.create_connection((self.host, self.port), timeout=0.2)
+                lab.log("net: connected to %s:%d" % (self.host, self.port))
+            self.conn.setblocking(False)
+            return True
+        except (BlockingIOError, OSError):
+            self.conn = None
+            return False
+
+    def dropped(self):
+        if self.mode != "udp" and self.conn is not None:
+            self.conn.close()
+            self.conn = None
+            lab.log("net: peer disconnected", "warn")
+
+    def recv(self):
+        if not self.ready():
+            return b""
+        chunks = []
+        while True:
+            try:
+                data = self.conn.recv(1 << 16)
+            except BlockingIOError:
+                break
+            except OSError:
+                self.dropped()
+                break
+            if not data:
+                if self.mode != "udp":
+                    self.dropped()
+                break
+            chunks.append(data)
+        return b"".join(chunks)
+
+    def send(self, data):
+        if not self.ready():
+            return
+        try:
+            if self.mode == "udp":
+                # keep datagrams under a typical MTU-friendly size
+                for i in range(0, len(data), 8192):
+                    self.conn.sendto(data[i:i + 8192], self.peer)
+            else:
+                self.conn.sendall(data)
+        except (BlockingIOError, BrokenPipeError, ConnectionResetError, OSError):
+            self.dropped()
+
+    def close(self):
+        for s in (self.conn, getattr(self, "listener", None)):
+            if s is not None:
+                s.close()
+
+
+NET_PARAMS = {"mode": ("tcp-server", "tcp-server|tcp-client|udp"), "host": ("127.0.0.1", "bind (server/udp in) or remote host"),
+              "port": (5600, ""), "format": ("cf32", "cf32|cs16|cu8 interleaved I/Q")}
+
+
+class NetSource(Block):
+    kind = "source"
+    doc = "IQ in over TCP/UDP (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams"
+    params = dict(NET_PARAMS, rate=(1e6, "sample rate of the incoming stream"))
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.net = _NetEndpoint(self.p, receiving=True)
+        self.rest = b""
+
+    def produce(self):
+        data = self.rest + self.net.recv()
+        if not data:
+            return None
+        x, self.rest = _decode_iq(data, self.p["format"])
+        return x, float(self.p["rate"])
+
+    def close(self):
+        self.net.close()
+
+
+class NetSink(Block):
+    kind = "sink"
+    doc = "IQ out over TCP/UDP (raw interleaved cf32/cs16/cu8)"
+    params = dict(NET_PARAMS)
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.net = _NetEndpoint(self.p, receiving=False)
+
+    def work(self, x, rate):
+        self.net.send(_encode_iq(x, self.p["format"]))
+        return None
+
+    def close(self):
+        self.net.close()
+
+
 
 BLOCKS = {
     "signal": SignalSource, "modulated": ModulatedSource, "file": FileSource, "soapy": SoapySource,
@@ -529,7 +682,7 @@ BLOCKS = {
     "symbol_sync": SymbolSync, "carrier_recovery": CarrierRecovery, "demod": Demod, "mag": Mag, "decimate": Decimate,
     "python": Python,
     "spectrum": Spectrum, "constellation": Constellation, "eye": Eye, "scope": Scope, "measure": Measure,
-    "audio": Audio, "wav": Wav,
+    "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
 }
 
 

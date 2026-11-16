@@ -55,7 +55,9 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
-| TCP/UDP IQ streaming in/out | ⬜ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP (interop: GNU Radio, SDR++, rtl_tcp-style clients) |
+| TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
+| Scope: triggered display + max/min hold + averaging | ⬜ | flowgraph `scope` sink: trigger edge/level/auto/normal/pre-trigger, traces live/max/min/avg (same as spectrum) |
+| Scope measurements: Vpp, Vmax, Vmin, RMS, mean, frequency, period, duty | ⬜ | computed per capture, channels `<dev>_<id>_<meas>` + measurement table in the trace pane |
 | libvolk | ⬜ | Not yet: the hot spots are per-symbol Python loops (carrier recovery, modem demod), and VOLK through ctypes wouldn't help. Move those loops into liquid/numpy/a small C helper first, then use VOLK kernels there |
 | Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |
 
@@ -170,3 +172,6 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 55. docker build
 56. fft, multi trace, rbw, averaging...
 57. rtl sdr
+58. max hold, min hold, everaging, including for scope
+59. scope trigger preview... Vpp and similar measurements
+60. frequency too
