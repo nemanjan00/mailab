@@ -27,7 +27,11 @@ const PREVIEW_STRING_CHARS = 80;
 
 // compact args for the activity feed: long arrays -> "[400 numbers]"
 const summarize = (value) => {
-	return JSON.stringify(value, (_key, v) => {
+	return JSON.stringify(value, (key, v) => {
+		// secrets in device options (vnc password) never reach the activity feed
+		if (key === "password" && v !== undefined && v !== "") {
+			return "***";
+		}
 		if (Array.isArray(v) && v.length > PREVIEW_ARRAY_ITEMS) {
 			let kind = "items";
 			if (v.every((x) => {

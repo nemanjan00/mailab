@@ -411,3 +411,12 @@ dialog.help a { color: var(--accent-2); }
 .terminal .widget { flex: 1; min-height: 0; background: #282a36; padding: 4px 0 0 6px; }
 .terminal .xterm { height: 100%; }
 .terminal .xterm-viewport, .terminal .xterm-scrollable-element { background-color: #282a36 !important; }
+
+/* remote desktop (noVNC) */
+.vnc { display: flex; flex-direction: column; height: 100%; }
+.vnc .toolbar { flex-wrap: wrap; padding: 4px 6px; background: var(--panel); }
+.vnc .toolbar button { width: auto; flex: none; }
+.vnc-toggle { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
+.vnc-toggle input { width: auto; margin: 0; accent-color: #bd93f9; }
+.vnc-clip { flex: 1 1 120px; min-width: 80px; width: auto; font-family: var(--mono); }
+.vnc .widget { flex: 1; min-height: 0; background: #282a36; overflow: hidden; }

@@ -35,6 +35,17 @@ const CHAT_PERSISTED = 200;
 const TERM_SCROLLBACK = 256 * 1024;
 const MAX_SCATTER_POINTS = 100000;
 const MAX_DERIVED_DEPTH = 8;
+// device options that are secrets: stored, but masked wherever devices are listed
+const SECRET_OPTIONS = ["password"];
+const SECRET_MASK = "***";
+
+const maskSecrets = (opts) => {
+	const out = Object.assign({}, opts);
+	SECRET_OPTIONS.filter((k) => out[k] !== undefined && out[k] !== "").forEach((k) => {
+		out[k] = SECRET_MASK;
+	});
+	return out;
+};
 
 const DEFAULT_PANES = [
 	{ type: "markdown", title: "mailab", x: 0, y: 0, w: 4, h: 4, config: { content: "# mailab\n\nThe AI owns this lab. Connect it over MCP at `/mcp`, or add devices and panes here.\n\n$$P = V \\cdot I$$" } },
@@ -662,7 +673,7 @@ const create = (options) => {
 			return {
 				id: id,
 				driver: inst.driver,
-				options: inst.options,
+				options: maskSecrets(inst.options),
 				state: inst.state,
 				detail: inst.detail,
 				commands: devices.get(inst.driver).commands

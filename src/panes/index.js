@@ -73,6 +73,10 @@ const TYPES = {
 		description: "web terminal (xterm.js, Dracula colors) for a uart device: ANSI colors and TUIs, raw keystrokes or line mode, live baud / format / line ending / hex view",
 		config: { device: "uart device id", mode: "raw (default) | line" }
 	},
+	vnc: {
+		description: "live remote desktop of a vnc device (noVNC): see and drive legacy GUIs with the AI; scale to fit, view-only, Ctrl-Alt-Del, clipboard send, screenshot to the lab",
+		config: { device: "vnc device id", viewOnly: "start view-only (default false)" }
+	},
 	usb: {
 		description: "USB tree: hubs, ports, devices with /dev nodes and the lab devices using them; power toggles on switchable hubs (uhubctl)",
 		config: {}
