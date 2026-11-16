@@ -27,8 +27,9 @@ import kaitai from "./panes/kaitai.js";
 import chat from "./panes/chat.js";
 import graph from "./panes/graph.js";
 import blob from "./panes/blob.js";
+import classifier from "./panes/classifier.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;

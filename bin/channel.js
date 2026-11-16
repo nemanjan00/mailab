@@ -22,6 +22,24 @@ const URL_BASE = process.env.MAILAB_URL || "http://127.0.0.1:3000";
 const NAME = process.env.MAILAB_NAME || "claude";
 const TOKEN = process.env.MAILAB_TOKEN || "";
 const RECONNECT_MS = 2000;
+// lab events pushed besides chat: rule, approval, trigger, cluster
+const SUBSCRIBE = (process.env.MAILAB_SUBSCRIBE || "rule,approval,trigger,cluster").split(",").map((t) => t.trim()).filter(Boolean);
+
+const describeEvent = (ev) => {
+	if (ev.type === "rule") {
+		return "safety rule " + ev.rule + " fired (" + ev.when + "): " + ev.action;
+	}
+	if (ev.type === "approval") {
+		return ev.who + " is waiting for approval: " + ev.device + "." + ev.command + " (" + ev.reason + ")";
+	}
+	if (ev.type === "cluster") {
+		return "new unclassified log lines: " + ev.clusters.map((c) => "×" + c.count + " " + c.signature).join("; ");
+	}
+	if (ev.type === "trigger") {
+		return "trigger " + ev.name + " on " + ev.device + ": " + JSON.stringify(ev);
+	}
+	return JSON.stringify(ev);
+};
 
 const headers = () => {
 	const out = { "content-type": "application/json" };
@@ -73,6 +91,13 @@ const follow = () => {
 	const socket = new WsClient(wsUrl, { headers: headers() });
 	socket.on("message", (raw) => {
 		const msg = JSON.parse(raw);
+		if (msg.type === "notify" && SUBSCRIBE.indexOf(msg.event.type) !== -1) {
+			server.notification({
+				method: "notifications/claude/channel",
+				params: { content: describeEvent(msg.event), meta: { kind: "event", type: msg.event.type } }
+			}).catch(() => null);
+			return;
+		}
 		if (msg.type !== "chat" || msg.message.from === NAME) {
 			return;
 		}

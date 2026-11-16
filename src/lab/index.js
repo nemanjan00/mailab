@@ -15,11 +15,13 @@ const devices = require("../devices");
 const math = require("../math");
 const plotModule = require("../plot");
 const safetyModule = require("../safety");
+const classifyModule = require("../classify");
 const panesModule = require("../panes");
 const storeModule = require("../store");
 
 const LOG_SIZE = 2000;
 const ACTIVITY_SIZE = 500;
+const NOTIFY_SIZE = 500;
 const CHAT_SIZE = 500;
 const CHAT_PERSISTED = 200;
 const MAX_SCATTER_POINTS = 100000;
@@ -56,6 +58,8 @@ const create = (options) => {
 	const logs = [];
 	const activity = [];
 	let activityId = 0;
+	const notifications = [];
+	let notifyId = 0;
 	const chat = (saved.chat || []).slice();
 	let chatId = chat.reduce((max, m) => Math.max(max, m.id), 0);
 	const derived = {};
@@ -73,7 +77,8 @@ const create = (options) => {
 			}),
 			panes: panes.list(),
 			chat: chat.slice(-CHAT_PERSISTED),
-			safety: lab.safety.snapshot()
+			safety: lab.safety.snapshot(),
+			classifier: { templates: lab.classifier.snapshot() }
 		};
 	};
 
@@ -338,6 +343,23 @@ const create = (options) => {
 		},
 
 		/**
+		 * Lab events for subscribers (MCP sessions, the channel bridge, the UI):
+		 * {type: rule | approval | trigger | cluster | match | line, ...}
+		 */
+		notify: (event) => {
+			notifyId++;
+			const full = Object.assign({ id: notifyId, t: Date.now() }, event);
+			ring(notifications, full, NOTIFY_SIZE);
+			events.emit("notify", full);
+			return full;
+		},
+
+		getNotifications: (options) => {
+			const opts = options || {};
+			return notifications.filter((n) => opts.since === undefined || n.id > opts.since).slice(-(opts.last || 100));
+		},
+
+		/**
 		 * Lab chat between people (web UI) and AIs (MCP).
 		 * @param {{from: string, kind: string, text: string, session: string}} msg
 		 *   kind "human" | "ai"; session: MCP session that sent it (not echoed back to it)
@@ -437,6 +459,9 @@ const create = (options) => {
 				},
 				blob: (name, data) => {
 					lab.setBlob(field(name), data, id);
+				},
+				event: (name, data) => {
+					lab.notify(Object.assign({ type: "trigger", device: id, name: field(name) }, data || {}));
 				},
 				audio: (name, rate, data) => {
 					lab.pushAudio(field(name), rate, data);
@@ -647,6 +672,7 @@ const create = (options) => {
 		// ---- lifecycle --------------------------------------------------
 
 		restore: () => {
+			lab.classifier.restore();
 			lab.safety.restore();
 			stopSafety = lab.safety.start();
 			if (!saved.panes) {
@@ -688,6 +714,8 @@ const create = (options) => {
 
 	lab.safety = safetyModule.create(lab, saved.safety);
 	lab.safety.changed = changed;
+	lab.classifier = classifyModule.create(lab, saved.classifier);
+	lab.classifier.changed = changed;
 
 	return lab;
 };

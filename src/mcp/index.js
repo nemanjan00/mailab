@@ -100,7 +100,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -117,7 +117,8 @@ const create = (lab, context) => {
 		const client = ctx.session && ctx.session.client;
 		return client ? who.name + "/" + client : who.name;
 	};
-	const server = new McpServer({ name: "mailab", version: pkg.version }, { instructions: INSTRUCTIONS });
+	// logging capability: subscribed lab events are sent as notifications/message
+	const server = new McpServer({ name: "mailab", version: pkg.version }, { instructions: INSTRUCTIONS, capabilities: { logging: {} } });
 
 	// name -> handler, so batch can call tools directly
 	const handlers = {};
@@ -508,6 +509,54 @@ const create = (lab, context) => {
 	}, (a) => {
 		return lab.getChat({ since: a.since, last: a.last || 50 });
 	});
+
+	// ---- classifier & notifications ----------------------------------------
+
+	tool("classifier_status", "Log classifier: templates (match counts) and the unclassified clusters of device lines (serial/UART/helpers), biggest first", {
+		limit: z.number().optional()
+	}, (a) => lab.classifier.status({ limit: a.limit }));
+
+	tool("classifier_add", "Teach the classifier a line template (placeholders <num> <hex> <ip> <uuid> <word> <*>). Matches count into channel cls_<name>; "
+		+ "numbers are recorded as cls_<name>_1, _2 … for charting. Matching clusters (the backlog) are absorbed", {
+		name: z.string(),
+		pattern: z.string().describe("e.g. \"temp=<num>C\" or \"client <uuid> failed to connect to <ip>:<num>\""),
+		record: z.boolean().optional().describe("record numeric fields as channels (default true)")
+	}, (a) => lab.classifier.addTemplate(a));
+
+	tool("classifier_remove", "Remove a classifier template", { name: z.string() }, (a) => lab.classifier.removeTemplate(a.name));
+
+	tool("subscribe", "Get lab events pushed to this MCP session as notifications/message: types rule, approval, trigger, cluster (new unclassified "
+		+ "line clusters, debounced), match (template matches), line. Optional filters: device, template, pattern (regex on the line)", {
+		types: z.array(z.enum(["rule", "approval", "trigger", "cluster", "match", "line"])),
+		device: z.string().optional(),
+		template: z.string().optional(),
+		pattern: z.string().optional()
+	}, (a) => {
+		if (!ctx.session) {
+			throw new Error("subscriptions need an MCP session (this client is stateless): use notifications_read to poll");
+		}
+		if (a.pattern) {
+			RegExp(a.pattern);
+		}
+		const sub = Object.assign({ id: "s" + (ctx.session.subs.length + 1) }, a);
+		ctx.session.subs.push(sub);
+		return sub;
+	});
+
+	tool("unsubscribe", "Remove a subscription (or all with id \"*\")", { id: z.string() }, (a) => {
+		if (!ctx.session) {
+			throw new Error("no MCP session");
+		}
+		ctx.session.subs = a.id === "*" ? [] : ctx.session.subs.filter((sub) => sub.id !== a.id);
+		return ctx.session.subs;
+	});
+
+	tool("subscriptions", "This session's subscriptions", {}, () => (ctx.session ? ctx.session.subs : []));
+
+	tool("notifications_read", "Recent lab events (poll alternative to subscribe)", {
+		since: z.number().optional().describe("only events with id > since"),
+		types: z.array(z.string()).optional()
+	}, (a) => lab.getNotifications({ since: a.since }).filter((ev) => !a.types || a.types.indexOf(ev.type) !== -1));
 
 	// ---- batch -----------------------------------------------------------
 

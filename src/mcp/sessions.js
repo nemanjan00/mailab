@@ -13,12 +13,43 @@ const isInitialize = (body) => {
 	});
 };
 
+// does subscription `sub` want lab event `ev`?
+const matches = (sub, ev) => {
+	if (sub.types && sub.types.length && sub.types.indexOf(ev.type) === -1) {
+		return false;
+	}
+	if (sub.device && ev.device !== sub.device) {
+		return false;
+	}
+	if (sub.template && ev.template !== sub.template) {
+		return false;
+	}
+	if (sub.pattern) {
+		try {
+			return new RegExp(sub.pattern).test(ev.line || JSON.stringify(ev));
+		} catch (_err) {
+			return false;
+		}
+	}
+	return true;
+};
+
 /**
  * @param {Object} lab
  */
 const create = (lab) => {
-	// session id -> {server, transport, who, client}
+	// session id -> {server, transport, who, client, subs}
 	const sessions = {};
+
+	// lab events -> sessions that subscribed to them (MCP notifications/message)
+	lab.events.on("notify", (ev) => {
+		Object.keys(sessions).forEach((id) => {
+			const s = sessions[id];
+			if ((s.subs || []).some((sub) => matches(sub, ev))) {
+				s.server.server.notification({ method: "notifications/message", params: { level: "info", logger: "mailab", data: ev } }).catch(() => null);
+			}
+		});
+	});
 
 	const fail = (res, status, message) => {
 		if (!res.headersSent) {
@@ -39,7 +70,7 @@ const create = (lab) => {
 	};
 
 	const open = (req, res) => {
-		const session = { who: req.who, client: null };
+		const session = { who: req.who, client: null, subs: [] };
 		session.server = mcp.create(lab, { who: req.who, session: session });
 		session.transport = new StreamableHTTPServerTransport({
 			sessionIdGenerator: randomUUID,

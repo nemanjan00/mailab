@@ -14,6 +14,7 @@
 //   {"type": "audio", "name": "out", "rate": 24000, "data": "<base64 int16 LE>"}
 //   {"type": "options", "options": {...}}                    merged into the device options (persisted)
 //   {"type": "blob", "name": "dump", "data": "<base64>"}     binary data (dumps, frames)
+//   {"type": "event", "name": "burst", "data": {...}}         notify subscribers (triggers, detections)
 //   {"type": "result", "id": 1, "result": {...}} | {"type": "result", "id": 1, "error": "..."}
 // lab -> helper (stdin):
 //   {"id": 1, "command": "set_voltage", "args": {...}}
@@ -56,6 +57,9 @@ const create = (options, io) => {
 		},
 		audio: (msg) => {
 			io.audio(msg.name, msg.rate, msg.data);
+		},
+		event: (msg) => {
+			io.event(msg.name, msg.data);
 		},
 		blob: (msg) => {
 			io.blob(msg.name, Buffer.from(msg.data, "base64"));

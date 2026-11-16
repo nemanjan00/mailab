@@ -107,6 +107,7 @@ const create = (lab, saved) => {
 			run = lab.commandDevice(r.action.device, r.action.command, r.action.args || {});
 		}
 		lab.recordActivity({ who: "safety", tool: "rule " + (r.name || r.id), args: r.when + " → " + actionText, ok: true });
+		lab.notify({ type: "rule", rule: r.name || r.id, when: r.when, value: value, action: actionText });
 		return run.then(() => {
 			lab.postChat({ from: "safety", kind: "safety", text: "⚠ rule **" + (r.name || r.id) + "** fired (`" + r.when + "` = " + value + "): " + actionText });
 		}, (err) => {
@@ -270,6 +271,7 @@ const create = (lab, saved) => {
 					text: "🔐 **" + request.who + "** wants `" + request.device + "." + request.command + " " + JSON.stringify(request.args || {}) + "`: " + request.reason
 				});
 				lab.events.emit("approval", entry);
+				lab.notify({ type: "approval", approval: entry.id, who: request.who, device: request.device, command: request.command, reason: request.reason });
 			});
 		},
 

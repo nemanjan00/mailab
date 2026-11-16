@@ -586,6 +586,8 @@ class LevelTrigger(Block):
         lab.log("%s: burst %d, %.1f ms, peak %.1f dBFS" % (self.id, self.count, len(data) / rate * 1e3,
                                                         10 * np.log10(np.max(np.abs(data) ** 2) + 1e-20)), "info")
         lab.sample(self.id + "_count", self.count, "")
+        lab.event(self.id, {"burst": self.count, "ms": round(len(data) / rate * 1e3, 1),
+                            "peak_dbfs": round(float(10 * np.log10(np.max(np.abs(data) ** 2) + 1e-20)), 1)})
         lab.blob(self.id, data.astype(np.complex64).tobytes())
         step = max(1, len(data) // 4000)
         env = 10 * np.log10(np.abs(data[::step]) ** 2 + 1e-20)
@@ -695,12 +697,12 @@ class UartRx(Block):
 
 
 class Python(Block):
-    doc = "scriptable block: params.code defines work(x, rate) -> y or (y, rate); np, dsp and state are in scope"
+    doc = "scriptable block: params.code defines work(x, rate) -> y or (y, rate); np, dsp, modem, lab (sample/log/event/value/blob) and state are in scope"
     params = {"code": ("def work(x, rate):\n    return x * 2", "python source")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
-        scope = {"np": np, "dsp": dsp, "state": {}}
+        scope = {"np": np, "dsp": dsp, "modem": modem, "lab": lab, "state": {}}
         exec(self.p["code"], scope)
         if "work" not in scope:
             raise ValueError("python block %s: code must define work(x, rate)" % bid)

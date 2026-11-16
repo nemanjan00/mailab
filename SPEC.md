@@ -56,8 +56,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | JSON view | ✅ | collapsible tree, keeps open state, any lab value |
 | Kaitai view | ✅ | lab blobs (devices/AI/upload) + server-side Kaitai (compiler in debug mode): field tree with byte ranges + hex dump with highlight; MCP `blob_write`/`blob_read`/`kaitai_parse` |
 | Grafana-like long-term trends | ⬜ | persistent, downsampled history per channel (min/max/mean buckets: 1 s → 1 min → 1 h tiers) on disk; trend pane with timeframe picker (5 min … 30 days), zoom, multiple channels/axes; e.g. battery charging curves over hours |
-| Configurable MCP notifications / subscriptions | ⬜ | the AI subscribes to events (safety rule firings, level-trigger bursts, approvals, UART/CLI lines matching patterns); pushed via channel bridge + `notifications/message`; diversity-classifier style: lines → templates, only unmatched clusters + debounced digests pushed, per-template counts recorded as channels for plotting |
-| Log classification (reference: diversity-classifier) | ⬜ | github.com/nemanjan00/diversity-classifier as reference: device logs / serial consoles / glitch-target replies → templates; the AI sees only unmatched clusters + aggregates/alarms; also replaces the generic glitch reply classes |
+| Configurable MCP notifications / subscriptions | ✅ | central `lab.notify` (rule, approval, trigger, cluster digests, template matches, raw lines); MCP `subscribe` (types + device/template/regex filters) → `notifications/message` on the session (logging capability; verified end to end with the SDK client); `notifications_read` to poll; channel bridge pushes rule/approval/trigger/cluster (`MAILAB_SUBSCRIBE`). Fixing it showed HTTP chat notifications had been silently dropped (missing logging capability) |
+| Log classification (reference: diversity-classifier) | ✅ | `src/classify`: device lines (rx/uart/stdout/…) normalized (<num> <hex> <ip> <uuid>) into clusters; templates (`classifier_add`) count matches → `cls_<name>`, numbers recorded as `cls_<name>_1…` for charting; templates absorb their backlog; new clusters → debounced digest notifications; classifier pane (clusters → template in one click). Verified on live console traffic. Next: glitch reply classes from templates |
 | Shared terminals (shell-session-mcp) | ⬜ | github.com/nemanjan00/shell-session-mcp: PTY sessions (bash, gdb, openocd, serial consoles) as a `shell` device + terminal pane (xterm.js), driven by both the user and the AI; output pushes like its `notifications/message` events |
 | protokai (.proto → .ksy) in the Kaitai view | ⬜ | github.com/nemanjan00/protokai: kaitai pane/`kaitai_parse` accept `proto` → protokai → .ksy (needs multi-file .ksy imports in the Kaitai loader) → parse protobuf blobs with field names |
 | Readings table for spectrum markers | ✅ | trace pane `markers` (peak / fixed x / Δ to another marker), `peaks: N` auto peaks, shift-click adds, × removes |
@@ -157,7 +157,6 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-2. UART in/out; MCP subscriptions/notifications; log classification (diversity-classifier style)
 3. Long-term trends (Grafana-like timeframes)
 4. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
 5. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry

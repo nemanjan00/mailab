@@ -67,6 +67,11 @@ def blob(name, data):
     emit({"type": "blob", "name": name, "data": __import__("base64").b64encode(bytes(data)).decode()})
 
 
+def event(name, data=None):
+    """notify subscribers (AI sessions, channel bridge): triggers, detections"""
+    emit({"type": "event", "name": name, "data": data or {}})
+
+
 def log(text, level="info"):
     emit({"type": "log", "text": str(text), "level": level})
 

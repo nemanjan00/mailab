@@ -69,6 +69,10 @@ const TYPES = {
 		description: "editor for a flowgraph device: blocks, links, live rates and errors",
 		config: { device: "flowgraph device id" }
 	},
+	classifier: {
+		description: "log classifier: templates with counts (numbers recorded as channels) and unclassified line clusters; turn clusters into templates",
+		config: {}
+	},
 	blob: {
 		description: "blob analysis: file type, entropy profile, binwalk signatures; with compare, a byte diff against another blob",
 		config: { blob: "blob name", compare: "second blob to diff against (optional)" }

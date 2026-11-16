@@ -44,6 +44,10 @@ const api = (lab) => {
 		return devices.list();
 	}));
 	router.get("/channels/:name", route((req) => {
+		// a chart may ask before the channel's first sample: empty, not an error
+		if (!lab.channels.has(req.params.name)) {
+			return { t: [], v: [] };
+		}
 		const opts = {};
 		["seconds", "since", "last"].forEach((key) => {
 			if (req.query[key] !== undefined) {
@@ -135,6 +139,10 @@ const api = (lab) => {
 		const decision = req.body.approve === true ? "approved" : "denied";
 		return lab.safety.decide(req.params.id, decision, (req.who && req.who.name) || "local");
 	}));
+	router.get("/classifier", route(() => lab.classifier.status({ limit: 200 })));
+	router.post("/classifier/templates", route((req) => lab.classifier.addTemplate(req.body)));
+	router.delete("/classifier/templates/:name", route((req) => lab.classifier.removeTemplate(req.params.name)));
+	router.get("/notifications", route((req) => lab.getNotifications({ since: req.query.since === undefined ? undefined : Number(req.query.since) })));
 	router.get("/whoami", route((req) => {
 		return req.who || { name: "local", role: "rw" };
 	}));
@@ -251,6 +259,13 @@ const attachSockets = (server, lab, pushIntervalMs, auth) => {
 		const entry = Object.assign({}, msg);
 		delete entry.session;
 		broadcast({ type: "chat", message: entry });
+	});
+	// low-volume events go to every browser and the channel bridge;
+	// per-line events (match, line) only to MCP sessions that subscribed
+	lab.events.on("notify", (ev) => {
+		if (ev.type !== "match" && ev.type !== "line") {
+			broadcast({ type: "notify", event: ev });
+		}
 	});
 	lab.events.on("approval", (entry) => {
 		broadcast({ type: "approval", approval: entry });
