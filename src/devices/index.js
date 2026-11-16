@@ -22,6 +22,7 @@ const DRIVERS = [
 	require("./picoglitcher"),
 	require("./flowgraph"),
 	require("./camera"),
+	require("./browser"),
 	require("./harogic"),
 	require("./replay"),
 	require("./sysmon"),

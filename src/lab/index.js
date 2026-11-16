@@ -348,8 +348,18 @@ const create = (options) => {
 		/**
 		 * Audio is streamed, not stored: chunks go straight to listening browsers.
 		 */
-		pushAudio: (name, rate, data) => {
-			events.emit("audio", { name: name, rate: rate, data: data });
+		/**
+		 * @param {string} name stream
+		 * @param {number} rate sample rate
+		 * @param {string} data base64 int16 LE PCM
+		 * @param {number} [channels] 2 = interleaved stereo (default mono)
+		 */
+		pushAudio: (name, rate, data, channels) => {
+			const chunk = { name: name, rate: rate, data: data };
+			if (channels === 2) {
+				chunk.channels = 2;
+			}
+			events.emit("audio", chunk);
 		},
 
 		/**
@@ -565,8 +575,16 @@ const create = (options) => {
 				event: (name, data) => {
 					lab.notify(Object.assign({ type: "trigger", device: id, name: field(name) }, data || {}));
 				},
-				audio: (name, rate, data) => {
-					lab.pushAudio(field(name), rate, data);
+				audio: (name, rate, data, channels) => {
+					lab.pushAudio(field(name), rate, data, channels);
+				},
+				// lab audio chunks ({name, rate, data, channels}) as they stream, for
+				// consumers such as a flowgraph audio_in block; returns the unsubscribe
+				onAudio: (handler) => {
+					events.on("audio", handler);
+					return () => {
+						events.removeListener("audio", handler);
+					};
 				},
 				term: (data) => {
 					lab.pushTerm(id, data);

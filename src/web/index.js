@@ -11,10 +11,13 @@ const math = require("../math");
 const devices = require("../devices");
 const kaitai = require("../kaitai");
 const blobs = require("../blobs");
+const captureModule = require("../capture");
 
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
 const ROOT = path.join(__dirname, "..", "..");
+// browsers send capture messages (camera frames up to 2 MB, base64) over /ws
+const WS_MAX_PAYLOAD = 4 * 1024 * 1024;
 
 // wrap a handler returning a value/promise into an express route
 const route = (handler) => {
@@ -289,10 +292,11 @@ const api = (lab) => {
 /**
  * Push lab events to every connected browser.
  */
-const attachSockets = (server, lab, pushIntervalMs, auth) => {
+const attachSockets = (server, lab, pushIntervalMs, auth, capture) => {
 	const wss = new ws.Server({
 		server: server,
 		path: "/ws",
+		maxPayload: WS_MAX_PAYLOAD,
 		verifyClient: (info) => {
 			return Boolean(auth.identify(info.req));
 		}
@@ -384,8 +388,34 @@ const attachSockets = (server, lab, pushIntervalMs, auth) => {
 		wss.close();
 	});
 
-	wss.on("connection", (socket) => {
+	wss.on("connection", (socket, req) => {
 		socket.send(JSON.stringify({ type: "state", state: lab.state() }));
+		// browsers push media (mic, camera) as capture_* messages; the identity
+		// decides whether they may (rw / human)
+		const sendTo = (msg) => {
+			if (socket.readyState === ws.OPEN) {
+				socket.send(JSON.stringify(msg));
+			}
+		};
+		const client = capture.connect(auth.identify(req), sendTo);
+		socket.on("message", (raw, isBinary) => {
+			let msg = null;
+			try {
+				msg = isBinary ? null : JSON.parse(raw.toString());
+			} catch (_err) {
+				msg = null;
+			}
+			capture.message(client, msg).then((reply) => {
+				if (reply) {
+					sendTo(reply);
+				}
+			}, (err) => {
+				sendTo({ type: "capture_error", device: msg && msg.device, ref: msg && msg.ref, error: err.message });
+			});
+		});
+		socket.on("close", () => {
+			capture.disconnect(client);
+		});
 	});
 
 	return wss;
@@ -403,6 +433,7 @@ const create = (lab, options) => {
 	const app = express();
 	const auth = options.auth || authModule.create();
 	const sessions = mcpSessions.create(lab);
+	const capture = captureModule.create(lab, { limits: options.captureLimits });
 
 	// chat reaches connected AIs as MCP notifications (Claude Code shows them via the
 	// stdio channel bridge, bin/channel.js; other clients may read them as log messages)
@@ -422,8 +453,8 @@ const create = (lab, options) => {
 	app.use(express.static(path.join(ROOT, "public")));
 
 	const server = http.createServer(app);
-	attachSockets(server, lab, options.pushIntervalMs, auth);
-	return { app: app, server: server, sessions: sessions };
+	attachSockets(server, lab, options.pushIntervalMs, auth, capture);
+	return { app: app, server: server, sessions: sessions, capture: capture };
 };
 
 module.exports = {

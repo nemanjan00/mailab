@@ -13,7 +13,9 @@ power supplies (Miniware MDP-P906, ISDT MP305), Rigol DM858E and MHO900 over
 SCPI, sigrok logic analyzers (Sipeed SLogic), RF (KC9531B power meter, tinySA
 Ultra, LiteVNA, Harogic HTRA), SDRs (HackRF, bladeRF, RTL-SDR via SoapySDR),
 Icom radios over CI-V, Proxmark3, PicoGlitcher (findus), webcams/V4L2 capture,
-serial gadgets, and any program that speaks JSON lines.
+serial gadgets, and any program that speaks JSON lines. A browser can be an
+instrument too: the capture pane streams a laptop's or phone's microphone and
+camera into the lab (see below).
 [HW.md](HW.md) tracks what has been verified on hardware.
 
 **DSP flowgraph**: GNU Radio-style blocks (numpy + liquid-dsp) that you or
@@ -25,7 +27,8 @@ the AI wire up live:
   recovery, carrier recovery, slicer, BER meter, sync-word framer.
 - **Views and I/O:** spectrum analyzer (RBW, max/min hold, averaging),
   triggered scope with measurements (Vpp, RMS, frequency, duty…),
-  constellation, eye diagram, level trigger, audio out, IQ over TCP/UDP.
+  constellation, eye diagram, level trigger, audio out, audio in (any lab
+  audio stream, e.g. a browser mic), IQ over TCP/UDP.
 - **Scripting:** a `python` block for your own DSP.
 
 **Views**: configurable panes that you and the AI share:
@@ -103,6 +106,27 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | `CHANNEL_CAPACITY` | `200000` | samples kept per channel |
 | `MDP_HOST_PATH` / `CIV_PATH` | `~/mdp-p906/host` / `~/ci-v` | libraries loaded from checkouts |
 | `SIGROK_CLI` / `PM3_CLIENT` / `PYTHON` | `sigrok-cli` / `proxmark3` / `python3` | external tools |
+
+## Browser as an instrument
+
+Add a `capture` pane and press **mic** and/or **camera** (browsers only start
+media from a click). The page captures with getUserMedia and streams over the
+UI WebSocket into a `browser` device (`device` in the pane, default `browser`):
+
+- `<dev>_mic`: audio stream (int16 PCM, 8–48 kHz, mono/stereo; an AudioWorklet
+  resamples to the chosen rate). Monitor it in an `audio` pane, or feed it to a
+  flowgraph with an `audio_in` block (`params: {stream: "<dev>_mic"}`).
+- `<dev>_mic_level` / `<dev>_mic_peak`: RMS and peak level in dBFS, 10 Hz.
+- `<dev>_frame`: camera frames as JPEG (1 fps by default, at most 10, width
+  capped by `maxWidth`); `<dev>_snapshot`: full-size frame from the pane's
+  button or the device's `snapshot` command, which asks the capturing browser
+  and returns the picture to the AI (times out after 5 s).
+
+The device runs while a browser streams and stops when the tab closes. Only
+`rw`/`human` identities may push media; the server caps rates, sizes and the
+number of captures per browser. getUserMedia needs a secure context:
+`http://localhost` works (tunnel with `ssh -L 3000:localhost:3000 lab` from a
+laptop), a phone needs https (e.g. a reverse proxy with a certificate).
 
 ## Collaboration
 

@@ -57,6 +57,17 @@ const TYPES = {
 		description: "play a lab audio stream (e.g. a flowgraph audio sink) in the browser",
 		config: { stream: "stream name, e.g. fg_audio" }
 	},
+	capture: {
+		description: "the browser as an instrument: stream this browser's microphone and/or camera into the lab (device <device>, driver browser: audio stream <device>_mic, levels <device>_mic_level/_peak dBFS, images <device>_frame / _snapshot). Needs a secure context (localhost or https) and a person clicking start",
+		config: {
+			device: "lab device id (default \"browser\")",
+			rate: "mic sample rate, 8000..48000 (default 48000)",
+			channels: "1 or 2 (default 1)",
+			fps: "camera frames per second sent to the lab, up to 10 (default 1)",
+			maxWidth: "frame width cap in px (default 1280)",
+			quality: "JPEG quality 0..1 (default 0.8)"
+		}
+	},
 	json: {
 		description: "collapsible JSON view of a lab value",
 		config: { value: "value name, e.g. fg_stats", depth: "levels expanded (default 2)", view: "\"table\": sortable/filterable table with CSV/JSON export (arrays of objects, sweep results)" }

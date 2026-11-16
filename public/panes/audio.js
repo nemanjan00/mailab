@@ -58,13 +58,18 @@ export default {
 				return;
 			}
 			const samples = decode(chunk.data);
+			// stereo streams (a browser mic) are interleaved L R L R
+			const channels = chunk.channels === 2 ? 2 : 1;
+			const frames = Math.floor(samples.length / channels);
 			level = Math.max(level * 0.8, samples.reduce((m, v) => Math.max(m, Math.abs(v)), 0));
 			bar.style.width = Math.round(level * 100) + "%";
-			if (!audio || !samples.length) {
+			if (!audio || !frames) {
 				return;
 			}
-			const buffer = audio.createBuffer(1, samples.length, chunk.rate);
-			buffer.copyToChannel(samples, 0);
+			const buffer = audio.createBuffer(channels, frames, chunk.rate);
+			for (let c = 0; c < channels; c++) {
+				buffer.copyToChannel(channels === 1 ? samples : samples.filter((_v, i) => i % 2 === c).subarray(0, frames), c);
+			}
 			const source = audio.createBufferSource();
 			source.buffer = buffer;
 			source.connect(gain);
