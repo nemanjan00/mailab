@@ -17,7 +17,7 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 
 # python libraries that aren't packaged in Debian
-RUN pip3 install --no-cache-dir --break-system-packages pymp305 findus
+RUN pip3 install --no-cache-dir --break-system-packages pymp305==0.6.3 findus
 
 WORKDIR /app
 COPY package.json yarn.lock ./

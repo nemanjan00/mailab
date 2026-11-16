@@ -52,6 +52,9 @@ SPEC.md lists every request with its status; update it as soon as a request come
 - External libs that aren't on npm (mdp-p906 host, ci-v) load from configurable paths (`MDP_HOST_PATH`, `CIV_PATH`)
 - husky hooks are active (yarn ran `prepare`); commits run lint-staged + jest
 - Vendor SDK files (e.g. `htra_api.h`) never go into the repo; bind via ctypes from layouts
+- Python driver `requires` are pinned (`==x.y` or `name @ git+…@<40-hex sha>`); `{spec, upgrade: true}` replaces an older installed copy (default: pins only apply to fresh installs). Optional sets go in `extras` + `extrasFor(options)` (mp305: bleak for BLE)
+- Bridges get `MAILAB_DEVICE_ID`; `lab.channel("v")` gives the lab channel name for `lab.panel` layouts. Strict setpoints: `lab.parse_number(v, name, lo, hi)`
+- Hardware-free bridge tests: a fake at the transport level (`python/mp305_fake.py`, `MAILAB_MP305_FAKE=1`) driven by `python/test_*.py`, run from jest
 - Never touch the MHO900's port 55555 (that's root ADB, not SCPI)
 
 ## Verify UI changes

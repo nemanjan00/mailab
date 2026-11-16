@@ -177,29 +177,43 @@ const create = (options, io) => {
 
 /**
  * Build a driver that runs one of the bundled python bridges.
- * @param {{name: string, description: string, script: string, options: Object, commands: Object, args: function(Object): string[]}} spec
- *   args maps device options to the bridge's command-line arguments
+ * @param {Object} spec
+ * @param {string} spec.name
+ * @param {string} spec.description
+ * @param {string} spec.script bridge file in python/
+ * @param {Object} spec.options
+ * @param {Object} spec.commands
+ * @param {function(Object): string[]} spec.args maps device options to the bridge's command-line arguments
+ * @param {Array} [spec.requires] pip requirements (src/services/pyenv), always installed
+ * @param {Object} [spec.extras] named optional requirement sets, e.g. {ble: ["bleak==3.1.0"]}
+ * @param {function(Object): string[]} [spec.extrasFor] which extras a device's options need
  */
 const pythonPreset = (spec) => {
 	const path = require("path");
 	const pyenv = require("../../services/pyenv");
 	const media = require("../../services/media");
+	const extras = spec.extras || {};
+	const requiresFor = (options) => {
+		const names = spec.extrasFor ? spec.extrasFor(options) : [];
+		return names.reduce((acc, name) => acc.concat(extras[name] || []), [].concat(spec.requires || []));
+	};
 	return {
 		name: spec.name,
 		description: spec.description,
 		options: spec.options,
 		commands: spec.commands,
 		requires: spec.requires || [],
+		extras: extras,
 		create: (options, io) => {
 			let inner = null;
 			return {
 				// the mailab-managed venv gets the driver's pip requirements first
-				start: () => pyenv.ensure(spec.requires || [], (line) => io.log(line, "setup")).then((python) => {
+				start: () => pyenv.ensure(requiresFor(options), (line) => io.log(line, "setup")).then((python) => {
 					inner = create({
 						command: python,
 						args: [path.join(__dirname, "..", "..", "..", "python", spec.script)].concat(spec.args(options)),
 						// set last: device options can't widen where bridges may read media
-						env: Object.assign({}, options.env || {}, { MAILAB_MEDIA_ROOTS: media.roots().join(":") })
+						env: Object.assign({}, options.env || {}, { MAILAB_MEDIA_ROOTS: media.roots().join(":"), MAILAB_DEVICE_ID: io.id || "" })
 					}, io);
 					return inner.start();
 				}),
