@@ -34,8 +34,8 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | RTL-SDR wideband sweeps | `rtl_power` | rtl_power / soapy_power | – | 🧪 (no dongle) |
 | SPI flash programmers | `flashrom` | flashrom CLI | – | ✅ flashrom dummy programmer (emulated W25Q128) |
 | XGecu T48/TL866 | `minipro` | minipro CLI | – | 🧪 info/search/presence run; programmer is on `lab` |
-| YARD Stick One / CC1111 | `rfcat` | rflib | – | 📝 in progress |
-| Cynthion (USB analyzer / Facedancer) | `cynthion` | LUNA gateware, cynthion / facedancer | – | 📝 in progress |
+| YARD Stick One / CC1111 | `rfcat` | rflib 2.0.1 | – | 🧪 fake dongle end to end; TX region-locked + approval |
+| Cynthion (USB analyzer / Facedancer) | `cynthion` | analyzer gateware (vendor requests + bulk), facedancer | Packetry's protocol | 🧪 fake board + synthetic enumerations |
 | PicoGlitcher | `picoglitcher` | findus | `findus` (pip) | 🧪 |
 | Bus Pirate 5/6 | – | BPIO2 | buspirate skill | 📝 |
 | Harogic HTRA (SAE/SAM/SAN) | `harogic` | USB, vendor libhtraapi | `htra_api.h` (SDK 0.55.x) | 🧪 |
