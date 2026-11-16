@@ -12,7 +12,7 @@
 		<div class="brand"><span class="m">m</span><span class="ai">ai</span>lab</div>
 		<span id="conn" class="conn" title="connection"></span>
 		<div class="spacer"></div>
-		<span class="mcp" title="Point your AI at this MCP endpoint">MCP <code id="mcp-url"></code></span>
+		<button class="mcp" id="mcp-help" title="How to connect an AI">MCP <code id="mcp-url"></code> ?</button>
 		<button id="add-device">+ device</button>
 		<button id="add-pane">+ pane</button>
 		<button id="theme" title="toggle theme">◐</button>
@@ -29,6 +29,25 @@
 				<button value="ok" class="primary" id="dialog-ok">ok</button>
 			</div>
 		</form>
+	</dialog>
+
+	<dialog id="mcp-dialog" class="help">
+		<h3>Connect an AI to this lab</h3>
+		<p>mailab is an MCP server (Streamable HTTP). Every tool call shows up in the <b>AI activity</b> pane.</p>
+		<h4>Claude Code</h4>
+		<div class="copy"><pre id="mcp-claude"></pre><button data-copy="mcp-claude">copy</button></div>
+		<h4>Other MCP clients (JSON config)</h4>
+		<div class="copy"><pre id="mcp-json"></pre><button data-copy="mcp-json">copy</button></div>
+		<div id="mcp-auth" hidden>
+			<h4>This lab requires a token</h4>
+			<p>Add <code>--header "Authorization: Bearer &lt;token&gt;"</code> to the command above (or a <code>headers</code> entry in the JSON). Ask the lab owner for a token (<code>MAILAB_TOKENS</code>).</p>
+		</div>
+		<h4>Lab chat pushed into Claude Code (optional)</h4>
+		<p>Claude Code channels are stdio-only, so a small bridge forwards the lab chat:</p>
+		<div class="copy"><pre id="mcp-channel"></pre><button data-copy="mcp-channel">copy</button></div>
+		<p class="muted">Then start <code>claude --dangerously-load-development-channels server:mailab-chat</code>.</p>
+		<p class="muted">Try asking: <i>"what's in the lab?"</i>, <i>"build a QPSK link and show me the constellation"</i>.</p>
+		<form method="dialog" class="actions"><button class="primary">close</button></form>
 	</dialog>
 
 	<script type="module" src="/build/app.js"></script>

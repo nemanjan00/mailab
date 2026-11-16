@@ -113,7 +113,8 @@ export const drawConstellation = (canvas, tr, color) => {
 	});
 	c.g.globalAlpha = 1;
 	c.g.fillStyle = cssVar("--muted");
-	c.g.fillText(s.x.length + " symbols", box.l, c.h - 6);
+	const label = s.x.length + " symbols";
+	c.g.fillText(label, c.w - c.g.measureText(label).width - 8, 14);
 };
 
 // overlaid 2-symbol segments

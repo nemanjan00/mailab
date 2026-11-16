@@ -326,3 +326,14 @@ ul.tree li > details { display: inline; }
 .graph-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .graph-range { width: 60px !important; }
 .graph .toolbar { border: none; padding: 4px 0; flex-wrap: wrap; }
+
+/* MCP help */
+button.mcp { background: none; border: none; color: var(--muted); }
+button.mcp:hover code { text-decoration: underline; }
+dialog.help { width: min(680px, 94vw); }
+dialog.help h4 { margin: 14px 0 6px; color: var(--accent-2); }
+dialog.help p { margin: 6px 0; }
+.copy { position: relative; }
+.copy pre { margin: 0; padding: 10px 70px 10px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+	font: 12px var(--mono); white-space: pre-wrap; word-break: break-all; }
+.copy button { position: absolute; top: 6px; right: 6px; }

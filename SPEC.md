@@ -23,6 +23,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | GUI SDK for readable panes | 🟡 | `public/sdk/`: `pane()` (reactive config, auto-dispose), `table`, `feed`, `iconButton`, `empty`, `toolbar`, `field`, `widget` (uPlot/canvas composed in, disposed with the scope). Panes on it: devices, channels, activity, chat. Next: log, value, json, kaitai, flowgraph, image, audio; then chart/trace via `widget` |
 | Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
 | Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | app store is qrp `state()` (lab state, activity/chat feeds, live values at 4 Hz in `batch`); 4 panes migrated via the SDK; imperative panes still work against the same store |
+| Tablet interface: numeric entry popover | ⬜ | SDK `numberField`: tap a value → popover keypad (digits, `.`, `±`, ⌫) + unit buttons (Hz/kHz/MHz/GHz, dBm/dB, mV/V, mA/A, µs/ms/s), like an instrument front panel; touch-friendly sizes; used in panes and dialogs |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
 | Auth hardening (reviewer feedback, rounds 2–3) | ✅ | `?token=` only as a login link (→ HttpOnly SameSite=Strict cookie + redirect), never accepted on API/MCP/WS; token table is a `Map` (inherited keys like `constructor`/`__proto__` were accepted as tokens: fixed); writes need role `rw` exactly (REST + MCP); non-loopback `HOST` without tokens refuses to start (`MAILAB_ALLOW_OPEN=1` overrides; Docker README uses tokens); open mode accepts only loopback/`MAILAB_ALLOWED_HOSTS` Host headers and same-origin requests, which blocks DNS rebinding (REST, MCP, WS). Verified against a live server |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
@@ -71,6 +72,8 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Modem toolkit, all common modulations (✅ BER-tested in `yarn test`/husky via jest + pytest, all at BER ≈ 0: bpsk qpsk psk8 apsk16 qam4/8/16/32/64/128/256 sqam32/128 2fsk msk gfsk gmsk 4fsk ook. Fixed: qam32 via matched filter + Gardner (`symbol_sync method: gardner`; liquid's loop mis-locks on the 8×4 grid), GMSK/GFSK via an integrating discriminator (2e-2 → 0)): analog AM/DSB/SSB/FM/PM; digital OOK/ASK, 2/4-FSK, GFSK, MSK, GMSK, BPSK…PSK, QAM up to 256, APSK, DPSK; BER; sync; clock recovery; bit streams | 🟡 | flowgraph blocks: bit sources (PRBS/pattern/text), modulators, AWGN/CFO channel, FSK/OOK demod, clock recovery (Gardner/M&M on real signals; symbol_sync for linear), slicer → bits, sync-word framing, BER meter (PRBS self-sync), bit-stream sinks (value/blob) |
 | OpenCV | ⬜ | image processing on camera/KVM frames: read instrument displays/LEDs, detect, measure; results as channels/values |
 | Analog video decode | ⬜ | PAL/NTSC composite from SDR/scope samples (e.g. FM-demodulated FPV): H/V sync detection, line assembly → image frames in the image pane |
+| ngscopeclient decoders & blocks | ⬜ | reference/reuse libscopehal's filter catalog: CDR/PLL, TIE & jitter, eye masks, 8b/10b, Manchester, UART/SPI/I2C/CAN/USB/Ethernet, math filters; port key ones as flowgraph blocks or run libscopehal headless as a bridge |
+| MCP connection help in the UI | ✅ | the header's MCP address opens a modal: `claude mcp add` with this lab's URL, JSON config for other clients, token hint when auth is on, channel-bridge config, copy buttons |
 | libsigrokdecode for external inputs | ⬜ | run sigrok protocol decoders (uart, spi, i2c, manchester, …) on bits/logic from any source (flowgraph bit streams, scope captures, blobs) via `sigrok-cli -I binary` + `-P`; flowgraph `decode` sink + MCP tool; annotations → log/value |
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
@@ -245,3 +248,7 @@ Next:
 87. update spec
 88. fix it all, update screenshot
 89. sdr level trigger
+90. update screenshot and readme
+91. tablet interface (input field, on click opens popover, click digit input and units, e.g. dBm)
+92. modal that gives help on how to add as mcp
+93. ngscopeclient decoders and blocks

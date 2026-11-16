@@ -460,6 +460,33 @@ grid.on("change", (_event, items) => {
 
 document.getElementById("mcp-url").textContent = location.origin + "/mcp";
 
+// "how do I connect my AI" help, filled with this lab's real address
+document.getElementById("mcp-help").addEventListener("click", () => {
+	const url = location.origin + "/mcp";
+	document.getElementById("mcp-claude").textContent = "claude mcp add --transport http mailab " + url;
+	document.getElementById("mcp-json").textContent = JSON.stringify({ mcpServers: { mailab: { type: "http", url: url } } }, null, 2);
+	document.getElementById("mcp-channel").textContent = JSON.stringify({ mcpServers: { "mailab-chat": {
+		command: "node", args: ["/path/to/mailab/bin/channel.js"],
+		env: { MAILAB_URL: location.origin, MAILAB_NAME: "claude" }
+	} } }, null, 2);
+	api("GET", "/whoami").then((who) => {
+		document.getElementById("mcp-auth").hidden = who.name === "local";
+	}, () => null);
+	document.getElementById("mcp-dialog").showModal();
+});
+document.getElementById("mcp-dialog").addEventListener("click", (event) => {
+	const button = event.target.closest("button[data-copy]");
+	if (!button) {
+		return;
+	}
+	navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent).then(() => {
+		button.textContent = "copied";
+		setTimeout(() => {
+			button.textContent = "copy";
+		}, 1200);
+	}, () => null);
+});
+
 document.getElementById("add-pane").addEventListener("click", () => {
 	const types = Object.keys(ctx.state.paneTypes);
 	const describe = (type) => {

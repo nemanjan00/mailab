@@ -1,22 +1,48 @@
 # mailab
 
-**m**y **ai** **lab**: an MCP server that hands a hardware lab to an AI, plus a
-live web UI where you watch (and steer) what it does.
-
-- **Devices**: drivers for bench gear, SDRs, logic analyzers, RF tools and
-  glitchers. Any program that speaks JSON lines can be a device too, which is
-  how the Python libraries plug in. See [HW.md](HW.md) for what's supported and
-  what still needs testing.
-- **Channels**: live time series (`<device>_<field>`) in ring buffers.
-- **Traces**: captured arrays such as spectra, VNA sweeps, scope and logic
-  captures, and glitch scatter plots.
-- **Math**: mathjs over channels and traces (`rms(psu_i)`, `max(mag(fft(scope_ch1)))`),
-  plus derived channels computed per sample (`psu_v * psu_i`).
-- **Panes**: a configurable grid of charts, traces, waterfalls, readouts,
-  live math, markdown notes with KaTeX, consoles and an AI activity feed.
-  You and the AI edit the same layout.
+**m**y **ai** **lab**: the AI owns the lab. mailab is an MCP server that
+gives an AI your bench instruments, SDRs, logic analyzers, glitchers and DSP,
+plus a live web UI where you watch, steer and collaborate with it.
 
 ![mailab](docs/screenshot.png)
+
+## What's in it
+
+**Instruments** (21 drivers; any instrument can run as several instances):
+power supplies (Miniware MDP-P906, ISDT MP305), Rigol DM858E and MHO900 over
+SCPI, sigrok logic analyzers (Sipeed SLogic), RF (KC9531B power meter, tinySA
+Ultra, LiteVNA, Harogic HTRA), SDRs (HackRF, bladeRF, RTL-SDR via SoapySDR),
+Icom radios over CI-V, Proxmark3, PicoGlitcher (findus), webcams/V4L2 capture,
+serial gadgets, and any program that speaks JSON lines.
+[HW.md](HW.md) tracks what has been verified on hardware.
+
+**DSP flowgraph**: GNU Radio-style blocks (numpy + liquid-dsp) that you or
+the AI wire up live:
+- **Modulation:** every common scheme (AM/DSB/SSB/FM/PM; OOK, ASK, PSK, DPSK,
+  APSK, QAM 4–256, 2/4-FSK, MSK, GFSK, GMSK), with PRBS/pattern/framed bit
+  sources.
+- **Receive chain:** AWGN/CFO channel, matched filter, symbol and clock
+  recovery, carrier recovery, slicer, BER meter, sync-word framer.
+- **Views and I/O:** spectrum analyzer (RBW, max/min hold, averaging),
+  triggered scope with measurements (Vpp, RMS, frequency, duty…),
+  constellation, eye diagram, level trigger, audio out, IQ over TCP/UDP.
+- **Scripting:** a `python` block for your own DSP.
+
+**Views**: configurable panes that you and the AI share:
+- **Plots:** live charts, traces with spectrum markers and readings, waterfall,
+  constellation, eye diagram, glitch scatter and findus-style parameter map.
+- **Math:** graphing calculator, live math (KaTeX), value readouts.
+- **Data:** markdown notes, JSON view, Kaitai Struct view (parse binary blobs:
+  field tree + hex).
+- **Lab:** flowgraph editor, audio, camera, device consoles, AI activity, lab chat.
+
+**AI tools**: lab overview, device control, data reads, math and the
+graphing calculator, Kaitai parsing, UI control, chat, and `batch`, which
+runs many calls in one request with ~1 ms timing for tight sequences.
+
+**Collaboration**: several people and AIs on one lab. Optional
+read-write/read-only tokens, every AI call attributed in the activity feed, a
+shared chat, and push into Claude Code through a channel bridge.
 
 ## Run
 
@@ -32,7 +58,12 @@ Connect an AI over MCP (Streamable HTTP):
 claude mcp add --transport http mailab http://127.0.0.1:3000/mcp
 ```
 
-Then ask it something like *"add the sim device, chart it and tell me the RMS"*.
+Then ask it something like *"add the sim device, chart it and tell me the
+RMS"* or *"build a QPSK link with 20 dB SNR and show me the constellation and
+BER"*.
+
+Python bridges need their libraries: `numpy`, `libliquid` (liquid-dsp ≥ 1.6),
+and per instrument `SoapySDR`, `pymp305`, `findus`.
 
 ### Docker
 
@@ -42,78 +73,73 @@ docker run --privileged --network host -v /dev:/dev -v mailab-data:/data \
   -e MAILAB_TOKENS="me:$(openssl rand -hex 24):rw" mailab
 ```
 
-The container listens on all interfaces, so it requires `MAILAB_TOKENS`
-(it refuses to start without them; `MAILAB_ALLOW_OPEN=1` overrides that on a
-trusted network). Open the UI once as `http://host:3000/?token=<token>`: the
-server swaps it for an HttpOnly cookie and redirects to the clean URL. Tokens in
-URLs are not accepted anywhere else; API/MCP clients use `Authorization: Bearer`.
+The container listens on all interfaces, so it requires `MAILAB_TOKENS`: it
+refuses to start without them (`MAILAB_ALLOW_OPEN=1` overrides that on a
+trusted network). Open the UI once as `http://host:3000/?token=<token>`; the
+server swaps the token for an HttpOnly cookie and redirects to the clean URL.
+API and MCP clients use `Authorization: Bearer`.
 
 The image includes sigrok-cli, liquid-dsp, SoapySDR (HackRF/bladeRF/RTL-SDR),
-hackrf tools, ffmpeg/v4l-utils, uhubctl, pymp305 and findus. Not included:
-the SLogic libsigrok fork, vendor SDKs (Harogic), the Proxmark3 client, and
-the mdp-p906/ci-v checkouts (mount them and set `MDP_HOST_PATH` / `CIV_PATH`).
+hackrf tools, ffmpeg/v4l-utils, uhubctl, pymp305 and findus. It doesn't
+include the SLogic libsigrok fork, vendor SDKs (Harogic), the Proxmark3
+client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
+`CIV_PATH`.
 
 ### Configuration (env)
 
 | Var | Default | |
 |---|---|---|
-| `PORT` / `HOST` | `3000` / `127.0.0.1` | the lab drives real hardware, so keep it local |
-| `DATA_DIR` | `./data` | `lab.json` holds devices, derived channels and panes |
+| `PORT` / `HOST` | `3000` / `127.0.0.1` | a non-loopback HOST needs `MAILAB_TOKENS` |
+| `MAILAB_TOKENS` | – | `name:token:rw\|ro,…` turns on auth |
+| `MAILAB_ALLOW_OPEN` | – | `1` = allow a non-loopback HOST without tokens (trusted networks) |
+| `MAILAB_ALLOWED_HOSTS` | – | extra Host names accepted without tokens |
+| `DATA_DIR` | `./data` | `lab.json`: devices, derived channels, panes, chat |
 | `CHANNEL_CAPACITY` | `200000` | samples kept per channel |
-| `MDP_HOST_PATH` | `~/mdp-p906/host` | mdp-p906 host library |
-| `CIV_PATH` | `~/ci-v` | ci-v library |
-| `SIGROK_CLI` | `sigrok-cli` | |
-| `PM3_CLIENT` | `proxmark3` | Proxmark3 client binary |
-| `PYTHON` | `python3` | for python bridges |
-
-Python bridges need their libraries: `pymp305`, `findus`, `SoapySDR` + `numpy`,
-and `libliquid` for demodulation.
+| `MDP_HOST_PATH` / `CIV_PATH` | `~/mdp-p906/host` / `~/ci-v` | libraries loaded from checkouts |
+| `SIGROK_CLI` / `PM3_CLIENT` / `PYTHON` | `sigrok-cli` / `proxmark3` / `python3` | external tools |
 
 ## Collaboration
 
-Several people and AIs can share one lab:
-
 - `MAILAB_TOKENS="alice:secret:rw,bob:secret2:rw,viewer:secret3:ro"` turns on
-  auth for the UI, REST, WebSocket and MCP (Bearer token, or the UI's
-  HttpOnly cookie from a one-time `/?token=` login link). `ro` tokens can look and chat but can't change the lab.
-  Set `HOST=0.0.0.0` to accept remote collaborators. A non-loopback `HOST`
-  without tokens is refused at startup.
-- Without tokens (local use) only loopback `Host` headers (plus
-  `MAILAB_ALLOWED_HOSTS`) and same-origin requests are accepted, which blocks
-  DNS-rebinding attacks from web pages.
-- Every MCP call is attributed (`alice/claude-code`) in the AI activity pane.
+  auth for the UI, REST, WebSocket and MCP. Tokens go in a Bearer header, or
+  in the UI's HttpOnly cookie set by a one-time `/?token=` login link. `ro`
+  tokens can look and chat but can't change the lab.
+- Without tokens (local use) the server only accepts loopback `Host` headers
+  (plus `MAILAB_ALLOWED_HOSTS`) and same-origin requests, which blocks DNS
+  rebinding from web pages.
+- The activity pane shows who made each MCP call (`alice/claude-code`).
 - **Lab chat**: the chat pane for people, `chat_send` / `chat_read` for AIs.
-- **Push to Claude Code**: chat messages arrive in a Claude Code session as
-  channel events through the stdio bridge `bin/channel.js` (channels are
-  stdio-only):
+- **Push into Claude Code**: chat messages arrive in a Claude Code session
+  through the stdio channel bridge `bin/channel.js` (Claude Code channels
+  only work over stdio). HTTP MCP sessions also receive each message as a
+  `notifications/message` log event.
 
   ```json
   {"mcpServers": {"mailab-chat": {"command": "node", "args": ["/path/to/mailab/bin/channel.js"],
     "env": {"MAILAB_URL": "http://127.0.0.1:3000", "MAILAB_NAME": "claude", "MAILAB_TOKEN": "secret"}}}}
   ```
 
-  `claude --dangerously-load-development-channels server:mailab-chat` (research preview).
-  HTTP MCP sessions also get each chat message as a `notifications/message` log event.
+  `claude --dangerously-load-development-channels server:mailab-chat` (research preview)
 
 ## MCP tools
 
 | Tool | |
 |---|---|
 | `lab_overview`, `lab_drivers` | what's in the lab, what can be added |
-| `device_add/remove/start/stop`, `device_command`, `device_log` | instruments |
+| `device_add/remove/start/stop`, `device_command`, `device_log` | instruments, including the flowgraph (`device_command fg blocks` lists its block catalog) |
 | `channel_read`, `channel_write` | time series (stats + downsampled data) |
-| `trace_read`, `trace_write`, `image_get` | captures and screenshots |
-| `math_eval`, `math_derive`, `math_remove` | analysis |
-| `pane_types`, `pane_add`, `pane_update`, `pane_remove`, `note` | the user's UI |
+| `trace_read`, `trace_write`, `image_get` | captures, spectra, screenshots |
+| `math_eval`, `math_derive`, `math_remove`, `plot` | analysis and the graphing calculator |
 | `value_read`, `value_write`, `blob_write`, `blob_read`, `kaitai_parse` | JSON values, binary blobs, Kaitai parsing |
+| `pane_types`, `pane_add`, `pane_update`, `pane_remove`, `note` | the shared UI |
 | `chat_send`, `chat_read` | lab chat |
-| `batch` | many calls in one request with ~1 ms timing |
+| `batch` | many calls in one request, ~1 ms timing, loops, result references |
 
 Every call shows up in the **AI activity** pane.
 
-## Writing a driver
+## Extending
 
-A driver is a module in `src/devices/<name>/index.js`:
+**Driver**: a module in `src/devices/<name>/index.js`:
 
 ```js
 module.exports = {
@@ -124,19 +150,40 @@ module.exports = {
 	create: (options, io) => {
 		// io.sample(field, value, {unit, t}), io.trace(name, {x, series}),
 		// io.point(dataset, {x, y, class}), io.image(name, buffer, mime),
-		// io.log(text, level), io.status(state, detail)
+		// io.value(name, json), io.blob(name, buffer), io.log(text, level)
 		return { start: () => Promise, stop: () => Promise, command: (name, args) => Promise };
 	}
 };
 ```
 
 Register it in `src/devices/index.js`. For Python libraries, write a bridge
-with `python/mailab_bridge.py` and a `processDriver.pythonPreset(...)`
+on `python/mailab_bridge.py` and wrap it with `processDriver.pythonPreset(...)`
 (see `src/devices/mp305`).
+
+**Pane**: a module in `public/panes/<type>.js` built on the GUI SDK
+(`public/sdk`, on [qrp](https://github.com/nemanjan00/qrp)):
+
+```js
+export default pane((ctx) => table({
+	rows: () => ctx.state.devices,
+	key: (d) => d.id,
+	columns: [{ title: "id", mono: true, value: (d) => d.id }, { title: "state", value: (d) => d.state }],
+	empty: "no devices"
+}));
+```
+
+**Flowgraph block**: a class in `python/flowgraph_bridge.py` with
+`params`, `doc` and `work(x, rate) -> (y, rate)`, or write it inline in a
+`python` block.
 
 ## Develop
 
 ```sh
-yarn test
+yarn test        # jest, incl. the python modem BER regression (python/test_modem.py)
 yarn lint
+yarn build       # UI bundle
 ```
+
+[SPEC.md](SPEC.md) lists every requested feature and its status,
+[HW.md](HW.md) the per-instrument hardware checklist, and
+[CLAUDE.md](CLAUDE.md) the architecture notes for AI contributors.
