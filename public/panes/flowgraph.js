@@ -7,6 +7,9 @@ const BOX_W = 150;
 const BOX_H = 54;
 const GAP_X = 50;
 const GAP_Y = 18;
+// per-block docs: explanation, parameters, example graph + screenshot
+const DOCS_URL = "https://github.com/nemanjan00/mailab/tree/master/docs/blocks/";
+const docsLink = (type) => DOCS_URL + encodeURIComponent(type);
 
 // column = longest path from a source
 const layout = (graph) => {
@@ -139,7 +142,8 @@ export default {
 			const block = graph.blocks.find((b) => b.id === id);
 			const doc = catalog && catalog[block.type];
 			ctx.dialog("Block " + id + " (" + block.type + ")", [
-				{ name: "params", type: "textarea", value: JSON.stringify(block.params || {}, null, 2), hint: doc ? doc.doc + "\n\n" + JSON.stringify(doc.params, null, 1) : "" },
+				{ name: "params", type: "textarea", value: JSON.stringify(block.params || {}, null, 2), hint: doc ? doc.doc + "\n\n" + JSON.stringify(doc.params, null, 1) : "",
+					link: { text: block.type + " docs ↗", href: () => docsLink(block.type) } },
 				{ name: "action", type: "select", options: ["update", "remove"] }
 			], (values) => {
 				if (values.action === "remove") {
@@ -166,7 +170,8 @@ export default {
 				loadCatalog().then((cat) => {
 					const types = Object.keys(cat);
 					ctx.dialog("Add block", [
-						{ name: "type", type: "select", options: types, hint: (t) => cat[t].kind + ": " + cat[t].doc + "\n\n" + JSON.stringify(cat[t].params, null, 1) },
+						{ name: "type", type: "select", options: types, hint: (t) => cat[t].kind + ": " + cat[t].doc + "\n\n" + JSON.stringify(cat[t].params, null, 1),
+							link: { text: "block docs ↗", href: docsLink } },
 						{ name: "id", value: "" },
 						{ name: "from", label: "input from", type: "select", options: ["(none)"].concat(ids) },
 						{ name: "params", type: "textarea", value: "{}" }

@@ -1,0 +1,18 @@
+{
+  "description": "A self-contained loopback over UDP: a QPSK signal sent as cs16 by `net_sink` and received by `net_source` on `$PORT`: constellation and spectrum of what arrived.",
+  "prompt": "Stream this QPSK IQ as cs16 over UDP to 127.0.0.1:5600.",
+  "needs": "a receiver on the port: here the same graph's `net_source`; replace `$PORT` with a free port (e.g. 5600).",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "rate": 100000.0, "sps": 8, "snr_db": 30}},
+    {"id": "send", "type": "net_sink", "params": {"mode": "udp", "host": "127.0.0.1", "port": "$PORT", "format": "cs16"}},
+    {"id": "net", "type": "net_source", "params": {"mode": "udp", "host": "127.0.0.1", "port": "$PORT", "format": "cs16", "rate": 100000.0}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 1024, "traces": ["avg"]}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "const", "type": "constellation", "params": {"points": 1000}}
+  ],
+  "links": [["src", "send"], ["net", "spec"], ["net", "sync"], ["sync", "const"]],
+  "panes": [
+    {"type": "trace", "title": "Received spectrum", "config": {"traces": ["fg_spec"]}},
+    {"type": "trace", "title": "Received constellation", "config": {"traces": ["fg_const"]}}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "description": "The envelope of an RRC-shaped QPSK signal (it is not constant: the pulse shaping makes it vary between symbols).",
+  "prompt": "Show me the envelope of the QPSK signal on a scope.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "sps": 8, "snr_db": 30}},
+    {"id": "mag", "type": "mag", "params": {}},
+    {"id": "scope", "type": "scope", "params": {"samples": 400, "trigger": "none", "traces": ["live"], "measure": ["vpp", "mean"]}}
+  ],
+  "links": [["src", "mag"], ["mag", "scope"]],
+  "panes": [
+    {"type": "trace", "title": "|x| (envelope)", "config": {"traces": ["fg_scope"]}}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "description": "A 9600 baud UART line with noise: the decoded text (value) and the lines it logged.",
+  "prompt": "Decode the UART on this line at 9600 baud and show me the text.",
+  "blocks": [
+    {"id": "tx", "type": "uart_tx", "params": {"text": "temp=23.5C\r\n", "baud": 9600, "sps": 8, "repeat_ms": 200}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 20}},
+    {"id": "rx", "type": "uart_rx", "params": {"baud": 9600, "bits": 8, "parity": "none"}}
+  ],
+  "links": [["tx", "ch"], ["ch", "rx"]],
+  "panes": [
+    {"type": "json", "title": "uart_rx value", "config": {"value": "fg_rx"}},
+    {"type": "log", "title": "Device log", "config": {"device": "fg"}}
+  ]
+}

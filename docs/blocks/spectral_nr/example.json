@@ -1,0 +1,18 @@
+{
+  "description": "Wiener noise reduction on the test recording: the hiss floor between the harmonics drops.",
+  "prompt": "Reduce the hiss on the recording and show me the spectrum before and after.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "nr", "type": "spectral_nr", "params": {"method": "wiener", "floor_db": 15}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}}
+  ],
+  "links": [["src", "nr"], ["nr", "out"], ["src", "spec_before"], ["nr", "spec_after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "audio", "title": "Audio", "config": {"stream": "fg_out"}, "w": 4}
+  ]
+}

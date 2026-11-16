@@ -1,0 +1,14 @@
+{
+  "description": "A 20 kHz tone shifted to 0 Hz: the spectrum after the shift, with the input overlaid.",
+  "prompt": "Shift the 20 kHz tone down to baseband and show the spectrum before and after.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 100000.0, "freq": 20000.0, "noise": 0.01}},
+    {"id": "before", "type": "spectrum", "params": {"fft": 1024, "traces": ["avg"]}},
+    {"id": "shift", "type": "shift", "params": {"offset": 20000.0}},
+    {"id": "after", "type": "spectrum", "params": {"fft": 1024, "traces": ["avg"], "overlay": ["before"]}}
+  ],
+  "links": [["src", "before"], ["src", "shift"], ["shift", "after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: shifted (avg) and input (before avg)", "config": {"traces": ["fg_after"]}}
+  ]
+}

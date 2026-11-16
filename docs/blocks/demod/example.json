@@ -1,0 +1,15 @@
+{
+  "description": "8-PSK at 20 dB SNR after timing recovery: its constellation and the EVM channel.",
+  "prompt": "Measure the EVM of the 8-PSK signal.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "psk8", "sps": 8, "snr_db": 20}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "const", "type": "constellation", "params": {"points": 1500}},
+    {"id": "dem", "type": "demod", "params": {"scheme": "psk8", "fps": 5}}
+  ],
+  "links": [["src", "sync"], ["sync", "const"], ["sync", "dem"]],
+  "panes": [
+    {"type": "trace", "title": "Constellation", "config": {"traces": ["fg_const"]}},
+    {"type": "chart", "title": "EVM (dB)", "config": {"channels": ["fg_dem_evm"], "seconds": 8}}
+  ]
+}

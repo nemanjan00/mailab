@@ -81,6 +81,15 @@ export default {
 			body.innerHTML = "";
 		};
 
+		// [x, y] for uPlot; a log x axis can't take x <= 0 (a spectrum of real input starts at 0 Hz)
+		const xyTable = (tr, s) => {
+			if (!pane.config.logX) {
+				return [tr.x, s.y];
+			}
+			const keep = tr.x.map((_x, i) => i).filter((i) => tr.x[i] > 0);
+			return [keep.map((i) => tr.x[i]), keep.map((i) => s.y[i])];
+		};
+
 		const buildLine = (trs) => {
 			const axis = axisStyle();
 			const series = [{}];
@@ -99,7 +108,7 @@ export default {
 						paths: tr.mode === "step" ? uPlot.paths.stepped({ align: 1 }) : undefined,
 						value: (_u, v) => (v === null || v === undefined ? "—" : eng(v) + (right ? "" : tr.yUnit))
 					});
-					tables.push([tr.x, s.y]);
+					tables.push(xyTable(tr, s));
 				});
 			});
 			const scaleY = { auto: true };
@@ -108,7 +117,8 @@ export default {
 				scaleY.range = [Number(pane.config.yMin), Number(pane.config.yMax)];
 			}
 			const axes = [
-				Object.assign({}, axis, { values: (_u, ticks) => ticks.map((v) => eng(v, 1) + trs[0].xUnit) }),
+				// log axes hand unlabeled minor ticks in as null
+				Object.assign({}, axis, { values: (_u, ticks) => ticks.map((v) => (v === null ? "" : eng(v, 1) + trs[0].xUnit)) }),
 				Object.assign({}, axis, { size: 72, values: (_u, ticks) => ticks.map((v) => eng(v, 1)) })
 			];
 			if (rightAxis) {
@@ -187,7 +197,7 @@ export default {
 			const tables = [];
 			trs.forEach((tr) => {
 				tr.series.forEach((s) => {
-					tables.push([tr.x, s.y]);
+					tables.push(xyTable(tr, s));
 				});
 			});
 			refreshReadings(trs);

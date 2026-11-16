@@ -1,0 +1,19 @@
+{
+  "description": "50 Hz hum and harmonics notched out of the test recording (log frequency axis).",
+  "prompt": "There's 50 Hz hum on the recording, notch it out with harmonics.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "template": {"name": "hum_removal", "args": {"path": "$MEDIA/demo.wav", "hum": 50}},
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "hum", "type": "hum_notch", "params": {"freq": 50, "harmonics": 10, "width": 2}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}}
+  ],
+  "links": [["src", "hum"], ["hum", "out"], ["src", "spec_before"], ["hum", "spec_after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"], "logX": true}},
+    {"type": "audio", "title": "Audio", "config": {"stream": "fg_out"}, "w": 4}
+  ]
+}

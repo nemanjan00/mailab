@@ -1,0 +1,18 @@
+{
+  "description": "A 300 Hz high-pass (2 stages, 24 dB/octave) on the test recording: the hum and low buzz harmonics are gone.",
+  "prompt": "High-pass the audio at 300 Hz, steep, and show me the spectrum before and after.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "hpf", "type": "biquad", "params": {"type": "highpass", "freq": 300, "stages": 2}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}}
+  ],
+  "links": [["src", "hpf"], ["hpf", "out"], ["src", "spec_before"], ["hpf", "spec_after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"], "logX": true}},
+    {"type": "audio", "title": "Audio", "config": {"stream": "fg_out"}, "w": 4}
+  ]
+}

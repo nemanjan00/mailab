@@ -1,0 +1,15 @@
+{
+  "description": "QPSK at 25 dB SNR after a matched filter: eye of the I and the Q component.",
+  "prompt": "Show me the eye diagram of the QPSK signal, both I and Q.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "sps": 8, "snr_db": 25}},
+    {"id": "mf", "type": "matched_filter", "params": {"sps": 8}},
+    {"id": "eye_i", "type": "eye", "params": {"sps": 8, "traces": 64, "part": "real"}},
+    {"id": "eye_q", "type": "eye", "params": {"sps": 8, "traces": 64, "part": "imag"}}
+  ],
+  "links": [["src", "mf"], ["mf", "eye_i"], ["mf", "eye_q"]],
+  "panes": [
+    {"type": "trace", "title": "Eye: I", "config": {"traces": ["fg_eye_i"]}},
+    {"type": "trace", "title": "Eye: Q", "config": {"traces": ["fg_eye_q"]}}
+  ]
+}

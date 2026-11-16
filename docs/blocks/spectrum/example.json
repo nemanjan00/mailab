@@ -1,0 +1,13 @@
+{
+  "description": "A QPSK signal with a 200 Hz RBW, Blackman-Harris window: live, max hold and average traces, a peak marker, and a waterfall.",
+  "prompt": "Show me the spectrum with 200 Hz RBW, max hold and averaging, and a waterfall.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "rate": 100000.0, "sps": 8, "snr_db": 30}},
+    {"id": "spec", "type": "spectrum", "params": {"rbw": 200, "window": "blackmanharris", "traces": ["live", "max", "avg"], "average": 20, "points": 512}}
+  ],
+  "links": [["src", "spec"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum", "config": {"traces": ["fg_spec"]}, "peaks": 1},
+    {"type": "waterfall", "title": "Waterfall", "config": {"trace": "fg_spec", "rows": 80}}
+  ]
+}

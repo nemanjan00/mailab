@@ -1,0 +1,20 @@
+{
+  "description": "RNNoise on the test recording: the spectrum before and after, and the block stats (backend, RTF, latency).",
+  "prompt": "Clean up the noisy voice with the neural denoiser.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg", "rnnoise"],
+  "needs": "librnnoise (CPU) or a CUDA GPU for DeepFilterNet (installed on first use).",
+  "template": {"name": "voice_cleanup", "args": {"path": "$MEDIA/demo.wav", "backend": "rnnoise"}},
+  "blocks": [
+    {"id": "dn", "type": "denoise", "params": {"backend": "rnnoise"}},
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}}
+  ],
+  "links": [["src", "dn"], ["dn", "out"], ["src", "spec_before"], ["dn", "spec_after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "json", "title": "Stats (backend, RTF)", "config": {"value": "fg_stats", "depth": 2}, "w": 4}
+  ]
+}

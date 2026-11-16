@@ -274,7 +274,7 @@ const connect = () => {
 
 /**
  * Show a form dialog; resolves with field values, or null on cancel.
- * fields: [{name, label, type: text|textarea|select, value, options, hint}]
+ * fields: [{name, label, type: text|textarea|select, value, options, hint, link: {text, href(value)}}]
  * validate(values) may return a promise; a rejection keeps the dialog open.
  */
 ctx.dialog = (title, fields, validate) => {
@@ -319,6 +319,19 @@ ctx.dialog = (title, fields, validate) => {
 					}
 				});
 			}
+		}
+		if (field.link) {
+			// {text, href(value)}: e.g. a block's docs page, follows the selected option
+			const link = document.createElement("a");
+			link.className = "hint";
+			link.target = "_blank";
+			link.rel = "noopener";
+			link.textContent = field.link.text;
+			link.href = field.link.href(input.value);
+			body.appendChild(link);
+			input.addEventListener("change", () => {
+				link.href = field.link.href(input.value);
+			});
 		}
 	});
 	return new Promise((resolve) => {

@@ -1,0 +1,16 @@
+{
+  "description": "A soft clipper (`tanh`) as a python block: the harmonics it creates on a 1 kHz tone (spectrum after, input overlaid), and the clipped waveform.",
+  "prompt": "Add a python block that soft-clips the signal with tanh and show me the harmonics it adds.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 48000, "freq": 1000, "amp": 1.0, "noise": 0.001}},
+    {"id": "before", "type": "spectrum", "params": {"fft": 2048, "traces": ["avg"], "onesided": "true"}},
+    {"id": "clip", "type": "python", "params": {"code": "def work(x, rate):\n    return np.tanh(3 * np.real(x)).astype(np.float32)"}},
+    {"id": "after", "type": "spectrum", "params": {"fft": 2048, "traces": ["avg"], "overlay": ["before"]}},
+    {"id": "scope", "type": "scope", "params": {"samples": 96, "measure": ["vpp"]}}
+  ],
+  "links": [["src", "before"], ["src", "clip"], ["clip", "after"], ["clip", "scope"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum after (input overlaid)", "config": {"traces": ["fg_after"]}},
+    {"type": "trace", "title": "Clipped waveform", "config": {"traces": ["fg_scope"]}}
+  ]
+}

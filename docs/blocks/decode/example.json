@@ -1,0 +1,13 @@
+{
+  "description": "uart_tx at 9600 baud decoded by the uart decoder (sigrok when installed, else builtin): the annotation table.",
+  "prompt": "Decode the UART line with the sigrok uart decoder at 9600 baud and show me the annotations.",
+  "blocks": [
+    {"id": "tx", "type": "uart_tx", "params": {"text": "AT+GMR\r\n", "baud": 9600, "sps": 8, "repeat_ms": 200}},
+    {"id": "dec", "type": "decode", "params": {"decoder": "uart", "options": {"baudrate": 9600}, "annotations": ["rx-data"], "keep": 40}}
+  ],
+  "links": [["tx", "dec"]],
+  "panes": [
+    {"type": "json", "title": "Annotations", "config": {"value": "fg_dec", "view": "table"}, "w": 8},
+    {"type": "log", "title": "Device log", "config": {"device": "fg"}, "w": 4}
+  ]
+}

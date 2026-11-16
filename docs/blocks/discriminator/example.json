@@ -1,0 +1,17 @@
+{
+  "description": "2-FSK at 18 dB SNR after the discriminator: scope and eye diagram of the \u00b11 levels.",
+  "prompt": "Demodulate the 2-FSK signal with a discriminator and show its eye.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 4800}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "2fsk", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 18}},
+    {"id": "disc", "type": "discriminator", "params": {"sps": 8, "h": 1.0}},
+    {"id": "scope", "type": "scope", "params": {"samples": 160, "trigger": "none"}},
+    {"id": "eye", "type": "eye", "params": {"sps": 8, "traces": 64}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["ch", "disc"], ["disc", "scope"], ["disc", "eye"]],
+  "panes": [
+    {"type": "trace", "title": "Discriminator output", "config": {"traces": ["fg_scope"]}},
+    {"type": "trace", "title": "Eye", "config": {"traces": ["fg_eye"]}}
+  ]
+}

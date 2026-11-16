@@ -1,0 +1,20 @@
+{
+  "description": "A gate at -20 dBFS on the test recording: it closes in the pauses between \"syllables\" (level out drops), gain in dB.",
+  "prompt": "Gate the audio so the background noise between words is muted.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "gate", "type": "gate", "params": {"threshold_db": -20, "hysteresis_db": 3, "hold_ms": 50, "range_db": -40}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}},
+    {"id": "lvl_in", "type": "measure", "params": {"stat": "power_db"}},
+    {"id": "lvl_out", "type": "measure", "params": {"stat": "power_db"}}
+  ],
+  "links": [["src", "gate"], ["gate", "out"], ["src", "spec_before"], ["gate", "spec_after"], ["src", "lvl_in"], ["gate", "lvl_out"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "chart", "title": "Level in / out, gate gain (dB)", "config": {"channels": ["fg_lvl_in", "fg_lvl_out", "fg_gate_gr"], "seconds": 8}, "w": 4}
+  ]
+}

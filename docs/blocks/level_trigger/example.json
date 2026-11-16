@@ -1,0 +1,15 @@
+{
+  "description": "OOK bursts (16 ms on, 64 ms off) over noise: the envelope of the last captured burst and the burst counter.",
+  "prompt": "Catch the bursts above -15 dBFS, count them and show me the last one.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "hex:ffff0000000000000000", "bitrate": 1000}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "ook", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 30}},
+    {"id": "trig", "type": "level_trigger", "params": {"threshold_db": -15, "pretrigger_ms": 2, "hold_ms": 5}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["ch", "trig"]],
+  "panes": [
+    {"type": "trace", "title": "Last burst (dBFS)", "config": {"traces": ["fg_trig_burst"]}},
+    {"type": "chart", "title": "Bursts", "config": {"channels": ["fg_trig_count"], "seconds": 8}}
+  ]
+}

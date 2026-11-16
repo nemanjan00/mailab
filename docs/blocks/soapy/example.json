@@ -1,0 +1,17 @@
+{
+  "description": "An RTL-SDR at 100 MHz, 1 MS/s: spectrum with RF frequencies on the x axis and a waterfall.",
+  "prompt": "Tune the RTL-SDR to 100 MHz and show me the spectrum and waterfall.",
+  "needs": "a SoapySDR device and its Soapy module (python SoapySDR bindings).",
+  "substitute": {"note": "no SDR is attached to the docs machine, so `src` is a `file` block playing a generated 1 MS/s IQ file (FM carrier at -200 kHz, CW tones at +150 and +300 kHz).", "blocks": {"src": {"type": "file", "params": {"path": "$MEDIA/demo.cf32", "rate": 1000000.0}}}},
+  "media": ["demo.cf32"],
+  "template": {"name": "sdr_fm_audio", "args": {"args": "driver=rtlsdr", "freq": 145500000.0, "rate": 1000000.0}},
+  "blocks": [
+    {"id": "src", "type": "soapy", "params": {"args": "driver=rtlsdr", "freq": 100000000.0, "rate": 1000000.0, "gain": 30}},
+    {"id": "spec", "type": "spectrum", "params": {"rbw": 2000, "traces": ["live", "max"], "points": 600, "center": 100000000.0}}
+  ],
+  "links": [["src", "spec"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum", "config": {"traces": ["fg_spec"]}, "peaks": 2},
+    {"type": "waterfall", "title": "Waterfall", "config": {"trace": "fg_spec", "rows": 80}}
+  ]
+}

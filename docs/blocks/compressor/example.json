@@ -1,0 +1,21 @@
+{
+  "description": "4:1 compression above -30 dBFS with 6 dB makeup on the test recording: level in/out and gain reduction.",
+  "prompt": "Compress the audio 4:1 above -30 dB and show me the gain reduction.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "template": {"name": "broadcast", "args": {"path": "$MEDIA/demo.wav"}},
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "comp", "type": "compressor", "params": {"threshold_db": -30, "ratio": 4, "attack_ms": 5, "release_ms": 120, "makeup_db": 6}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}},
+    {"id": "lvl_in", "type": "measure", "params": {"stat": "power_db"}},
+    {"id": "lvl_out", "type": "measure", "params": {"stat": "power_db"}}
+  ],
+  "links": [["src", "comp"], ["comp", "out"], ["src", "spec_before"], ["comp", "spec_after"], ["src", "lvl_in"], ["comp", "lvl_out"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "chart", "title": "Level in / out, GR (dB)", "config": {"channels": ["fg_lvl_in", "fg_lvl_out", "fg_comp_gr"], "seconds": 8}, "w": 4}
+  ]
+}

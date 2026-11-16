@@ -1,0 +1,20 @@
+{
+  "description": "A -12 dBFS ceiling on the test recording (clicks peak near -2 dBFS): peak in vs out, and gain reduction.",
+  "prompt": "Limit the audio to -12 dBFS and show me the peaks before and after.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "lim", "type": "limiter", "params": {"ceiling_db": -12, "lookahead_ms": 5, "release_ms": 60}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}},
+    {"id": "peak_in", "type": "measure", "params": {"stat": "peak"}},
+    {"id": "peak_out", "type": "measure", "params": {"stat": "peak"}}
+  ],
+  "links": [["src", "lim"], ["lim", "out"], ["src", "spec_before"], ["lim", "spec_after"], ["src", "peak_in"], ["lim", "peak_out"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "chart", "title": "Peak in / out (linear), GR (dB)", "config": {"channels": ["fg_peak_in", "fg_peak_out", "fg_lim_gr"], "seconds": 8}, "w": 4}
+  ]
+}

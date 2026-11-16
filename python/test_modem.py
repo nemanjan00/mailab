@@ -104,7 +104,16 @@ def test_uart():
     print("ok uart")
 
 
+def test_lowpass_gain():
+    # unity passband gain whatever the cutoff (liquid's Kaiser design alone has ~1 / (2 cutoff))
+    for cutoff in (0.02, 0.1, 0.3):
+        y = dsp.Lowpass(cutoff, 127).process(np.exp(2j * np.pi * cutoff / 4 * np.arange(4000)))
+        assert abs(np.mean(np.abs(y[-1000:])) - 1) < 0.01, cutoff
+    print("ok lowpass")
+
+
 if __name__ == "__main__":
+    test_lowpass_gain()
     test_linear()
     test_gardner_path()
     test_cpfsk()

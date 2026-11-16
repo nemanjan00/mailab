@@ -1,0 +1,18 @@
+{
+  "description": "A 300-3400 Hz band-pass (255 taps) on the test recording: everything outside the telephone band drops.",
+  "prompt": "Band-pass the audio to 300-3400 Hz with a linear-phase FIR.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "bp", "type": "fir_filter", "params": {"type": "bandpass", "freq": 300, "freq2": 3400, "taps": 255}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}}
+  ],
+  "links": [["src", "bp"], ["bp", "out"], ["src", "spec_before"], ["bp", "spec_after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"], "logX": true}},
+    {"type": "audio", "title": "Audio", "config": {"stream": "fg_out"}, "w": 4}
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "description": "The test recording played at 0.1x (about -40 dBFS) brought to -20 dBFS: level in/out and the AGC gain.",
+  "prompt": "The audio is way too quiet, add an AGC to -20 dBFS and show me the gain.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000, "gain": 0.1}},
+    {"id": "agc", "type": "audio_agc", "params": {"target_db": -20, "max_gain_db": 30, "attack_ms": 20, "release_ms": 1000}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}},
+    {"id": "lvl_in", "type": "measure", "params": {"stat": "power_db"}},
+    {"id": "lvl_out", "type": "measure", "params": {"stat": "power_db"}}
+  ],
+  "links": [["src", "agc"], ["agc", "out"], ["src", "spec_before"], ["agc", "spec_after"], ["src", "lvl_in"], ["agc", "lvl_out"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "chart", "title": "Level in / out, gain (dB)", "config": {"channels": ["fg_lvl_in", "fg_lvl_out", "fg_agc_gain"], "seconds": 8}, "w": 4}
+  ]
+}

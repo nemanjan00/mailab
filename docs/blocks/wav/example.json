@@ -1,0 +1,14 @@
+{
+  "description": "A 1 kHz tone recorded to `DATA_DIR/media/rec.wav`: the waveform being recorded and the block stats (samples written).",
+  "prompt": "Record this signal to a WAV file in the media folder.",
+  "blocks": [
+    {"id": "rec", "type": "wav", "params": {}},
+    {"id": "src", "type": "signal", "params": {"rate": 48000, "freq": 1000, "amp": 0.5, "noise": 0.01}},
+    {"id": "scope", "type": "scope", "params": {"samples": 480, "measure": ["freq"]}}
+  ],
+  "links": [["src", "rec"], ["src", "scope"]],
+  "panes": [
+    {"type": "trace", "title": "Recording", "config": {"traces": ["fg_scope"]}},
+    {"type": "json", "title": "Stats (rec: samples in)", "config": {"value": "fg_stats"}}
+  ]
+}

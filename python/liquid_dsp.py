@@ -212,13 +212,21 @@ class Lowpass(_Handle):
     _destroy = staticmethod(_firfilt_destroy)
 
     def __init__(self, cutoff, taps=63, stopband_db=60.0):
+        # liquid's Kaiser design isn't normalized (DC gain ~ 1 / (2 cutoff), +22 dB at
+        # cutoff 0.04): measure the DC gain on a throwaway copy and scale to unity
+        probe = _firfilt_create(taps, cutoff, stopband_db, 0.0)
+        ones = np.ones(taps + 1, dtype=np.complex64)
+        out = np.empty(len(ones), dtype=np.complex64)
+        _firfilt_block(probe, ones.ctypes.data, len(ones), out.ctypes.data)
+        _firfilt_destroy(probe)
+        self.scale = 1.0 / (abs(out[-1]) or 1.0)
         self._q = _firfilt_create(taps, cutoff, stopband_db, 0.0)
 
     def process(self, x):
         x = _c64(x)
         y = np.empty(len(x), dtype=np.complex64)
         _firfilt_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
-        return y
+        return y * np.float32(self.scale)
 
 
 class MatchedFilter(_Handle):

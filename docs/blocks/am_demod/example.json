@@ -1,0 +1,18 @@
+{
+  "description": "A 1 kHz tone AM-modulated (80 %) through a 30 dB SNR channel: the AM spectrum (carrier + sidebands) and the demodulated tone.",
+  "prompt": "AM-modulate a 1 kHz tone, show its spectrum and the demodulated audio.",
+  "template": {"name": "sdr_am_audio", "args": {"args": "driver=rtlsdr", "freq": 7100000.0, "mode": "lsb"}},
+  "blocks": [
+    {"id": "tone", "type": "signal", "params": {"rate": 48000, "freq": 1000, "amp": 1.0, "noise": 0}},
+    {"id": "am", "type": "analog_mod", "params": {"mode": "am", "index": 0.8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 30}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 2048, "traces": ["avg"]}},
+    {"id": "demod", "type": "am_demod", "params": {"mode": "am"}},
+    {"id": "scope", "type": "scope", "params": {"samples": 240, "measure": ["freq", "vpp"]}}
+  ],
+  "links": [["tone", "am"], ["am", "ch"], ["ch", "spec"], ["ch", "demod"], ["demod", "scope"]],
+  "panes": [
+    {"type": "trace", "title": "AM spectrum", "config": {"traces": ["fg_spec"]}},
+    {"type": "trace", "title": "Demodulated", "config": {"traces": ["fg_scope"]}}
+  ]
+}

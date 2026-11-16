@@ -14,6 +14,8 @@
 		"test:watch": "jest --watch",
 		"prepare": "husky",
 		"channel": "node bin/channel.js",
+		"block-docs": "node bin/block-docs.js",
+		"block-shots": "node bin/block-shots.js",
 		"build": "esbuild public/app.js --bundle --format=esm --outdir=public/build --sourcemap --minify --loader:.woff2=file --loader:.woff=file --loader:.ttf=file"
 	},
 	"jest": {

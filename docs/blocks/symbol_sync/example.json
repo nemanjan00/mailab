@@ -1,0 +1,15 @@
+{
+  "description": "QPSK at 22 dB SNR: the raw samples (8 per symbol, pulse-shape trajectories) and the one-sample-per-symbol output.",
+  "prompt": "Recover symbol timing on the QPSK signal and show the constellation before and after.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "sps": 8, "snr_db": 22}},
+    {"id": "raw", "type": "constellation", "params": {"points": 2000}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8, "beta": 0.35}},
+    {"id": "const", "type": "constellation", "params": {"points": 1500}}
+  ],
+  "links": [["src", "raw"], ["src", "sync"], ["sync", "const"]],
+  "panes": [
+    {"type": "trace", "title": "Before: every sample", "config": {"traces": ["fg_raw"]}},
+    {"type": "trace", "title": "After symbol_sync", "config": {"traces": ["fg_const"]}}
+  ]
+}

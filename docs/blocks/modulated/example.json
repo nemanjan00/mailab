@@ -1,0 +1,15 @@
+{
+  "description": "16-QAM at 25 dB SNR: the occupied spectrum, and the constellation after symbol timing recovery.",
+  "prompt": "Give me a 16-QAM test signal and show its spectrum and constellation.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qam16", "sps": 8, "snr_db": 25}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 1024, "traces": ["avg"], "average": 16}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8, "bandwidth": 0.01}},
+    {"id": "const", "type": "constellation", "params": {"points": 2000}}
+  ],
+  "links": [["src", "spec"], ["src", "sync"], ["sync", "const"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum", "config": {"traces": ["fg_spec"]}},
+    {"type": "trace", "title": "Constellation after symbol_sync", "config": {"traces": ["fg_const"]}}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "description": "A 10 kHz tone with some noise at 100 kS/s: its spectrum and the triggered real part on a scope.",
+  "prompt": "Make a 10 kHz test tone with a bit of noise and show me the spectrum and a scope view.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 100000.0, "freq": 10000.0, "amp": 1.0, "noise": 0.05}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 2048, "traces": ["live", "avg"]}},
+    {"id": "scope", "type": "scope", "params": {"samples": 200, "trigger": "rising", "level": 0, "measure": ["vpp", "freq"]}}
+  ],
+  "links": [["src", "spec"], ["src", "scope"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum", "config": {"traces": ["fg_spec"]}},
+    {"type": "trace", "title": "Scope (real part)", "config": {"traces": ["fg_scope"]}}
+  ]
+}
