@@ -152,14 +152,16 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-2. Blob analysis: entropy, `file`, binwalk, binary diff; then flashrom/minipro/OpenOCD dumps into it
-3. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
-4. Finish the qrp/SDK migration of the remaining panes; markdown live values
-5. MHO900 siggen; Soapy TX block with an allow-TX + power gate
-6. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, uhubctl, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, NanoKVM, ThunderScope, KC901K/KC908V
-7. Shared terminals (shell-session-mcp), protokai, log classification, OpenCV, analog video, journal, timebase
-8. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
-9. Deployment on `lab`: waiting on your decision
+1. Blob analysis: entropy, `file`, binwalk, binary diff
+2. UART in/out; MCP subscriptions/notifications; log classification (diversity-classifier style)
+3. Long-term trends (Grafana-like timeframes)
+4. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
+5. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry
+6. MHO900 siggen; Soapy TX block with an allow-TX + power gate
+7. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, uhubctl, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, OpenOCD, flashrom, minipro, NanoKVM, ThunderScope, KC901K/KC908V
+8. Shared terminals (shell-session-mcp), protokai, OpenCV, analog video, journal, timebase, ngscopeclient-style decoders
+9. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
+10. Deployment on `lab`: waiting on your decision
 
 ## Appendix: requests in order (this session)
 
