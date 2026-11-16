@@ -41,7 +41,16 @@ export default (dialog, body, ctx) => {
 		el("p", { class: "muted" }, "A profile holds devices and their options, panes, derived channels, safety rules + approval policy, classifier templates and trend patterns (not recorded data)."),
 		el("form", { class: "toolbar", onsubmit: (e) => {
 			e.preventDefault();
-			act(ctx.api("POST", "/profiles", { name: view.name }), "saved " + view.name);
+			const name = view.name;
+			// replacing a profile people trust by name: show what changes first
+			const existing = view.profiles.some((p) => p.name === name);
+			const check = existing ? ctx.api("GET", "/profiles/" + encodeURIComponent(name) + "/diff").then((d) => confirm("Overwrite profile \"" + name + "\"?\n\n"
+				+ (d.save.length ? d.save.join("\n") : "(no changes)"))) : Promise.resolve(true);
+			check.then((ok) => {
+				if (ok) {
+					act(ctx.api("POST", "/profiles", { name: name }), "saved " + name);
+				}
+			});
 		} },
 		el("input", { placeholder: "name, e.g. psu-bringup", bind: [view, "name"] }),
 		el("button", { class: "primary" }, "save current lab"),
@@ -54,11 +63,13 @@ export default (dialog, body, ctx) => {
 				el("td", { class: "muted" }, p.devices.join(", ") || "—"),
 				el("td", { class: "muted" }, p.savedAt ? time(Date.parse(p.savedAt)) : ""),
 				el("td", {},
-					el("button", { onclick: () => {
-						if (confirm("Replace the whole lab with \"" + p.name + "\"? Devices restart.")) {
+					el("button", { onclick: () => ctx.api("GET", "/profiles/" + encodeURIComponent(p.name) + "/diff").then((d) => {
+						if (confirm("Replace the whole lab with \"" + p.name + "\"? Devices restart.\n\n" + (d.load.length ? d.load.join("\n") : "(same as the current lab)"))) {
 							act(ctx.api("POST", "/profiles/" + p.name + "/load"), "loaded " + p.name);
 						}
-					} }, "load"), " ",
+					}, (err) => {
+						view.status = "⚠ " + err.message;
+					}) }, "load"), " ",
 					el("a", { href: "/api/profiles/" + p.name, download: p.name + ".mailab.json" }, "download"), " ",
 					el("button", { class: "icon", title: "delete", onclick: () => {
 						if (confirm("Delete profile " + p.name + "?")) {

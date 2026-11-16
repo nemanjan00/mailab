@@ -147,10 +147,17 @@ const api = (lab) => {
 		lab.trends.setPatterns(req.body.patterns || []);
 		return { patterns: lab.trends.getPatterns() };
 	}));
-	// lab profiles: saving is a normal write; loading/importing/deleting can
+	// lab profiles: saving a new one is a normal write; overwriting, loading/importing/deleting can
 	// replace safety rules and the policy, so only people do it
 	router.get("/profiles", route(() => lab.profiles.list()));
-	router.post("/profiles", route((req) => lab.profiles.save(req.body.name)));
+	router.post("/profiles", route((req) => {
+		// a new profile is a normal write; replacing one (a profile people trust by name) is human-only
+		if (lab.profiles.exists(req.body.name)) {
+			human(req);
+		}
+		return lab.profiles.save(req.body.name);
+	}));
+	router.get("/profiles/:name/diff", route((req) => ({ load: lab.profiles.loadDiff(req.params.name), save: lab.profiles.saveDiff(req.params.name) })));
 	router.get("/profiles/:name", (req, res) => {
 		try {
 			res.attachment(req.params.name + ".mailab.json").json(lab.profiles.get(req.params.name));

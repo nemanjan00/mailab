@@ -16,3 +16,10 @@ describe("pyenv", () => {
 		requirements.forEach((r) => expect(r).toMatch(/==\d/));
 	});
 });
+
+describe("pins", () => {
+	test("installed versions that differ from the pin are reported, not changed", () => {
+		expect(pyenv.pinMismatches(["numpy==2.5.3", "pyserial==3.5", "hidapi==0.15.0", "loose"], { numpy: "2.2.4", pyserial: "3.5", hidapi: null }))
+			.toEqual(["numpy 2.2.4 is installed, numpy==2.5.3 is pinned (kept: pins only apply to fresh installs)"]);
+	});
+});

@@ -569,17 +569,29 @@ const create = (lab, context) => {
 
 	tool("lab_profiles", "Saved lab setups (profiles)", {}, () => lab.profiles.list());
 
-	tool("lab_save", "Save the whole lab setup (devices + options, panes, derived channels, safety rules + policy, classifier templates, trend patterns) as a named profile", {
+	tool("lab_save", "Save the whole lab setup (devices + options, panes, derived channels, safety rules + policy, classifier templates, trend patterns) as a named profile. "
+		+ "A new name saves directly; overwriting an existing profile waits for a person's approval (they see what changes)", {
 		name: z.string()
-	}, (a) => lab.profiles.save(a.name));
+	}, (a) => {
+		if (!lab.profiles.exists(a.name)) {
+			return lab.profiles.save(a.name);
+		}
+		const diff = lab.profiles.saveDiff(a.name);
+		return lab.safety.requestApproval({
+			who: actor(), device: "lab", command: "save", args: { profile: a.name },
+			reason: "overwrites profile \"" + a.name + "\"" + (diff.length ? ":\n" + diff.join("\n") : " (no changes)")
+		}).then(() => lab.profiles.save(a.name));
+	});
 
 	tool("lab_load", "Replace the lab with a saved profile (stops all devices). Waits for a person's approval: it can replace safety rules", {
 		name: z.string()
 	}, (a) => {
 		const profile = lab.profiles.get(a.name);
+		const diff = lab.profiles.loadDiff(a.name);
 		return lab.safety.requestApproval({
 			who: actor(), device: "lab", command: "load", args: { profile: a.name },
 			reason: "replaces the whole lab with profile \"" + a.name + "\" (" + (profile.devices || []).length + " devices, safety rules included)"
+				+ (diff.length ? ":\n" + diff.join("\n") : "")
 		}).then(() => lab.importState(profile)).then((state) => ({ loaded: a.name, devices: state.devices.map((d) => d.id + ":" + d.state) }));
 	});
 

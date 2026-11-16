@@ -83,6 +83,52 @@ describe("lab profiles", () => {
 		});
 	});
 
+	test("overwriting a profile: human-only on REST, approval with a diff over MCP", () => {
+		return lab.addDevice("psu", "sim", { maxVolts: 5 })
+			.then(() => request(app).post("/api/profiles").set(AI).send({ name: "safe" }).expect(200))
+			.then(() => {
+				return lab.removeDevice("psu");
+			})
+			.then(() => lab.addDevice("psu", "sim", { maxVolts: 30 }))
+			// a new name is still a normal write
+			.then(() => request(app).post("/api/profiles").set(AI).send({ name: "fresh" }).expect(200))
+			.then(() => request(app).post("/api/profiles").set(AI).send({ name: "safe" }).expect(403))
+			.then(() => request(app).get("/api/profiles/safe/diff").set(ME).expect(200))
+			.then((res) => {
+				expect(res.body.save).toContain("~ device psu: maxVolts 5 → 30");
+				expect(res.body.load).toContain("~ device psu: maxVolts 30 → 5");
+				const saving = request(app).post("/mcp").set(MCP).set(AI).send({
+					jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "lab_save", arguments: { name: "safe" } }
+				}).then((r) => r);
+				return wait(150).then(() => {
+					const pending = lab.safety.listPending();
+					expect(pending.length).toBe(1);
+					expect(pending[0].reason).toMatch(/overwrites profile "safe"[\s\S]*maxVolts 5 → 30/);
+					return request(app).post("/api/approvals/" + pending[0].id).set(ME).send({ approve: false });
+				}).then(() => saving);
+			})
+			.then((res) => {
+				expect(res.body.result.isError).toBe(true);
+				expect(lab.profiles.get("safe").devices.find((d) => d.id === "psu").options.maxVolts).toBe(5);
+				return request(app).post("/api/profiles").set(ME).send({ name: "safe" }).expect(200);
+			})
+			.then(() => {
+				expect(lab.profiles.get("safe").devices.find((d) => d.id === "psu").options.maxVolts).toBe(30);
+				return lab.removeDevice("psu");
+			});
+	});
+
+	test("diffStates summarizes devices, rules, policy", () => {
+		const diffStates = require("..").diffStates;
+		const a = { devices: [{ id: "x", driver: "sim", options: { a: 1 }, enabled: true }, { id: "gone", driver: "sim" }], safety: { rules: [], policy: [{ command: "output" }] }, panes: [] };
+		const b = { devices: [{ id: "x", driver: "sim", options: { a: 2 }, enabled: false }, { id: "new", driver: "uart" }], safety: { rules: [{ id: "r", when: "1" }], policy: [] }, panes: [{}] };
+		expect(diffStates(a, b)).toEqual([
+			"~ device x: a 1 → 2", "~ device x: disabled", "+ device new (uart)", "- device gone (sim)",
+			"~ safety rules: 0 removed or changed, 1 added or changed", "~ approval policy: 1 → 0 entries (contents differ)", "~ panes: 0 → 1"
+		]);
+		expect(diffStates(a, a)).toEqual([]);
+	});
+
 	test("profile names can't escape the profiles directory", () => {
 		expect(() => lab.profiles.save("../evil")).toThrow(/profile names/);
 		expect(() => lab.profiles.save(".hidden")).toThrow(/profile names/);

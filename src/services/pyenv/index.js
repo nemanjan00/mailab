@@ -52,6 +52,26 @@ const IMPORT_NAMES = { hidapi: "hid", pyserial: "serial" };
 // "pymp305==0.5.3" -> "pymp305": requirements are pinned, imports aren't
 const distName = (requirement) => String(requirement).split(/[<>=!~;[\s]/)[0];
 
+// "numpy==2.5.3" -> "2.5.3" (only exact pins are compared)
+const pinnedVersion = (requirement) => {
+	const m = /==\s*([^\s;,]+)/.exec(String(requirement));
+	return m ? m[1] : null;
+};
+
+/**
+ * Requirements whose installed version differs from the pin. Pins are not
+ * enforced on what's already importable (a system numpy / SoapySDR stack must
+ * not be shadowed by a venv copy): mismatches are only reported.
+ * @param {string[]} requirements
+ * @param {Object} versions dist name -> installed version (null = unknown)
+ * @returns {string[]} warnings
+ */
+const pinMismatches = (requirements, versions) => [].concat(requirements || []).filter((r) => {
+	const want = pinnedVersion(r);
+	const have = versions[distName(r)];
+	return want && have && have !== want;
+}).map((r) => distName(r) + " " + versions[distName(r)] + " is installed, " + r + " is pinned (kept: pins only apply to fresh installs)");
+
 const importName = (requirement) => {
 	const name = distName(requirement);
 	return IMPORT_NAMES[name] || name.replace(/-/g, "_");
@@ -96,15 +116,33 @@ const pyenv = {
 			}
 			// import check: system site packages count as installed
 			const imports = wanted.map(importName);
-			const probe = "import importlib.util, sys\nmissing = [n for n in sys.argv[1:] if importlib.util.find_spec(n) is None]\nprint(' '.join(missing))";
+			// argv: import names, "--", dist names; prints the missing imports, then dist=version pairs
+			const probe = "import importlib.util, importlib.metadata as md, sys\n"
+				+ "i = sys.argv.index('--')\n"
+				+ "print(' '.join(n for n in sys.argv[1:i] if importlib.util.find_spec(n) is None))\n"
+				+ "def v(d):\n    try:\n        return md.version(d)\n    except Exception:\n        return ''\n"
+				+ "print(' '.join(d + '=' + v(d) for d in sys.argv[i + 1:]))";
 			return new Promise((resolve, reject) => {
-				const child = spawn(venvPython(), ["-c", probe].concat(imports));
+				const child = spawn(venvPython(), ["-c", probe].concat(imports, ["--"], wanted.map(distName)));
 				let out = "";
 				child.stdout.on("data", (d) => {
 					out += d;
 				});
 				child.on("error", reject);
-				child.on("close", () => resolve(out.trim().split(/\s+/).filter(Boolean)));
+				child.on("close", () => {
+					const lines = out.split("\n");
+					const versions = {};
+					(lines[1] || "").trim().split(/\s+/).filter(Boolean).forEach((pair) => {
+						const eq = pair.indexOf("=");
+						versions[pair.slice(0, eq)] = pair.slice(eq + 1) || null;
+					});
+					pinMismatches(wanted, versions).forEach((warning) => {
+						if (log) {
+							log(warning);
+						}
+					});
+					resolve((lines[0] || "").trim().split(/\s+/).filter(Boolean));
+				});
 			}).then((missingImports) => {
 				const missing = wanted.filter((p, i) => missingImports.indexOf(imports[i]) !== -1);
 				if (!missing.length) {
@@ -119,6 +157,7 @@ const pyenv = {
 	}),
 
 	importName: importName,
+	pinMismatches: pinMismatches,
 
 	_venvDir: venvDir
 };
