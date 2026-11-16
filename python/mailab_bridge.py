@@ -38,6 +38,33 @@ def parse_switch(value, name="value"):
     raise ValueError('%s must be true/false or "on"/"off", got %r' % (name, value))
 
 
+def parse_number(value, name="value", lo=None, hi=None, unit=""):
+    """Strict number for hardware setpoints: int/float or a numeric string,
+    finite, within [lo, hi]. Rejects bools (True would be 1 V)."""
+    if isinstance(value, bool) or value is None:
+        raise ValueError("%s must be a number, got %r" % (name, value))
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("%s must be a number, got %r" % (name, value)) from None
+    if number != number or number in (float("inf"), float("-inf")):
+        raise ValueError("%s must be finite, got %r" % (name, value))
+    if lo is not None and number < lo:
+        raise ValueError("%s %g%s is below the minimum %g%s" % (name, number, unit, lo, unit))
+    if hi is not None and number > hi:
+        raise ValueError("%s %g%s is above the limit %g%s" % (name, number, unit, hi, unit))
+    return number
+
+
+# the lab device this bridge runs as (set by the process driver); lab channels are <device>_<field>
+DEVICE_ID = __import__("os").environ.get("MAILAB_DEVICE_ID") or "device"
+
+
+def channel(field):
+    """full lab channel name of one of this bridge's sample fields (for panels)"""
+    return "%s_%s" % (DEVICE_ID, field)
+
+
 def emit(msg):
     with _out_lock:
         sys.stdout.write(json.dumps(msg) + "\n")

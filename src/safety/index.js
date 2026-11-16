@@ -8,7 +8,8 @@
 //
 // Approvals: an AI command matching the policy waits for a person to approve
 // it in the chat pane. Default policy: power outputs on, voltage above 5 V,
-// PTT, glitch campaigns, pairing, chip write/erase (flashrom, minipro).
+// PTT, glitch campaigns, pairing, chip write/erase (flashrom, minipro), MP305
+// mode / USB-PD / program changes.
 
 const randomUUID = require("crypto").randomUUID;
 const math = require("../math");
@@ -26,6 +27,13 @@ const DEFAULT_POLICY = [
 	{ command: "glitch", reason: "fires a glitch" },
 	{ command: "pair", reason: "pairs a radio module" },
 	{ command: "usb_power", reason: "switches power on a USB hub port (the device on it drops off the bus)" },
+	// MP305: power-on paths beyond DC set_output/output (covered above)
+	{ driver: "mp305", command: "set_output", when: "on and voltage > 5", reason: "MP305 output on above 5 V" },
+	{ driver: "mp305", command: "mode", reason: "switches the MP305 operating mode (DC / USB-PD source / programmable)" },
+	{ driver: "mp305", command: "pd_set", reason: "changes the USB-PD voltages the MP305 offers a connected sink" },
+	{ driver: "mp305", command: "pd_output", when: "on", reason: "turns the MP305 USB-PD source output on" },
+	{ driver: "mp305", command: "program_write", reason: "overwrites a stored MP305 voltage program" },
+	{ driver: "mp305", command: "program_run", reason: "runs a voltage program on the MP305 output" },
 	{ driver: "flashrom", command: "write", reason: "overwrites a flash chip" },
 	{ driver: "flashrom", command: "erase", reason: "erases a flash chip" },
 	{ driver: "minipro", command: "write", reason: "overwrites a chip in the programmer" },

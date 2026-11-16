@@ -13,7 +13,7 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | Anything printing lines | `serial` | USB serial (tty) | – | 🧪 |
 | Any JSON-lines helper | `process` | stdio | `python/mailab_bridge.py` | ✅ (fake helper) |
 | Miniware MDP-P906 PSU | `mdp` | nRF52840 radio bridge | `~/mdp-p906/host` | 🧪 |
-| ISDT MP305A/B PSU | `mp305` | USB-HID | `pymp305` | 🧪 |
+| ISDT MP305A/B PSU | `mp305` | USB-HID / BLE | `pymp305` 0.6.3 | 🧪 (bridge tested against a simulated unit) |
 | Rigol DM858/DM858E DMM | `dm858` | SCPI over LAN / usbtmc | programming guide | 🧪 |
 | Rigol MHO900 scope | `mho900` | SCPI over LAN / usbtmc | DHO-family SCPI | 🧪 *protocol from docs* |
 | Sipeed SLogic / DSLogic | `sigrok` | sigrok-cli | `nemanjan00/libsigrok` (slogic-dev) | 🧪 (demo ✅) |
@@ -41,9 +41,10 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 - [ ] Multiple modules: one device per module address
 
 ### mp305
-- [ ] `pip install pymp305`, udev rule for the HID device
-- [ ] Check `read_state()` field names match `python/mp305_bridge.py` (voltage/current/power/temperature)
-- [ ] BLE variant (`MP305BLE`) as an option
+- [x] pymp305 0.6.3 (installed/upgraded into the mailab venv on device start)
+- [ ] udev rule for the HID device
+- [ ] First run on a real unit: DC set/output, CV/CC + OCP/`reapply`, modes, USB-PD `pd_set`/`pd_output`, program write/run (only the simulated unit in `python/mp305_fake.py` has been driven so far)
+- [ ] BLE (`transport: "ble"`): never run; the bridge wraps MP305BLE on its own asyncio thread and does `reapply` itself (MP305BLE.set_output has no reapply)
 
 ### dm858
 - [ ] LAN: confirm raw-socket port (5555?) or use usbtmc (`/dev/usbtmcN`)
