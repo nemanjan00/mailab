@@ -6,6 +6,7 @@
 //   "image"    {name}
 //   "value"    {name}               a JSON document changed
 //   "audio"    {name, rate, data}   a chunk of base64 int16 PCM
+//   "term"     {device, data}       raw console bytes (base64) for web terminals
 //   "log"      {t, device, level, text}
 //   "activity" {t, tool, args, ok, summary}
 
@@ -30,6 +31,8 @@ const ACTIVITY_SIZE = 500;
 const NOTIFY_SIZE = 500;
 const CHAT_SIZE = 500;
 const CHAT_PERSISTED = 200;
+// raw console bytes kept per device for web terminals (ANSI included)
+const TERM_SCROLLBACK = 256 * 1024;
 const MAX_SCATTER_POINTS = 100000;
 const MAX_DERIVED_DEPTH = 8;
 
@@ -69,6 +72,8 @@ const create = (options) => {
 	const chat = (saved.chat || []).slice();
 	let chatId = chat.reduce((max, m) => Math.max(max, m.id), 0);
 	const derived = {};
+	// device -> raw console bytes (web terminal scrollback)
+	const terms = {};
 	// samples not yet pushed to web clients: name -> {t: [], v: []}
 	let pending = {};
 
@@ -346,6 +351,19 @@ const create = (options) => {
 			events.emit("audio", { name: name, rate: rate, data: data });
 		},
 
+		/**
+		 * Raw terminal bytes of a console device (ANSI colors and all), for web
+		 * terminals: kept as a short scrollback and pushed as they arrive.
+		 */
+		pushTerm: (device, data) => {
+			const prev = terms[device] || Buffer.alloc(0);
+			const next = Buffer.concat([prev, data]);
+			terms[device] = next.length > TERM_SCROLLBACK ? next.subarray(next.length - TERM_SCROLLBACK) : next;
+			events.emit("term", { device: device, data: data.toString("base64") });
+		},
+
+		getTerm: (device) => (terms[device] || Buffer.alloc(0)).toString("base64"),
+
 		log: (device, text, level) => {
 			const entry = { t: Date.now(), device: device, level: level || "info", text: String(text) };
 			ring(logs, entry, LOG_SIZE);
@@ -548,6 +566,9 @@ const create = (options) => {
 				},
 				audio: (name, rate, data) => {
 					lab.pushAudio(field(name), rate, data);
+				},
+				term: (data) => {
+					lab.pushTerm(id, data);
 				},
 				// drivers persisting their own state (e.g. a flowgraph) into options
 				setOptions: (changes) => {

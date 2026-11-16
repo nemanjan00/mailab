@@ -404,13 +404,10 @@ dialog.help a { color: var(--accent-2); }
 .usb-nodes { color: var(--c1); }
 .usb-ctl { margin-left: auto; display: inline-flex; gap: 4px; }
 
-/* serial terminal */
+/* serial terminal (xterm.js, Dracula) */
 .terminal { display: flex; flex-direction: column; height: 100%; }
-.term-feed { flex: 1; overflow: auto; padding: 4px 8px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
-.term-feed .t { color: var(--muted); }
-.term-tx { color: var(--accent-2); }
-.term-warn, .term-error { color: var(--err); }
-.term-info { color: var(--muted); }
-.term-input { margin: 4px 8px 8px; }
 .terminal .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .terminal .toolbar select { width: auto; flex: none; }
+.terminal .widget { flex: 1; min-height: 0; background: #282a36; padding: 4px 0 0 6px; }
+.terminal .xterm { height: 100%; }
+.terminal .xterm-viewport, .terminal .xterm-scrollable-element { background-color: #282a36 !important; }

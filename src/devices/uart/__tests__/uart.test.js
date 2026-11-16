@@ -31,6 +31,8 @@ const fakeIo = () => {
 	};
 	io.setOptions = (o) => Object.assign(io.options, o);
 	io.sample = () => null;
+	io.terms = [];
+	io.term = (data) => io.terms.push(data);
 	return io;
 };
 
@@ -87,6 +89,14 @@ describe("uart helpers", () => {
 			})
 			.then(() => {
 				expect(rx()).toEqual(["U-Boot 2024", "ok", "login: "]);
+				// web terminals get the raw bytes, colors included
+				expect(Buffer.concat(io.terms).toString("latin1")).toContain("\x1b[32mok\x1b[0m");
+				return dev.command("write_raw", { data: Buffer.from("\x03ls\r").toString("base64") });
+			})
+			.then(() => waitFor(() => peer === "\x03ls\r", 2000))
+			.then(() => {
+				peer = "";
+				expect(io.logs.filter((l) => l[0] === "tx").length).toBe(0);
 				return dev.command("write", { text: "root", eol: "crlf" });
 			})
 			.then(() => waitFor(() => peer === "root\r\n", 2000))

@@ -94,6 +94,10 @@ const create = (options, io) => {
 
 	const onData = (data) => {
 		stats.rxBytes += data.length;
+		// web terminals get the bytes untouched (colors, cursor movement)
+		if (io.term) {
+			io.term(data);
+		}
 		if (capture && capture.size < CAPTURE_MAX) {
 			capture.chunks.push(data);
 			capture.size += data.length;
@@ -177,6 +181,14 @@ const create = (options, io) => {
 		write: (args) => {
 			writeText(args.text === undefined ? "" : args.text, args.eol);
 			return { ok: true };
+		},
+
+		// keystrokes from a web terminal: sent as is, not logged per key (the
+		// target echoes them back)
+		write_raw: (args) => {
+			const buf = Buffer.from(String(args.data || ""), "base64");
+			send(buf);
+			return { ok: true, bytes: buf.length };
 		},
 
 		write_hex: (args) => {
@@ -299,6 +311,7 @@ module.exports = {
 	commands: {
 		write: "{text, eol?} send text",
 		write_hex: "{hex} send raw bytes, e.g. \"de ad be ef\"",
+		write_raw: "{data} send base64 bytes as is (web terminal keystrokes; not logged)",
 		query: "{text, timeoutMs?, until?} send, return lines received until the regex `until` matches or the timeout",
 		set: "{baud?, format?, flow?, eol?, display?} change settings live",
 		capture_start: "{} start recording raw received bytes",

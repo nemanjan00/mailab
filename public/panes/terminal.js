@@ -1,120 +1,180 @@
-// Serial terminal for a `uart` device (USB-UART adapters): scrollback of
-// rx / tx lines, an input line that sends text (or hex), and live baud,
-// line ending and display (text / hex) switches. History with ↑ / ↓.
+// Web terminal for a `uart` device (USB-UART adapters): xterm.js on the raw
+// byte stream, so colors, cursor movement and full-screen TUIs (menuconfig,
+// vi, top on the target) work. Dracula palette. Raw mode sends keystrokes as
+// typed (the target echoes); line mode edits locally and sends on Enter with
+// the device's line ending (↑ / ↓ history). Toolbar: baud, format, line
+// ending, how rx is logged for the AI (text / hex), raw / line, clear.
 
-import { el, list, onDispose, state, when } from "@nemanjan00/qrp";
-import { empty, iconButton, pane, toolbar } from "../sdk/index.js";
-import { time } from "./util.js";
+import "@xterm/xterm/css/xterm.css";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { el, onDispose, state, when } from "@nemanjan00/qrp";
+import { empty, iconButton, pane, toolbar, widget } from "../sdk/index.js";
 
-const MAX_LINES = 2000;
 const BAUDS = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 1000000, 1500000, 2000000, 3000000];
 const EOLS = ["lf", "crlf", "cr", "none"];
-const LEVELS = ["rx", "tx", "warn", "error", "info"];
+const FORMATS = ["8N1", "8E1", "8O1", "7E1", "7O1", "8N2"];
 
-const select = (values, current, onchange) => el("select", { onchange: (e) => onchange(e.target.value) },
+// Dracula (draculatheme.com/contribute) ANSI palette
+const DRACULA = {
+	background: "#282a36",
+	foreground: "#f8f8f2",
+	cursor: "#f8f8f2",
+	cursorAccent: "#282a36",
+	selectionBackground: "#44475a",
+	black: "#21222c",
+	red: "#ff5555",
+	green: "#50fa7b",
+	yellow: "#f1fa8c",
+	blue: "#bd93f9",
+	magenta: "#ff79c6",
+	cyan: "#8be9fd",
+	white: "#f8f8f2",
+	brightBlack: "#6272a4",
+	brightRed: "#ff6e6e",
+	brightGreen: "#69ff94",
+	brightYellow: "#ffffa5",
+	brightBlue: "#d6acff",
+	brightMagenta: "#ff92df",
+	brightCyan: "#a4ffff",
+	brightWhite: "#ffffff"
+};
+
+const fromBase64 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+const toBase64 = (text) => btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+const hexLine = (bytes) => Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join(" ") + "\r\n";
+
+const select = (values, current, onchange, title) => el("select", { title: title, onchange: (e) => onchange(e.target.value) },
 	...values.map((v) => el("option", { value: v, selected: () => String(current()) === String(v) }, String(v))));
 
-const terminal = (ctx, device) => {
-	const view = state({ lines: [], status: null, error: "", hexInput: false });
+const terminal = (ctx, p, device) => {
+	const view = state({ status: null, error: "", mode: (p.pane.config.mode === "line" ? "line" : "raw") });
+	let term = null;
+	let line = "";
 	const history = [];
 	let historyAt = 0;
-	let seq = 0;
-
-	const add = (entry) => {
-		seq++;
-		view.lines = view.lines.concat([Object.assign({ key: seq }, entry)]).slice(-MAX_LINES);
-	};
 
 	const command = (name, args) => ctx.api("POST", "/devices/" + device + "/command", { command: name, args: args || {} });
-
+	const fail = (err) => {
+		view.error = err.message;
+	};
 	const refresh = () => command("status").then((s) => {
 		view.status = s;
-	}, (err) => {
-		view.error = err.message;
-	});
-
-	ctx.api("GET", "/logs?device=" + encodeURIComponent(device)).then((entries) => {
-		view.lines = entries.filter((e) => LEVELS.indexOf(e.level) !== -1).slice(-MAX_LINES).map((e) => {
-			seq++;
-			return Object.assign({ key: seq }, e);
-		});
-	});
-	refresh();
-	onDispose(ctx.on("log", (msg) => {
-		if (msg.entry.device === device && LEVELS.indexOf(msg.entry.level) !== -1) {
-			add(msg.entry);
-		}
-	}));
-
+		view.error = "";
+	}, fail);
 	const set = (changes) => command("set", changes).then((s) => {
 		view.status = s;
 		view.error = "";
-	}, (err) => {
-		view.error = err.message;
-	});
+	}, fail);
 
-	const input = el("input", {
-		class: "mono term-input",
-		placeholder: () => (view.hexInput ? "hex bytes, e.g. de ad be ef" : "send… (↑↓ history)"),
-		onkeydown: (e) => {
-			if (e.key === "Enter") {
-				const text = input.value;
-				history.push(text);
-				historyAt = history.length;
-				input.value = "";
-				(view.hexInput ? command("write_hex", { hex: text }) : command("write", { text: text })).then(() => {
-					view.error = "";
-				}, (err) => {
-					view.error = err.message;
-				});
-			} else if (e.key === "ArrowUp" && historyAt > 0) {
-				historyAt--;
-				input.value = history[historyAt];
-				e.preventDefault();
-			} else if (e.key === "ArrowDown" && historyAt < history.length) {
-				historyAt++;
-				input.value = history[historyAt] || "";
-				e.preventDefault();
+	const show = (bytes) => {
+		if (!term) {
+			return;
+		}
+		term.write(view.status && view.status.display === "hex" ? hexLine(bytes) : bytes);
+	};
+
+	const sendRaw = (text) => ctx.api("POST", "/devices/" + device + "/term", { data: toBase64(text) }).catch(fail);
+
+	// line mode: local editing, the whole line goes out on Enter
+	const lineInput = (data) => {
+		if (data === "\r") {
+			term.write("\r\n");
+			history.push(line);
+			historyAt = history.length;
+			command("write", { text: line }).catch(fail);
+			line = "";
+		} else if (data === "\x7f" || data === "\b") {
+			if (line.length) {
+				line = line.slice(0, -1);
+				term.write("\b \b");
 			}
+		} else if (data === "\x1b[A" || data === "\x1b[B") {
+			historyAt = Math.max(0, Math.min(history.length, historyAt + (data === "\x1b[A" ? -1 : 1)));
+			term.write("\b \b".repeat(line.length));
+			line = history[historyAt] || "";
+			term.write(line);
+		} else if (data === "\x03") {
+			// Ctrl-C still reaches the target
+			sendRaw(data);
+		} else if (!data.startsWith("\x1b")) {
+			const printable = Array.from(data).filter((c) => c.charCodeAt(0) >= 32).join("");
+			line += printable;
+			term.write(printable);
 		}
-	});
+	};
 
-	const scroll = el("div", { class: "term-feed mono" },
-		list(() => view.lines, (l) => l.key, (l) => el("div", { class: "term-" + l.level },
-			el("span", { class: "t" }, time(l.t) + " "),
-			l.level === "tx" ? "› " : "",
-			l.text)));
-	new MutationObserver(() => {
-		if (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 60) {
-			scroll.scrollTop = scroll.scrollHeight;
+	refresh();
+	onDispose(ctx.on("term", (msg) => {
+		if (msg.device === device) {
+			show(fromBase64(msg.data));
 		}
-	}).observe(scroll, { childList: true });
+	}));
+	// connection state follows the device (replugs)
+	onDispose(ctx.on("state", () => {
+		refresh();
+	}));
+
+	const screen = widget((host) => {
+		term = new Terminal({
+			theme: DRACULA,
+			fontFamily: getComputedStyle(document.body).getPropertyValue("--mono") || "monospace",
+			fontSize: 13,
+			cursorBlink: true,
+			scrollback: 5000,
+			convertEol: false,
+			allowProposedApi: false
+		});
+		const fit = new FitAddon();
+		term.loadAddon(fit);
+		term.open(host);
+		fit.fit();
+		term.onData((data) => {
+			if (view.mode === "line") {
+				lineInput(data);
+			} else {
+				sendRaw(data);
+			}
+		});
+		ctx.api("GET", "/devices/" + device + "/term").then((r) => {
+			if (r.data) {
+				term.write(fromBase64(r.data));
+			}
+		}, fail);
+		return {
+			resize: () => fit.fit(),
+			destroy: () => {
+				term.dispose();
+				term = null;
+			}
+		};
+	});
 
 	const st = (k) => () => (view.status ? view.status[k] : "");
 
 	return el("div", { class: "terminal" },
 		toolbar(
-			el("span", { class: () => "state " + (view.status && view.status.connected ? "running" : "error") },
-				() => (view.status ? (view.status.connected ? view.status.path.split("/").pop() : "disconnected") : "…")),
-			" ",
-			select(BAUDS, st("baud"), (v) => set({ baud: Number(v) })),
-			select(["8N1", "8E1", "8O1", "7E1", "7O1", "8N2"], st("format"), (v) => set({ format: v })),
-			select(EOLS, st("eol"), (v) => set({ eol: v })),
-			select(["text", "hex"], st("display"), (v) => set({ display: v })),
-			el("label", { class: "muted" }, el("input", { type: "checkbox", onchange: (e) => {
-				view.hexInput = e.target.checked;
-			} }), " hex send"),
-			iconButton("⌫", "clear scrollback", () => {
-				view.lines = [];
-			}),
-			el("span", { class: "muted mono" }, () => (view.status ? " rx " + view.status.rxBytes + " / tx " + view.status.txBytes + " B" : ""))),
+			el("span", { class: () => "state " + (view.status && view.status.connected ? "running" : "error"), title: () => (view.status && view.status.path) || "" },
+				() => (view.status ? (view.status.connected ? String(view.status.path).split("/").pop() : "disconnected") : "…")),
+			select(BAUDS, st("baud"), (v) => set({ baud: Number(v) }), "baud"),
+			select(FORMATS, st("format"), (v) => set({ format: v }), "data bits, parity, stop bits"),
+			select(EOLS, st("eol"), (v) => set({ eol: v }), "line ending sent in line mode"),
+			select(["text", "hex"], st("display"), (v) => set({ display: v }), "how received bytes are shown and logged"),
+			select(["raw", "line"], () => view.mode, (v) => {
+				view.mode = v;
+				line = "";
+				if (term) {
+					term.focus();
+				}
+			}, "raw: keystrokes go out as typed; line: edit locally, send on Enter"),
+			iconButton("⌫", "clear screen", () => term && term.clear()),
+			el("span", { class: "muted mono" }, () => (view.status ? "rx " + view.status.rxBytes + " / tx " + view.status.txBytes + " B" : ""))),
 		when(() => view.error, () => el("div", { class: "error pad" }, () => view.error)),
-		scroll,
-		input);
+		screen);
 };
 
 export default pane((ctx, p) => when(
 	() => p.pane.config.device,
-	(device) => terminal(ctx, device),
+	(device) => terminal(ctx, p, device),
 	() => empty("set config.device to a uart device id")
 ));

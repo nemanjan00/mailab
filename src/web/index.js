@@ -243,6 +243,12 @@ const api = (lab) => {
 	router.post("/devices/:id/stop", route((req) => {
 		return lab.stopDevice(req.params.id);
 	}));
+	// web terminal: scrollback, and keystrokes as typed (raw bytes, base64)
+	router.get("/devices/:id/term", route((req) => {
+		lab.getDevice(req.params.id);
+		return { data: lab.getTerm(req.params.id) };
+	}));
+	router.post("/devices/:id/term", route((req) => lab.commandDevice(req.params.id, "write_raw", { data: String(req.body.data || "") })));
 	router.post("/devices/:id/command", route((req) => {
 		return lab.commandDevice(req.params.id, req.body.command, req.body.args || {});
 	}));
@@ -342,6 +348,9 @@ const attachSockets = (server, lab, pushIntervalMs, auth) => {
 	});
 	lab.events.on("value", (e) => {
 		broadcast({ type: "value", value: lab.getValue(e.name) });
+	});
+	lab.events.on("term", (chunk) => {
+		broadcast({ type: "term", device: chunk.device, data: chunk.data });
 	});
 	lab.events.on("audio", (chunk) => {
 		broadcast({ type: "audio", chunk: chunk });

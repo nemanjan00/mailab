@@ -70,8 +70,8 @@ const TYPES = {
 		config: { device: "flowgraph device id" }
 	},
 	terminal: {
-		description: "serial terminal for a uart device (USB-UART adapter): scrollback, send line / hex, live baud, format, line ending, hex view",
-		config: { device: "uart device id" }
+		description: "web terminal (xterm.js, Dracula colors) for a uart device: ANSI colors and TUIs, raw keystrokes or line mode, live baud / format / line ending / hex view",
+		config: { device: "uart device id", mode: "raw (default) | line" }
 	},
 	usb: {
 		description: "USB tree: hubs, ports, devices with /dev nodes and the lab devices using them; power toggles on switchable hubs (uhubctl)",
