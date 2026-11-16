@@ -47,7 +47,10 @@ const sections = (ctx) => [
 		key: (b) => "b:" + b.name,
 		latest: (b) => b.bytes + " B",
 		source: (b) => "blob · " + (b.source || ""),
-		actions: (b) => [show(ctx, "⬚", "kaitai view", { type: "kaitai", title: b.name, config: { blob: b.name, ksy: "" } })]
+		actions: (b) => [
+			show(ctx, "∿", "analyze (entropy, binwalk)", { type: "blob", title: b.name, config: { blob: b.name } }),
+			show(ctx, "⬚", "kaitai view", { type: "kaitai", title: b.name, config: { blob: b.name, ksy: "" } })
+		]
 	}
 ];
 

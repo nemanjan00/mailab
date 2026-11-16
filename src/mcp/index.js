@@ -6,6 +6,7 @@ const z = require("zod");
 const pkg = require("../../package.json");
 const batch = require("../batch");
 const kaitai = require("../kaitai");
+const blobs = require("../blobs");
 
 const MAX_POINTS = 500;
 const ARGS_PREVIEW = 160;
@@ -99,7 +100,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -338,6 +339,26 @@ const create = (lab, context) => {
 		const offset = a.offset || 0;
 		const length = Math.min(a.length || 256, 65536);
 		return { name: a.name, bytes: blob.data.length, offset: offset, hex: blob.data.slice(offset, offset + length).toString("hex") };
+	});
+
+	tool("blob_analyze", "Analyze a blob: size, sha256, `file` type, entropy profile (also stored as trace <name>_entropy) with high/low-entropy regions, binwalk signatures", {
+		name: z.string(),
+		window: z.number().optional().describe("entropy window in bytes (default 256)"),
+		binwalk: z.boolean().optional().describe("default true")
+	}, (a) => {
+		const blob = lab.getBlob(a.name);
+		return blobs.analyze(blob.data, { window: a.window, binwalk: a.binwalk }).then((r) => {
+			lab.setTrace(a.name + "_entropy", { x: r.entropy.x, series: [{ label: "bits/byte", y: r.entropy.y }], xUnit: "B", yUnit: "bits" }, "analysis");
+			const out = Object.assign({}, r, { entropy: { mean: r.entropy.mean, window: r.entropy.window, regions: r.entropy.regions, trace: a.name + "_entropy" } });
+			return out;
+		});
+	});
+
+	tool("blob_diff", "Changed byte ranges between two blobs (e.g. flash before/after a glitch)", {
+		a: z.string(),
+		b: z.string()
+	}, (a) => {
+		return blobs.diff(lab.getBlob(a.a).data, lab.getBlob(a.b).data);
 	});
 
 	tool("kaitai_parse", "Parse a blob with a Kaitai Struct .ksy (YAML text): returns the field tree and each field's byte range", {

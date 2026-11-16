@@ -10,6 +10,7 @@ const authModule = require("../auth");
 const math = require("../math");
 const devices = require("../devices");
 const kaitai = require("../kaitai");
+const blobs = require("../blobs");
 
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
@@ -79,6 +80,12 @@ const api = (lab) => {
 	router.put("/blobs/:name", express.raw({ type: "*/*", limit: "64mb" }), route((req) => {
 		lab.setBlob(req.params.name, req.body, "ui");
 		return { name: req.params.name, bytes: req.body.length };
+	}));
+	router.get("/blobs/:name/analysis", route((req) => {
+		return blobs.analyze(lab.getBlob(req.params.name).data, { window: Number(req.query.window) || undefined });
+	}));
+	router.get("/blobs/:a/diff/:b", route((req) => {
+		return blobs.diff(lab.getBlob(req.params.a).data, lab.getBlob(req.params.b).data);
 	}));
 	router.post("/kaitai", route((req) => {
 		return kaitai.parse(req.body.ksy, lab.getBlob(req.body.blob).data);

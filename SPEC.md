@@ -37,7 +37,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | One timebase across instruments | ⬜ | samples carry host time, so PSU/scope/logic drift by ms; a sync pulse every instrument sees aligns them (matters for glitching and power analysis) |
 | Record & replay as a device | ⬜ | save a session's channels/traces/logs, play it back as a fake instrument: test panes and AI workflows without the bench, CI on real data, live demos without hardware |
 | Experiment journal with evidence tags | ⬜ | each batch/run stores device options, setpoints and data; AI conclusions in notes link to their data and get tagged [HW] automatically, or [INF] when nothing backs them (the mdp-p906 convention, enforced); export a run to markdown |
-| Binary diff for blobs | ⬜ | two dumps side by side in the Kaitai view (flash before/after a glitch, config before/after pairing), changed ranges mapped to fields; pairs with minipro/flashrom dumps |
+| Binary diff for blobs | ✅ | `blob_diff` + blob pane `compare`: merged changed ranges, side-by-side hex with highlights. Next: map changed ranges to Kaitai fields |
 | Test automation for python | ✅ | `python/test_modem.py` is pytest-style (4 tests) and runs from jest (`src/devices/flowgraph/__tests__/modem.test.js`), so the pre-commit hook covers the BER regression; skipped when numpy/liquid-dsp are missing |
 | Run on the lab host `nemanjan00@10.69.1.91` (`lab`) | ⬜ | Feather nRF52840, EVGA XR1 capture, sigrok, minipro and hackrf live there. Options: run mailab there, or add remote device agents. **Needs a decision** |
 
@@ -85,6 +85,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | WebSocket streams | ⬜ | `ws-client`/`ws-server` modes for net_source/net_sink (IQ and data), for web SDRs and browser tools. (If "websocket" meant MCP-over-WebSocket, this row changes) |
 | UART in/out | ⬜ | flowgraph `uart_encode` (bytes/text → async serial bits: start/stop, parity, 5–8 data bits, baud) and `uart_decode` (bits/logic → bytes, framing/parity errors), plus a serial terminal pane over the `serial` driver |
 | SDR level trigger | ✅ | flowgraph `level_trigger` (power squelch): gates the stream above threshold_db with pretrigger/hold, logs + counts bursts, saves each as IQ blob + envelope trace. Verified on gated GFSK bursts |
+| Beamforming math | ⬜ | mathjs helpers: steering vectors, array factor (ULA/UCA), beam patterns in the graph pane (polar); DoA (delay-and-sum, MUSIC) once multi-channel coherent SDR input exists (bladeRF 2×2, KrakenSDR) |
 | Graphing calculator / matplotlib-like plots | ✅ | `graph` pane (editable expressions, range, live refresh; edits saved to the pane config) + MCP `plot` → trace (`plot` mode, canvas, matplotlib-style): functions of x, parametric `x(t); y(t)`, data expressions (`db(mag(fft(ch)))`) against index. Data expressions without samples now say so instead of plotting nothing. Next: log scales, axis labels per series, subplots |
 | Spectrum analyzer features: FFT with RBW, multiple traces, averaging | ✅ | `spectrum` sink: `rbw` → FFT size via window ENBW (actual RBW logged), windows hann/blackmanharris/flattop/rect, traces live/max/min/avg (exponential power average), `points` + peak/sample detector; verified: tone at 0 dBFS reads −0.14 dBFS |
 | TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
@@ -128,9 +129,10 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | Black Magic Probe | ⬜ | gdb remote over its serial port (`monitor swdp_scan`, attach, load, mem dump) + its UART |
 | flashrom | ⬜ | SPI flash probe/read/write/verify (ch341a, buspirate, linux_spi…) → dumps as blobs |
 | XGecu (minipro) | ⬜ | (also listed above) chip identify/read/write/verify → blobs |
-| binwalk | ⬜ | signature scan of blobs → table of offsets/types (value) + extract; ties into the Kaitai view |
-| `file` (libmagic) | ⬜ | identify blobs/files |
-| File & bitstream entropy | ⬜ | sliding-window Shannon entropy of blobs and flowgraph bit streams → trace (spot compressed/encrypted regions, keys) |
+| binwalk | ✅ | `blob_analyze` + blob pane: signatures (offset/type/size/description) from binwalk 3 JSON. Next: extraction |
+| `file` (libmagic) | ✅ | type + MIME in `blob_analyze` and the blob pane |
+| File & bitstream entropy | ✅ | sliding-window Shannon entropy → trace `<blob>_entropy` + plot; high/low regions with a window-aware threshold (small-window bias); bit streams via the bitview/framer blobs |
+| CatSniffer V3 (Electronic Cats) | ⬜ | multiprotocol sniffer (CC1352P7 + SX1262 + RP2040): flash firmwares (catnip) and run bridges: Sniffle (BLE), 802.15.4 (Zigbee/Thread), LoRa/sub-GHz; packets → values + pcap blobs, RSSI → channels |
 | USB hub power control (uhubctl) | ⬜ | port on/off/cycle so the AI can power-cycle a hung device (with confirmation; don't cut the hub the bridge/AI host depends on) |
 | GPU / system monitor (nvtop-like) | ⬜ | GPU/CPU load, memory, temperatures as channels (nvidia-smi / amdgpu sysfs / hwmon) |
 | ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
@@ -152,7 +154,6 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-1. Blob analysis: entropy, `file`, binwalk, binary diff
 2. UART in/out; MCP subscriptions/notifications; log classification (diversity-classifier style)
 3. Long-term trends (Grafana-like timeframes)
 4. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
@@ -264,3 +265,5 @@ Next:
 97. configurable mcp notifications for things like triggers, uart/cli line, like diversity classifier; diversity-classifier-like recording and plotting
 98. grafana like different timeframe longterm recordings of trends, like battery charging
 99. update spec
+100. catsniffer v3 fw and bridges (electroniccats.com/store/catsniffer-v3)
+101. beamforming math

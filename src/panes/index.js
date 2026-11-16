@@ -69,6 +69,10 @@ const TYPES = {
 		description: "editor for a flowgraph device: blocks, links, live rates and errors",
 		config: { device: "flowgraph device id" }
 	},
+	blob: {
+		description: "blob analysis: file type, entropy profile, binwalk signatures; with compare, a byte diff against another blob",
+		config: { blob: "blob name", compare: "second blob to diff against (optional)" }
+	},
 	graph: {
 		description: "graphing calculator: mathjs expressions of x, parametric \"x(t); y(t)\", or lab data (db(mag(fft(ch))))",
 		config: { exprs: "[\"sin(x)\", {x: \"cos(t)\", y: \"sin(t)\"}]", xmin: "default -10", xmax: "default 10", refreshMs: "default 2000" }

@@ -344,3 +344,12 @@ dialog.help p { margin: 6px 0; }
 .approval { margin: 4px 0 2px; }
 .approval-approved { color: var(--accent) !important; }
 .approval-denied, .approval-timeout { color: var(--err) !important; }
+
+/* blob analysis */
+.blobpane { display: flex; flex-direction: column; height: 100%; overflow: auto; }
+.blob-plot { position: relative; height: 140px; flex: none; }
+.blob-head { border-bottom: 1px solid var(--line); }
+.region.high { color: var(--c2); }
+.region.low { color: var(--c1); }
+.diff-rows { font-size: 12px; white-space: pre; margin-top: 6px; }
+.diff-row .hit { background: var(--c4); color: var(--on-accent); border-radius: 2px; }
