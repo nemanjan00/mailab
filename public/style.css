@@ -414,3 +414,24 @@ dialog.help a { color: var(--accent-2); }
 .term-input { margin: 4px 8px 8px; }
 .terminal .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .terminal .toolbar select { width: auto; flex: none; }
+
+/* datasheets / FCC ID research pane */
+.datasheets { font-size: 13px; overflow: auto; height: 100%; }
+.datasheets .toolbar { flex-wrap: wrap; }
+.datasheets .toolbar input:not([type]) { flex: 1; min-width: 160px; }
+.datasheets .toolbar select { width: auto; flex: none; }
+.datasheets h3, .datasheets h4 { margin: 8px 0 4px; }
+.ds-table { width: 100%; border-collapse: collapse; }
+.ds-table td, .ds-table th { padding: 2px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.ds-snip { max-width: 360px; font-size: 12px; }
+.ds-url { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-hit { padding: 2px 0; cursor: pointer; border-bottom: 1px solid var(--line); }
+.ds-hit:hover { background: var(--panel-2); }
+.ds-viewer { border-bottom: 1px solid var(--line); }
+.ds-pageno { width: 4em; flex: none !important; min-width: 0 !important; }
+.ds-page { max-height: 70vh; overflow: auto; background: #fff; text-align: center; }
+.ds-page img { max-width: 100%; }
+.fcc-ex { border-bottom: 1px solid var(--line); padding: 3px 0; }
+.fcc-ex-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fcc-type { min-width: 130px; color: var(--c1); }
+.fcc-thumb { display: block; max-width: 100%; max-height: 420px; margin: 4px 0; background: #fff; }

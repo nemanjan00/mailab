@@ -33,8 +33,9 @@ import trend from "./panes/trend.js";
 import custom from "./panes/custom.js";
 import usb from "./panes/usb.js";
 import terminal from "./panes/terminal.js";
+import datasheets from "./panes/datasheets.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, datasheets };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;

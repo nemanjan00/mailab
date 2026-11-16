@@ -14,6 +14,9 @@ MCP server + live web UI for a hardware lab the AI operates. See README.md
   - `scpi`: generic SCPI plus `preset()` (dm858, mho900)
 - `src/services/tty`: raw serial "socket" (write / on("data")). Use it instead of node-serialport, which delivers reads late on Node 26 (found in mdp-p906)
 - `src/services/scpi`: TCP / usbtmc SCPI client with IEEE block parsing
+- `src/services/http`: polite web client (UA, per-host spacing, size caps, disk cache with TTL) on node:https; fccid.io's Cloudflare 403s undici `fetch`. `testing.js`: fake transport for tests
+- `src/services/fccid`: FCC ID filings/exhibits scraped from fccid.io (apps.fcc.gov 403s scripts); parsers in `parse.js`, fixtures in `__tests__/fixtures`
+- `src/services/datasheets`: online providers (keyless manufacturer URL probes; Mouser/Nexar/DigiKey/SearXNG via env, untested live) + local DB (`library.js`: pdftotext pages, inverted index, pdftoppm renders) in `DATA_DIR/datasheets`
 - `src/mcp`: MCP tools (identity-aware, read-only gating); every call is recorded via `lab.recordActivity`. `sessions.js`: stateful Streamable HTTP sessions (stateless fallback), `notifyAll` for push
 - `src/auth`: optional `MAILAB_TOKENS` (name:token:rw|ro), used by REST, `/mcp` and `/ws`
 - `src/batch`: multi-call scripts with ~1 ms timing (the `batch` tool)

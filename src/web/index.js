@@ -11,6 +11,8 @@ const math = require("../math");
 const devices = require("../devices");
 const kaitai = require("../kaitai");
 const blobs = require("../blobs");
+const fccid = require("../services/fccid");
+const datasheets = require("../services/datasheets");
 
 const STATE_DEBOUNCE_MS = 100;
 const TRACE_MIN_INTERVAL_MS = 100;
@@ -270,6 +272,47 @@ const api = (lab) => {
 	router.put("/layout", route((req) => {
 		return lab.panes.arrange(req.body.items || []);
 	}));
+
+	// research: FCC ID filings and the datasheet DB (GETs only read; they may fill the HTTP cache)
+	// produce() may throw synchronously (unknown id): still a JSON error
+	const sendFile = (res, produce) => {
+		Promise.resolve().then(produce).then((r) => {
+			res.type(r.mime).set("cache-control", "private, max-age=3600").send(r.data);
+		}, (err) => {
+			res.status(err.status || 400).json({ error: err.message });
+		});
+	};
+	router.get("/fccid/search", route((req) => fccid.find(req.query.q)));
+	router.get("/fccid/exhibit", route((req) => fccid.exhibit(req.query.url)));
+	router.get("/fccid/preview", (req, res) => sendFile(res, () => fccid.preview(req.query.url)));
+	router.get("/fccid/:id", route((req) => fccid.lookup(req.params.id)));
+	router.post("/fccid/fetch", route((req) => {
+		return fccid.download({ url: req.body.url }).then((r) => {
+			const name = String(req.body.name || "fcc_" + (r.exhibit.documentId || Date.now())).replace(/[^A-Za-z0-9_]+/g, "_");
+			lab.setBlob(name, r.data, "fccid");
+			if (/^image\//.test(r.mime)) {
+				lab.setImage(name, r.data, r.mime);
+			}
+			return { name: name, bytes: r.data.length, mime: r.mime, title: r.exhibit.title };
+		});
+	}));
+	router.get("/datasheets", route(() => ({ items: datasheets.library().list(), providers: datasheets.providers() })));
+	router.get("/datasheets/search", route((req) => datasheets.search(req.query.q, { online: req.query.online !== "0" })));
+	router.get("/datasheets/find", route((req) => datasheets.find({ query: req.query.q, kind: req.query.kind || undefined, id: req.query.id || undefined, limit: Number(req.query.limit) || undefined })));
+	router.post("/datasheets/fetch", route((req) => datasheets.fetch(req.body || {})));
+	router.get("/datasheets/:id/pdf", (req, res) => {
+		try {
+			res.type("application/pdf").sendFile(datasheets.library().file(req.params.id));
+		} catch (err) {
+			res.status(err.status || 404).json({ error: err.message });
+		}
+	});
+	router.get("/datasheets/:id/text/:page", route((req) => ({ id: req.params.id, page: Number(req.params.page), text: datasheets.library().pageText(req.params.id, req.params.page) })));
+	router.get("/datasheets/:id/page/:page", (req, res) => {
+		sendFile(res, () => datasheets.render(req.params.id, req.params.page, Number(req.query.dpi) || undefined).then((png) => ({ data: png, mime: "image/png" })));
+	});
+	router.get("/datasheets/:id", route((req) => datasheets.library().get(req.params.id)));
+	router.delete("/datasheets/:id", route((req) => datasheets.library().remove(req.params.id)));
 
 	return router;
 };

@@ -41,6 +41,12 @@ the AI wire up live:
 graphing calculator, Kaitai parsing, UI control, chat, and `batch`, which
 runs many calls in one request with ~1 ms timing for tight sequences.
 
+**Research**: FCC ID lookups (filings, frequencies and power, exhibits such
+as internal photos and block diagrams, downloaded into the lab as blobs and
+page images) and a local datasheet DB (find PDFs online, full-text search with
+page numbers, rendered pages for pinouts and register maps), with a
+`datasheets` pane. Needs poppler (`pdftotext`, `pdftoppm`).
+
 **Collaboration**: several people and AIs on one lab. Optional
 read-write/read-only tokens, every AI call attributed in the activity feed, a
 shared chat, and push into Claude Code through a channel bridge.
@@ -103,6 +109,8 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | `CHANNEL_CAPACITY` | `200000` | samples kept per channel |
 | `MDP_HOST_PATH` / `CIV_PATH` | `~/mdp-p906/host` / `~/ci-v` | libraries loaded from checkouts |
 | `SIGROK_CLI` / `PM3_CLIENT` / `PYTHON` | `sigrok-cli` / `proxmark3` / `python3` | external tools |
+| `FCCID_MAX_BYTES` / `DATASHEET_MAX_BYTES` | 30 MB / 50 MB | download caps |
+| `MOUSER_API_KEY`, `NEXAR_CLIENT_ID`+`NEXAR_CLIENT_SECRET`, `DIGIKEY_CLIENT_ID`+`DIGIKEY_CLIENT_SECRET`, `SEARXNG_URL` | – | optional datasheet search providers (off while unset) |
 
 ## Collaboration
 
@@ -149,6 +157,8 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | `chat_send`, `chat_read` | lab chat |
 | `batch` | many calls in one request, ~1 ms timing, loops, result references |
 | `sweep`, `optimize` | step 1-2 command parameters (linear/log/list) and tabulate channel readings; golden-section / hill-climb search for a min/max. One approval per plan when the policy matches |
+| `fccid_search`, `fccid_exhibits`, `fccid_fetch` | FCC filings via fccid.io (cached in `DATA_DIR/cache/fccid`, 1.5 s between requests); fetch stores an exhibit as a blob + page images |
+| `datasheet_search`, `datasheet_fetch`, `datasheet_find`, `datasheet_page` | local datasheet DB in `DATA_DIR/datasheets` + online candidates; find by text or section kind (pinout, registers, ratings, package, timing); render a page as a lab image |
 | `recording_start`, `recording_stop`, `recordings` | record channels (globs), traces, values, events and logs to ndjson; play back with the `replay` driver (prefix, speed, loop) |
 
 Every call shows up in the **AI activity** pane.
