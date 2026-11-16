@@ -1,7 +1,9 @@
-"""Minimal ctypes bindings for liquid-dsp (libliquid): resampling and FM/AM demod.
+"""ctypes bindings for liquid-dsp (libliquid 1.6+).
 
-Only what the SDR bridge needs; extend as required. Complex buffers are numpy
-complex64 (same layout as liquid_float_complex), real buffers float32.
+One-shot helpers (resample, fm_demod, am_demod, shift) plus stateful classes
+for streaming: state is kept between chunks, so filters, resamplers and loops
+behave across block boundaries. Complex buffers are numpy complex64 (same
+layout as liquid_float_complex), real buffers float32.
 """
 
 import ctypes
@@ -11,60 +13,266 @@ import numpy as np
 
 _lib = ctypes.CDLL(ctypes.util.find_library("liquid") or "libliquid.so")
 
-_c_ptr = ctypes.c_void_p
-_lib.msresamp_crcf_create.restype = _c_ptr
-_lib.msresamp_crcf_create.argtypes = [ctypes.c_float, ctypes.c_float]
-_lib.msresamp_crcf_execute.argtypes = [_c_ptr, _c_ptr, ctypes.c_uint, _c_ptr, ctypes.POINTER(ctypes.c_uint)]
-_lib.msresamp_crcf_destroy.argtypes = [_c_ptr]
-_lib.freqdem_create.restype = _c_ptr
-_lib.freqdem_create.argtypes = [ctypes.c_float]
-_lib.freqdem_demodulate_block.argtypes = [_c_ptr, _c_ptr, ctypes.c_uint, _c_ptr]
-_lib.freqdem_destroy.argtypes = [_c_ptr]
-_lib.ampmodem_create.restype = _c_ptr
-_lib.ampmodem_create.argtypes = [ctypes.c_float, ctypes.c_int, ctypes.c_int]
-_lib.ampmodem_demodulate_block.argtypes = [_c_ptr, _c_ptr, ctypes.c_uint, _c_ptr]
-_lib.ampmodem_destroy.argtypes = [_c_ptr]
+_p = ctypes.c_void_p
+_u = ctypes.c_uint
+_f = ctypes.c_float
+_i = ctypes.c_int
+
+
+class _Complex(ctypes.Structure):
+    _fields_ = [("re", ctypes.c_float), ("im", ctypes.c_float)]
+
+
+def _sig(name, restype, *argtypes):
+    fn = getattr(_lib, name)
+    fn.restype = restype
+    fn.argtypes = list(argtypes)
+    return fn
+
+
+_msresamp_create = _sig("msresamp_crcf_create", _p, _f, _f)
+_msresamp_execute = _sig("msresamp_crcf_execute", _i, _p, _p, _u, _p, ctypes.POINTER(_u))
+_msresamp_destroy = _sig("msresamp_crcf_destroy", _i, _p)
+_freqdem_create = _sig("freqdem_create", _p, _f)
+_freqdem_block = _sig("freqdem_demodulate_block", _i, _p, _p, _u, _p)
+_freqdem_destroy = _sig("freqdem_destroy", _i, _p)
+_ampmodem_create = _sig("ampmodem_create", _p, _f, _i, _i)
+_ampmodem_block = _sig("ampmodem_demodulate_block", _i, _p, _p, _u, _p)
+_ampmodem_destroy = _sig("ampmodem_destroy", _i, _p)
+_firfilt_create = _sig("firfilt_crcf_create_kaiser", _p, _u, _f, _f, _f)
+_firfilt_block = _sig("firfilt_crcf_execute_block", _i, _p, _p, _u, _p)
+_firfilt_destroy = _sig("firfilt_crcf_destroy", _i, _p)
+_agc_create = _sig("agc_crcf_create", _p)
+_agc_bandwidth = _sig("agc_crcf_set_bandwidth", _i, _p, _f)
+_agc_block = _sig("agc_crcf_execute_block", _i, _p, _p, _u, _p)
+_agc_destroy = _sig("agc_crcf_destroy", _i, _p)
+_nco_create = _sig("nco_crcf_create", _p, _i)
+_nco_set_frequency = _sig("nco_crcf_set_frequency", _i, _p, _f)
+_nco_mix_down = _sig("nco_crcf_mix_block_down", _i, _p, _p, _p, _u)
+_nco_destroy = _sig("nco_crcf_destroy", _i, _p)
+_interp_create = _sig("firinterp_crcf_create_prototype", _p, _i, _u, _u, _f, _f)
+_interp_block = _sig("firinterp_crcf_execute_block", _i, _p, _p, _u, _p)
+_interp_destroy = _sig("firinterp_crcf_destroy", _i, _p)
+_symsync_create = _sig("symsync_crcf_create_rnyquist", _p, _i, _u, _u, _f, _u)
+_symsync_lf_bw = _sig("symsync_crcf_set_lf_bw", _i, _p, _f)
+_symsync_execute = _sig("symsync_crcf_execute", _i, _p, _p, _u, _p, ctypes.POINTER(_u))
+_symsync_destroy = _sig("symsync_crcf_destroy", _i, _p)
+_modem_create = _sig("modemcf_create", _p, _i)
+_modem_bps = _sig("modemcf_get_bps", _u, _p)
+_modem_modulate = _sig("modemcf_modulate", _i, _p, _u, ctypes.POINTER(_Complex))
+_modem_demodulate = _sig("modemcf_demodulate", _i, _p, _Complex, ctypes.POINTER(_u))
+_modem_evm = _sig("modemcf_get_demodulator_evm", _f, _p)
+_modem_destroy = _sig("modemcf_destroy", _i, _p)
+_str2mod = _sig("liquid_getopt_str2mod", _i, ctypes.c_char_p)
 
 AM_DSB, AM_USB, AM_LSB = 0, 1, 2
+FIRFILT_RRC = 9
+NCO = 0
 
+
+def _c64(x):
+    return np.ascontiguousarray(x, dtype=np.complex64)
+
+
+def modulation(name):
+    """'qpsk', 'bpsk', 'psk8', 'qam16', 'apsk16', ... -> liquid scheme id."""
+    scheme = _str2mod(name.encode())
+    if scheme == 0:
+        raise ValueError("unknown modulation scheme: %s" % name)
+    return scheme
+
+
+# ---- one-shot helpers --------------------------------------------------------
 
 def resample(iq, rate, stopband_db=60.0):
     """Arbitrary-rate resample of complex samples by `rate` (out/in)."""
-    x = np.ascontiguousarray(iq, dtype=np.complex64)
-    q = _lib.msresamp_crcf_create(ctypes.c_float(rate), ctypes.c_float(stopband_db))
+    r = Resampler(rate, stopband_db)
     try:
-        y = np.empty(int(np.ceil(len(x) * rate)) + 64, dtype=np.complex64)
-        ny = ctypes.c_uint(0)
-        _lib.msresamp_crcf_execute(q, x.ctypes.data, len(x), y.ctypes.data, ctypes.byref(ny))
-        return y[:ny.value]
+        return r.process(iq)
     finally:
-        _lib.msresamp_crcf_destroy(q)
+        r.close()
 
 
 def fm_demod(iq, deviation, rate):
     """FM demodulate; output is scaled so full deviation is ~±1."""
-    x = np.ascontiguousarray(iq, dtype=np.complex64)
-    q = _lib.freqdem_create(ctypes.c_float(deviation / rate))
+    d = FmDemod(deviation, rate)
     try:
-        y = np.empty(len(x), dtype=np.float32)
-        _lib.freqdem_demodulate_block(q, x.ctypes.data, len(x), y.ctypes.data)
-        return y
+        return d.process(iq)
     finally:
-        _lib.freqdem_destroy(q)
+        d.close()
 
 
 def am_demod(iq, kind=AM_DSB, mod_index=0.8):
-    x = np.ascontiguousarray(iq, dtype=np.complex64)
-    q = _lib.ampmodem_create(ctypes.c_float(mod_index), kind, 0)
+    d = AmDemod(kind, mod_index)
     try:
-        y = np.empty(len(x), dtype=np.float32)
-        _lib.ampmodem_demodulate_block(q, x.ctypes.data, len(x), y.ctypes.data)
-        return y
+        return d.process(iq)
     finally:
-        _lib.ampmodem_destroy(q)
+        d.close()
 
 
 def shift(iq, offset_hz, rate):
     """Move a signal at +offset_hz down to baseband."""
     n = np.arange(len(iq))
     return (iq * np.exp(-2j * np.pi * offset_hz / rate * n)).astype(np.complex64)
+
+
+# ---- stateful streaming blocks ----------------------------------------------
+
+class _Handle:
+    _destroy = None
+
+    def close(self):
+        if self._q:
+            type(self)._destroy(self._q)
+            self._q = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+class Resampler(_Handle):
+    _destroy = staticmethod(_msresamp_destroy)
+
+    def __init__(self, rate, stopband_db=60.0):
+        self.rate = rate
+        self._q = _msresamp_create(rate, stopband_db)
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(int(np.ceil(len(x) * self.rate)) + 64, dtype=np.complex64)
+        ny = _u(0)
+        _msresamp_execute(self._q, x.ctypes.data, len(x), y.ctypes.data, ctypes.byref(ny))
+        return y[:ny.value]
+
+
+class FmDemod(_Handle):
+    _destroy = staticmethod(_freqdem_destroy)
+
+    def __init__(self, deviation, rate):
+        self._q = _freqdem_create(deviation / rate)
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(len(x), dtype=np.float32)
+        _freqdem_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
+        return y
+
+
+class AmDemod(_Handle):
+    _destroy = staticmethod(_ampmodem_destroy)
+
+    def __init__(self, kind=AM_DSB, mod_index=0.8):
+        self._q = _ampmodem_create(mod_index, kind, 0)
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(len(x), dtype=np.float32)
+        _ampmodem_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
+        return y
+
+
+class Lowpass(_Handle):
+    """Kaiser-window FIR low-pass; cutoff relative to the sample rate (0..0.5)."""
+    _destroy = staticmethod(_firfilt_destroy)
+
+    def __init__(self, cutoff, taps=63, stopband_db=60.0):
+        self._q = _firfilt_create(taps, cutoff, stopband_db, 0.0)
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(len(x), dtype=np.complex64)
+        _firfilt_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
+        return y
+
+
+class Agc(_Handle):
+    _destroy = staticmethod(_agc_destroy)
+
+    def __init__(self, bandwidth=1e-3):
+        self._q = _agc_create()
+        _agc_bandwidth(self._q, bandwidth)
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(len(x), dtype=np.complex64)
+        _agc_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
+        return y
+
+
+class Mixer(_Handle):
+    """Shift by -offset_hz (continuous phase across chunks)."""
+    _destroy = staticmethod(_nco_destroy)
+
+    def __init__(self, offset_hz, rate):
+        self._q = _nco_create(NCO)
+        _nco_set_frequency(self._q, 2 * np.pi * offset_hz / rate)
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(len(x), dtype=np.complex64)
+        _nco_mix_down(self._q, x.ctypes.data, y.ctypes.data, len(x))
+        return y
+
+
+class RrcInterpolator(_Handle):
+    """Upsample symbols by sps with a root-raised-cosine pulse."""
+    _destroy = staticmethod(_interp_destroy)
+
+    def __init__(self, sps, m=7, beta=0.35):
+        self.sps = sps
+        self._q = _interp_create(FIRFILT_RRC, sps, m, beta, 0.0)
+
+    def process(self, symbols):
+        x = _c64(symbols)
+        y = np.empty(len(x) * self.sps, dtype=np.complex64)
+        _interp_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
+        return y
+
+
+class SymbolSync(_Handle):
+    """Polyphase RRC symbol timing recovery: samples in, one sample per symbol out."""
+    _destroy = staticmethod(_symsync_destroy)
+
+    def __init__(self, sps, m=7, beta=0.35, filters=32, bandwidth=0.02):
+        self._q = _symsync_create(FIRFILT_RRC, sps, m, beta, filters)
+        _symsync_lf_bw(self._q, bandwidth)
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(len(x) + 64, dtype=np.complex64)
+        ny = _u(0)
+        _symsync_execute(self._q, x.ctypes.data, len(x), y.ctypes.data, ctypes.byref(ny))
+        return y[:ny.value]
+
+
+class Modem(_Handle):
+    """Linear modem (PSK/QAM/APSK...): constellation table, demod with EVM."""
+    _destroy = staticmethod(_modem_destroy)
+
+    def __init__(self, scheme="qpsk"):
+        self._q = _modem_create(modulation(scheme))
+        self.bps = _modem_bps(self._q)
+        point = _Complex()
+        table = []
+        for s in range(1 << self.bps):
+            _modem_modulate(self._q, s, ctypes.byref(point))
+            table.append(complex(point.re, point.im))
+        self.table = np.array(table, dtype=np.complex64)
+
+    def modulate(self, symbols):
+        return self.table[np.asarray(symbols) % len(self.table)]
+
+    def demodulate(self, x):
+        """-> (symbol indices, rms EVM in dB)"""
+        out = np.empty(len(x), dtype=np.uint32)
+        sym = _u(0)
+        evm = []
+        for i, v in enumerate(x):
+            _modem_demodulate(self._q, _Complex(float(v.real), float(v.imag)), ctypes.byref(sym))
+            out[i] = sym.value
+            evm.append(_modem_evm(self._q))
+        evm_rms = float(np.sqrt(np.mean(np.square(evm)))) if evm else 0.0
+        return out, 20 * np.log10(evm_rms + 1e-12)

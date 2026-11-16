@@ -59,6 +59,10 @@ def point(dataset, x, y, cls, info=None, x_label="x", y_label="y"):
           "info": info, "xLabel": x_label, "yLabel": y_label})
 
 
+def value(name, doc):
+    emit({"type": "value", "name": name, "value": doc})
+
+
 def log(text, level="info"):
     emit({"type": "log", "text": str(text), "level": level})
 

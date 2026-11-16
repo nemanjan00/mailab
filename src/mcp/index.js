@@ -250,6 +250,18 @@ const create = (lab) => {
 		return { name: a.name };
 	});
 
+	tool("value_read", "Read a JSON value (flowgraph graph/stats, decoded data...)", { name: z.string() }, (a) => {
+		return lab.getValue(a.name);
+	});
+
+	tool("value_write", "Store a JSON value, e.g. structured findings to show in a json pane", {
+		name: z.string(),
+		value: z.any()
+	}, (a) => {
+		lab.setValue(a.name, a.value, "ai");
+		return { name: a.name };
+	});
+
 	tool("image_get", "Get an image (e.g. a scope screenshot) to look at", { name: z.string() }, (a) => {
 		const img = lab.getImage(a.name);
 		return { _image: { data: img.data.toString("base64"), mime: img.mime }, name: img.name, t: img.t };

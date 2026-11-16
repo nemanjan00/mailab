@@ -10,6 +10,9 @@
 //   {"type": "image", "name": "screen", "mime": "image/png", "data": "<base64>"}
 //   {"type": "log", "text": "...", "level": "info"}
 //   {"type": "status", "state": "running", "detail": "..."}
+//   {"type": "value", "name": "graph", "value": {...}}      any JSON document
+//   {"type": "audio", "name": "out", "rate": 24000, "data": "<base64 int16 LE>"}
+//   {"type": "options", "options": {...}}                    merged into the device options (persisted)
 //   {"type": "result", "id": 1, "result": {...}} | {"type": "result", "id": 1, "error": "..."}
 // lab -> helper (stdin):
 //   {"id": 1, "command": "set_voltage", "args": {...}}
@@ -46,6 +49,15 @@ const create = (options, io) => {
 		},
 		status: (msg) => {
 			io.status(msg.state, msg.detail);
+		},
+		value: (msg) => {
+			io.value(msg.name, msg.value);
+		},
+		audio: (msg) => {
+			io.audio(msg.name, msg.rate, msg.data);
+		},
+		options: (msg) => {
+			io.setOptions(msg.options);
 		},
 		result: (msg) => {
 			const waiter = pending[msg.id];

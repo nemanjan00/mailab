@@ -4,6 +4,8 @@
 //   "state"    devices / channels / panes / derived changed
 //   "trace"    {name}               a trace was replaced or appended to
 //   "image"    {name}
+//   "value"    {name}               a JSON document changed
+//   "audio"    {name, rate, data}   a chunk of base64 int16 PCM
 //   "log"      {t, device, level, text}
 //   "activity" {t, tool, args, ok, summary}
 
@@ -45,6 +47,7 @@ const create = (options) => {
 	const instances = {};
 	const traces = {};
 	const images = {};
+	const values = {};
 	const logs = [];
 	const activity = [];
 	const derived = {};
@@ -238,6 +241,38 @@ const create = (options) => {
 			});
 		},
 
+		/**
+		 * Named JSON documents (graph descriptions, decoded packets, parse trees...).
+		 */
+		setValue: (name, value, source) => {
+			const isNew = !values[name];
+			values[name] = { name: name, source: source || "", value: value, t: Date.now() };
+			if (isNew) {
+				events.emit("state");
+			}
+			events.emit("value", { name: name });
+		},
+
+		getValue: (name) => {
+			if (!values[name]) {
+				throw new Error("unknown value: " + name);
+			}
+			return values[name];
+		},
+
+		listValues: () => {
+			return Object.keys(values).sort().map((name) => {
+				return { name: name, source: values[name].source, t: values[name].t };
+			});
+		},
+
+		/**
+		 * Audio is streamed, not stored: chunks go straight to listening browsers.
+		 */
+		pushAudio: (name, rate, data) => {
+			events.emit("audio", { name: name, rate: rate, data: data });
+		},
+
 		log: (device, text, level) => {
 			const entry = { t: Date.now(), device: device, level: level || "info", text: String(text) };
 			ring(logs, entry, LOG_SIZE);
@@ -328,6 +363,17 @@ const create = (options) => {
 				},
 				image: (name, buffer, mime) => {
 					lab.setImage(field(name), buffer, mime);
+				},
+				value: (name, value) => {
+					lab.setValue(field(name), value, id);
+				},
+				audio: (name, rate, data) => {
+					lab.pushAudio(field(name), rate, data);
+				},
+				// drivers persisting their own state (e.g. a flowgraph) into options
+				setOptions: (changes) => {
+					inst.options = Object.assign({}, inst.options, changes);
+					changed();
 				},
 				log: (text, level) => {
 					lab.log(id, text, level);
@@ -483,6 +529,7 @@ const create = (options) => {
 				channels: channels.list(),
 				traces: lab.listTraces(),
 				images: lab.listImages(),
+				values: lab.listValues(),
 				derived: lab.listDerived(),
 				panes: panes.list(),
 				paneTypes: panesModule.TYPES

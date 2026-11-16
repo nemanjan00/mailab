@@ -67,6 +67,12 @@ const api = (lab) => {
 			res.status(404).json({ error: err.message });
 		}
 	});
+	router.get("/values/:name", route((req) => {
+		return lab.getValue(req.params.name);
+	}));
+	router.put("/values/:name", route((req) => {
+		lab.setValue(req.params.name, req.body, "ui");
+	}));
 	router.get("/logs", route((req) => {
 		return lab.getLogs({ device: req.query.device, last: Number(req.query.last) || 300 });
 	}));
@@ -189,6 +195,12 @@ const attachSockets = (server, lab, pushIntervalMs) => {
 		}, Math.max(0, wait));
 	});
 
+	lab.events.on("value", (e) => {
+		broadcast({ type: "value", value: lab.getValue(e.name) });
+	});
+	lab.events.on("audio", (chunk) => {
+		broadcast({ type: "audio", chunk: chunk });
+	});
 	lab.events.on("image", (e) => {
 		broadcast({ type: "image", name: e.name, t: Date.now() });
 	});

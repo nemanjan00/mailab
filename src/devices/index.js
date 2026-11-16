@@ -18,7 +18,8 @@ const DRIVERS = [
 	require("./hackrf"),
 	require("./soapy"),
 	require("./proxmark3"),
-	require("./picoglitcher")
+	require("./picoglitcher"),
+	require("./flowgraph")
 ];
 
 const devices = {
