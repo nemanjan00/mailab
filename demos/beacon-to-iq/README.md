@@ -1,6 +1,6 @@
 # Bytes → IQ → spectrum, in a few MCP calls
 
-Craft an 802.11 beacon frame, parse it, modulate the bytes as QAM256 and watch
+Craft an 802.11 beacon frame, parse it, modulate the bytes as 16-QAM and watch
 the signal — the whole thing an AI drives in six tool calls.
 
 ![beacon to IQ](screenshot.png)
@@ -15,9 +15,9 @@ The calls:
 | call | |
 |---|---|
 | `blob_write` | the crafted beacon bytes → blob `beacon` |
-| `device_add fg flowgraph` | `bits(hex:…) → mod(qam256) → channel` then `spectrum`, and `matched_filter → symbol_sync → constellation` |
+| `device_add fg flowgraph` | `bits(hex:…) → mod(qam16) → channel`, then `spectrum`, and `agc → symbol_sync → carrier_recovery → constellation` (the receive chain that lands the scatter on the 16-QAM grid) |
 | `pane_add kaitai` | the frame parsed into fields ([beacon.ksy](beacon.ksy)) |
-| `pane_add trace fg_spec` | the QAM256 spectrum at baseband |
+| `pane_add trace fg_spec` | the 16-QAM spectrum at baseband |
 | `pane_add trace fg_con` | the recovered constellation |
 | `pane_add flowgraph fg` | the graph |
 
@@ -29,6 +29,7 @@ SSID `mAIlab`, supported-rates tag, FCS.
 
 - **Nothing radiates.** The signal loops through the `channel` block (AWGN at
   30 dB), the same way the modem toolkit is tested. There is no SDR in the chain.
+- **16-QAM, not 256.** A 54-byte beacon is only ~108 symbols; 16-QAM fills its 16-point grid cleanly where QAM256 would barely sample its 256 points. 16-QAM is a real 802.11 MCS.
 - **It is not real Wi-Fi.** 802.11 is OFDM — dozens of subcarriers with pilots,
   scrambling, convolutional coding and interleaving, plus a preamble.
   Single-carrier QAM256 makes a pretty constellation but not a frame any access

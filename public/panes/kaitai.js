@@ -37,7 +37,8 @@ export default {
 
 		const annotate = (path) => {
 			const r = result && result.ranges[path];
-			if (!r) {
+			// container fields (arrays, structs with a lazy end) have a null endpoint
+			if (!r || r[0] === null || r[1] === null) {
 				return "";
 			}
 			return " <span class=\"k-range\" data-path=\"" + escapeHtml(path) + "\">[" + r[0].toString(16) + "–" + r[1].toString(16) + ")</span>";
