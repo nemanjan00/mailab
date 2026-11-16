@@ -1,0 +1,16 @@
+{
+  "description": "QPSK with a 40 Hz carrier offset: the symbols spin around a ring before the PLL and sit on four points after it.",
+  "prompt": "There's a carrier offset on the QPSK signal, lock a carrier recovery loop onto it and show the constellation before and after.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "sps": 8, "snr_db": 25, "cfo": 40}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "before", "type": "constellation", "params": {"points": 1500}},
+    {"id": "pll", "type": "carrier_recovery", "params": {"scheme": "qpsk", "bandwidth": 0.02}},
+    {"id": "after", "type": "constellation", "params": {"points": 1500}}
+  ],
+  "links": [["src", "sync"], ["sync", "before"], ["sync", "pll"], ["pll", "after"]],
+  "panes": [
+    {"type": "trace", "title": "Before: 40 Hz offset", "config": {"traces": ["fg_before"]}},
+    {"type": "trace", "title": "After carrier_recovery", "config": {"traces": ["fg_after"]}}
+  ]
+}

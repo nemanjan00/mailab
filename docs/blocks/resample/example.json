@@ -1,0 +1,15 @@
+{
+  "description": "A 5 kHz tone at 100 kS/s resampled to 48 kS/s: spectrum before (100 kHz wide) and after (48 kHz wide).",
+  "prompt": "Resample the 100 kS/s signal to 48 kS/s and show both spectra.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 100000.0, "freq": 5000.0, "noise": 0.02}},
+    {"id": "before", "type": "spectrum", "params": {"fft": 1024, "traces": ["avg"]}},
+    {"id": "rs", "type": "resample", "params": {"rate": 48000.0}},
+    {"id": "after", "type": "spectrum", "params": {"fft": 512, "traces": ["avg"]}}
+  ],
+  "links": [["src", "before"], ["src", "rs"], ["rs", "after"]],
+  "panes": [
+    {"type": "trace", "title": "Before: 100 kS/s", "config": {"traces": ["fg_before"]}},
+    {"type": "trace", "title": "After: 48 kS/s", "config": {"traces": ["fg_after"]}}
+  ]
+}

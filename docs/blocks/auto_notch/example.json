@@ -1,0 +1,19 @@
+{
+  "description": "The 4 kHz whistle found and notched automatically; the stats show the tracked tone.",
+  "prompt": "There's a whistle in the audio, find it and notch it out automatically.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "shotWaitMs": 6000,
+  "blocks": [
+    {"id": "notch", "type": "auto_notch", "params": {"tones": 1, "fmin": 200, "fmax": 6000}},
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}}
+  ],
+  "links": [["src", "notch"], ["notch", "out"], ["src", "spec_before"], ["notch", "spec_after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"], "logX": true}},
+    {"type": "json", "title": "Stats (tracked tones)", "config": {"value": "fg_stats", "depth": 4}, "w": 4}
+  ]
+}

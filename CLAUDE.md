@@ -56,6 +56,7 @@ SPEC.md lists every request with its status; update it as soon as a request come
 - Bridges get `MAILAB_DEVICE_ID`; `lab.channel("v")` gives the lab channel name for `lab.panel` layouts. Strict setpoints: `lab.parse_number(v, name, lo, hi)`
 - Hardware-free bridge tests: a fake at the transport level (`python/mp305_fake.py`, `MAILAB_MP305_FAKE=1`) driven by `python/test_*.py`, run from jest
 - Never touch the MHO900's port 55555 (that's root ADB, not SCPI)
+- New / changed flowgraph block: `docs/blocks/<block>/` needs `about.md` (front matter group, summary, related + prose) and a runnable `example.json`; then `yarn block-docs` (READMEs from the live catalog; a jest test fails when stale) and `yarn block-shots <block>` (screenshot). Every param needs a doc string
 
 ## Verify UI changes
 

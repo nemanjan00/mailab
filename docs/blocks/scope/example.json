@@ -1,0 +1,13 @@
+{
+  "description": "A noisy 2.5 kHz tone, rising-edge triggered: live, max and min hold, with measurements; Vpp as a readout.",
+  "prompt": "Put the signal on a scope triggered on the rising edge, with max/min hold, and show me Vpp and frequency.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 200000.0, "freq": 2500, "amp": 1.2, "noise": 0.06}},
+    {"id": "scope", "type": "scope", "params": {"samples": 400, "trigger": "rising", "level": 0, "traces": ["live", "max", "min"], "measure": ["vpp", "freq"]}}
+  ],
+  "links": [["src", "scope"]],
+  "panes": [
+    {"type": "trace", "title": "Scope", "config": {"traces": ["fg_scope"]}, "w": 8},
+    {"type": "value", "title": "Vpp", "config": {"channel": "fg_scope_vpp", "precision": 3, "label": "Vpp"}, "w": 4}
+  ]
+}

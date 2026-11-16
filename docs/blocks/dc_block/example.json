@@ -1,0 +1,21 @@
+{
+  "description": "The test recording with 0.3 of DC added (python block): the mean before and after the DC blocker.",
+  "prompt": "Remove the DC offset from the audio and show me the mean level before and after.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "offset", "type": "python", "params": {"code": "def work(x, rate):\n    return np.real(x) + 0.3"}},
+    {"id": "dc", "type": "dc_block", "params": {"cutoff": 10}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}},
+    {"id": "mean_in", "type": "measure", "params": {"stat": "mean"}},
+    {"id": "mean_out", "type": "measure", "params": {"stat": "mean"}}
+  ],
+  "links": [["src", "offset"], ["offset", "dc"], ["dc", "out"], ["offset", "spec_before"], ["dc", "spec_after"], ["offset", "mean_in"], ["dc", "mean_out"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "chart", "title": "Mean before / after", "config": {"channels": ["fg_mean_in", "fg_mean_out"], "seconds": 8}, "w": 4}
+  ]
+}

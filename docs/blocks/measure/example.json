@@ -1,0 +1,14 @@
+{
+  "description": "Power (dB) and peak of a QPSK signal at 25 dB SNR, as channels in a chart and a readout.",
+  "prompt": "Measure the power of the signal and chart it.",
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "sps": 8, "snr_db": 25}},
+    {"id": "power", "type": "measure", "params": {"stat": "power_db"}},
+    {"id": "peak", "type": "measure", "params": {"stat": "peak"}}
+  ],
+  "links": [["src", "power"], ["src", "peak"]],
+  "panes": [
+    {"type": "chart", "title": "power (dB) and peak", "config": {"channels": ["fg_power", "fg_peak"], "seconds": 8}, "w": 8},
+    {"type": "value", "title": "Power", "config": {"channel": "fg_power", "precision": 2, "label": "mean power"}, "w": 4}
+  ]
+}

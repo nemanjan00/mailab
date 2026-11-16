@@ -1,0 +1,14 @@
+{
+  "description": "A generated 1 MS/s recording (an FM carrier at -200 kHz and two CW tones at +150 / +300 kHz) on a spectrum and waterfall.",
+  "prompt": "Play back $MEDIA/demo.cf32 at 1 MS/s and show me the spectrum and a waterfall.",
+  "media": ["demo.cf32"],
+  "blocks": [
+    {"id": "src", "type": "file", "params": {"path": "$MEDIA/demo.cf32", "rate": 1000000.0}},
+    {"id": "spec", "type": "spectrum", "params": {"rbw": 2000, "traces": ["live", "max"], "points": 600}}
+  ],
+  "links": [["src", "spec"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum", "config": {"traces": ["fg_spec"]}, "peaks": 2},
+    {"type": "waterfall", "title": "Waterfall", "config": {"trace": "fg_spec", "rows": 80}}
+  ]
+}

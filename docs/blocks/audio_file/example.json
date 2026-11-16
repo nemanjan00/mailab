@@ -1,0 +1,16 @@
+{
+  "description": "A generated test recording (buzzy \"voice\", 50 Hz hum, 4 kHz whistle, hiss, clicks): its averaged spectrum and the audio stream.",
+  "prompt": "Load $MEDIA/demo.wav, let me listen to it and show its spectrum.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}}
+  ],
+  "links": [["src", "out"], ["src", "spec"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum (avg)", "config": {"traces": ["fg_spec"], "logX": true}, "w": 8},
+    {"type": "audio", "title": "Audio", "config": {"stream": "fg_out"}, "w": 4}
+  ]
+}

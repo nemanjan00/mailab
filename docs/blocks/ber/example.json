@@ -1,0 +1,17 @@
+{
+  "description": "A QPSK link through a channel at 0 dB SNR over the whole 80 kHz sample bandwidth (about 9 dB Es/N0 in the signal band after the matched filter): BER per 20 000 bits, as a chart and a number.",
+  "prompt": "Measure the bit error rate of a QPSK link at 0 dB SNR.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 20000}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "qpsk", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 0}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "sl", "type": "slicer", "params": {"scheme": "qpsk"}},
+    {"id": "ber", "type": "ber", "params": {"prbs": 9, "window": 20000}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["ch", "sync"], ["sync", "sl"], ["sl", "ber"]],
+  "panes": [
+    {"type": "chart", "title": "BER", "config": {"channels": ["fg_ber"], "seconds": 8}},
+    {"type": "value", "title": "BER", "config": {"channel": "fg_ber", "precision": 5, "label": "bit error rate"}}
+  ]
+}

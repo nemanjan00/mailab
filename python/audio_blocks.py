@@ -21,6 +21,8 @@ class AudioBlock:
     kind = "dsp"
     params = {}
     doc = ""
+    inputs = "real audio (complex: real part)"
+    outputs = "real audio, same rate"
     engine = None
     restart = ()          # params that need a rebuilt engine (state reset)
     channel = None        # (stat key, channel suffix, unit) published at `fps`
@@ -137,7 +139,7 @@ class AutoNotch(AudioBlock):
     doc = ("auto-tracking notch: finds the strongest stationary tones (long-term spectrum, min_snr_db above the floor, "
            "stable persist_s) and notches them, retuning as they drift; or notches the fixed `freqs` list")
     params = dict(COMMON, tones=(1, "max tones removed"), freqs=([], "fixed tone list Hz (disables tracking)"),
-                  fmin=(80.0, "search range Hz"), fmax=(8000.0, ""), width=(4.0, "notch width Hz"),
+                  fmin=(80.0, "search range Hz"), fmax=(8000.0, "search range upper edge Hz"), width=(4.0, "notch width Hz"),
                   min_snr_db=(15.0, "peak above the median floor"), persist_s=(0.5, "a tone must last this long"),
                   hold_s=(2.0, "keep a notch this long after the tone fades"), retune_hz=(0.5, "retune when it drifts more"),
                   resolution=(2.0, "analysis resolution Hz"), average_s=(1.0, "spectrum averaging time"))
@@ -151,38 +153,46 @@ class DcBlock(AudioBlock):
 
 
 class Compressor(AudioBlock):
+    inputs = "real audio (complex: real part)"
+    outputs = "real audio, same rate; channel <device>_<id>_gr (gain reduction dB)"
     doc = ("dynamics compressor: threshold, ratio, soft knee, attack/release (on gain, dB), makeup, optional lookahead, "
            "RMS or peak detector, sidechain HPF; gain reduction -> channel <device>_<id>_gr")
-    params = dict(COMMON, threshold_db=(-24.0, "dBFS"), ratio=(4.0, ""), knee_db=(6.0, "soft knee width"),
-                  attack_ms=(5.0, ""), release_ms=(120.0, ""), makeup_db=(0.0, ""),
+    params = dict(COMMON, threshold_db=(-24.0, "dBFS"), ratio=(4.0, "input dB over threshold per output dB"), knee_db=(6.0, "soft knee width"),
+                  attack_ms=(5.0, "gain-reduction time constant"), release_ms=(120.0, "recovery time constant"), makeup_db=(0.0, "gain added after compression"),
                   lookahead_ms=(0.0, "delays the audio so the gain leads transients"), **DETECTOR, **DYNAMICS)
     engine = A.Compressor
     channel = ("last_gr", "gr", "dB")
 
 
 class Limiter(AudioBlock):
+    inputs = "real audio (complex: real part)"
+    outputs = "real audio, same rate; channel <device>_<id>_gr (gain reduction dB)"
     doc = "brickwall lookahead limiter: output never exceeds ceiling_db; gain reduction -> channel <device>_<id>_gr"
-    params = dict(COMMON, ceiling_db=(-1.0, "dBFS"), lookahead_ms=(5.0, "= latency"), release_ms=(60.0, ""), **DYNAMICS)
+    params = dict(COMMON, ceiling_db=(-1.0, "dBFS"), lookahead_ms=(5.0, "= latency"), release_ms=(60.0, "gain recovery time constant"), **DYNAMICS)
     engine = A.Limiter
     channel = ("last_gr", "gr", "dB")
 
 
 class Gate(AudioBlock):
+    inputs = "real audio (complex: real part)"
+    outputs = "real audio, same rate; channel <device>_<id>_gr (gain dB)"
     doc = ("noise gate (ratio 0: open above threshold, close below threshold - hysteresis after hold) or downward "
            "expander (ratio > 1); attenuation limited to range_db; gain -> channel <device>_<id>_gr")
-    params = dict(COMMON, threshold_db=(-50.0, "dBFS (RMS)"), hysteresis_db=(6.0, ""), hold_ms=(50.0, ""),
+    params = dict(COMMON, threshold_db=(-50.0, "dBFS (RMS)"), hysteresis_db=(6.0, "closes this far below threshold"), hold_ms=(50.0, "stay open after the level drops"),
                   attack_ms=(1.0, "opening"), release_ms=(100.0, "closing"), range_db=(-60.0, "max attenuation"),
-                  ratio=(0.0, "0 = gate, > 1 = expander ratio"), rms_ms=(5.0, ""), sidechain_hpf=(0.0, "Hz"), **DYNAMICS)
+                  ratio=(0.0, "0 = gate, > 1 = expander ratio"), rms_ms=(5.0, "level detector RMS window"), sidechain_hpf=(0.0, "Hz"), **DYNAMICS)
     engine = A.Gate
     channel = ("last_gr", "gr", "dB")
 
 
 class AudioAgc(AudioBlock):
+    inputs = "real audio (complex: real part)"
+    outputs = "real audio, same rate; channel <device>_<id>_gain (dB)"
     doc = ("audio AGC: RMS level to target_db within min/max gain; attack (gain down) / release (gain up); "
            "holds the gain below noise_floor_db; gain -> channel <device>_<id>_gain")
-    params = dict(COMMON, target_db=(-20.0, "dBFS RMS"), max_gain_db=(30.0, ""), min_gain_db=(-20.0, ""),
-                  attack_ms=(20.0, ""), release_ms=(1000.0, ""), noise_floor_db=(-55.0, "no gain changes below"),
-                  rms_ms=(50.0, ""), **DYNAMICS)
+    params = dict(COMMON, target_db=(-20.0, "dBFS RMS"), max_gain_db=(30.0, "most gain applied (quiet input)"), min_gain_db=(-20.0, "most attenuation (loud input)"),
+                  attack_ms=(20.0, "gain-down time constant"), release_ms=(1000.0, "gain-up time constant"), noise_floor_db=(-55.0, "no gain changes below"),
+                  rms_ms=(50.0, "level detector RMS window"), **DYNAMICS)
     engine = A.AudioAgc
     channel = ("g", "gain", "dB")
 

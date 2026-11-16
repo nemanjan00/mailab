@@ -1,0 +1,18 @@
+{
+  "description": "The same QPSK signal before and after a channel with 14 dB SNR and a 30 degree phase rotation, both after symbol timing recovery.",
+  "prompt": "Put a channel with 14 dB SNR and 30 degrees of phase rotation after a QPSK modulator and compare the constellations before and after.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 20000}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "qpsk", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 14, "phase": 30}},
+    {"id": "sync_tx", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "const_tx", "type": "constellation", "params": {"points": 1000}},
+    {"id": "sync_rx", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "const_rx", "type": "constellation", "params": {"points": 1000}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["tx", "sync_tx"], ["sync_tx", "const_tx"], ["ch", "sync_rx"], ["sync_rx", "const_rx"]],
+  "panes": [
+    {"type": "trace", "title": "Before the channel", "config": {"traces": ["fg_const_tx"]}},
+    {"type": "trace", "title": "After: 14 dB SNR, 30 deg", "config": {"traces": ["fg_const_rx"]}}
+  ]
+}

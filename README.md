@@ -53,6 +53,7 @@ the AI wire up live:
   (`load_template`): voice_cleanup, sdr_fm_audio, sdr_am_audio,
   hum_removal, broadcast; spectrum `overlay` draws before/after in one trace.
 - **Scripting:** a `python` block for your own DSP.
+- **Block docs:** [docs/blocks](docs/blocks/README.md) has a page per block: parameters, inputs/outputs, a runnable example with a screenshot and the prompt / MCP calls that build it.
 
 **Views**: configurable panes that you and the AI share, organized in
 dashboard tabs (rename, reorder, `#tab=` links), collapsible to their title

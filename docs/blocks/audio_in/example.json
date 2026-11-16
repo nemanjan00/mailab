@@ -1,0 +1,16 @@
+{
+  "description": "A browser microphone (`browser_mic`, from a capture pane) analysed: spectrum and level in dBFS.",
+  "prompt": "Take my browser mic, show its spectrum and level.",
+  "template": {"name": "voice_cleanup", "args": {"stream": "browser_mic"}},
+  "substitute": {"note": "headless Chrome has no microphone, so `in` listens to `fg_tonesink`, an `audio` sink in the same graph fed by a 700 Hz `signal` (a lab audio stream like any other).", "blocks": {"in": {"type": "audio_in", "params": {"stream": "fg_tonesink"}}}, "add": {"blocks": [{"id": "tone", "type": "signal", "params": {"rate": 48000, "freq": 700, "amp": 0.5, "noise": 0.01}}, {"id": "tonesink", "type": "audio", "params": {"rate": 48000}}], "links": [["tone", "tonesink"]]}},
+  "blocks": [
+    {"id": "in", "type": "audio_in", "params": {"stream": "browser_mic"}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "level", "type": "measure", "params": {"stat": "power_db", "fps": 10}}
+  ],
+  "links": [["in", "spec"], ["in", "level"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum (avg)", "config": {"traces": ["fg_spec"], "logX": true}, "w": 8},
+    {"type": "chart", "title": "Level (dBFS)", "config": {"channels": ["fg_level"], "seconds": 8}, "w": 4}
+  ]
+}

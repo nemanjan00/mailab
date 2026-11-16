@@ -1,0 +1,16 @@
+{
+  "description": "A 2 kHz tone at 100 kS/s, low-passed to 4 kHz and decimated by 10: spectrum and scope at 10 kS/s.",
+  "prompt": "Decimate the signal by 10 (with an anti-alias filter first) and show the result.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 100000.0, "freq": 2000.0, "noise": 0.05}},
+    {"id": "lp", "type": "lowpass", "params": {"cutoff": 4000.0, "taps": 127}},
+    {"id": "dec", "type": "decimate", "params": {"n": 10}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 512, "traces": ["avg"]}},
+    {"id": "scope", "type": "scope", "params": {"samples": 50, "measure": ["freq"]}}
+  ],
+  "links": [["src", "lp"], ["lp", "dec"], ["dec", "spec"], ["dec", "scope"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum at 10 kS/s", "config": {"traces": ["fg_spec"]}},
+    {"type": "trace", "title": "Scope at 10 kS/s", "config": {"traces": ["fg_scope"]}}
+  ]
+}

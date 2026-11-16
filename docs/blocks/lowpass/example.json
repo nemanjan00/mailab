@@ -1,0 +1,14 @@
+{
+  "description": "Noise at 100 kS/s through a 10 kHz low-pass: the output spectrum with the input overlaid.",
+  "prompt": "Low-pass the noisy signal at 10 kHz and show the spectrum before and after.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 100000.0, "freq": 3000.0, "amp": 0.5, "noise": 0.3}},
+    {"id": "before", "type": "spectrum", "params": {"fft": 1024, "traces": ["avg"], "average": 16}},
+    {"id": "lp", "type": "lowpass", "params": {"cutoff": 10000.0, "taps": 127}},
+    {"id": "after", "type": "spectrum", "params": {"fft": 1024, "traces": ["avg"], "average": 16, "overlay": ["before"]}}
+  ],
+  "links": [["src", "before"], ["src", "lp"], ["lp", "after"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: low-passed (avg) and input (before avg)", "config": {"traces": ["fg_after"]}}
+  ]
+}

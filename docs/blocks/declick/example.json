@@ -1,0 +1,20 @@
+{
+  "description": "Clicks in the test recording (about 5 per second, peaking near -2 dBFS): peak level before and after the de-clicker.",
+  "prompt": "There are clicks in the recording, remove them and show me the peak level before and after.",
+  "media": ["demo.wav"],
+  "requires": ["ffmpeg"],
+  "blocks": [
+    {"id": "src", "type": "audio_file", "params": {"path": "$MEDIA/demo.wav", "rate": 48000}},
+    {"id": "declick", "type": "declick", "params": {"mode": "click"}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000}},
+    {"id": "spec_before", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4}},
+    {"id": "spec_after", "type": "spectrum", "params": {"fft": 4096, "traces": ["avg"], "average": 8, "fps": 4, "overlay": ["spec_before"]}},
+    {"id": "peak_in", "type": "measure", "params": {"stat": "peak"}},
+    {"id": "peak_out", "type": "measure", "params": {"stat": "peak"}}
+  ],
+  "links": [["src", "declick"], ["declick", "out"], ["src", "spec_before"], ["declick", "spec_after"], ["src", "peak_in"], ["declick", "peak_out"]],
+  "panes": [
+    {"type": "trace", "title": "Spectrum: after, with before overlaid", "config": {"traces": ["fg_spec_after"]}},
+    {"type": "chart", "title": "Peak in / out", "config": {"channels": ["fg_peak_in", "fg_peak_out"], "seconds": 8}, "w": 4}
+  ]
+}

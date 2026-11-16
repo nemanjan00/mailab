@@ -1,0 +1,17 @@
+{
+  "description": "Framed text (`aaaa` preamble, `2dd4` sync, \"hello from mailab\") over a noisy BPSK link: the decoded frames as a table.",
+  "prompt": "Send framed packets over BPSK with sync word 2dd4 and show me the frames the receiver finds.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "text:hello from mailab", "preamble": "aaaa", "sync": "2dd4", "bitrate": 9600}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "bpsk", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 15}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "sl", "type": "slicer", "params": {"scheme": "bpsk"}},
+    {"id": "frm", "type": "framer", "params": {"sync": "2dd4", "frame_bytes": 17, "keep": 20}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["ch", "sync"], ["sync", "sl"], ["sl", "frm"]],
+  "panes": [
+    {"type": "json", "title": "Frames", "config": {"value": "fg_frm", "view": "table"}, "w": 8},
+    {"type": "chart", "title": "Frames received", "config": {"channels": ["fg_frm_count"], "seconds": 8}, "w": 4}
+  ]
+}

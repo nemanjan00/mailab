@@ -1,0 +1,14 @@
+{
+  "description": "A PRBS9 bit stream at 1200 bit/s: the bits on a scope and in a bit view.",
+  "prompt": "Make a PRBS9 bit stream and show me the bits.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 1200}},
+    {"id": "scope", "type": "scope", "params": {"samples": 64, "trigger": "none", "measure": ["mean"]}},
+    {"id": "view", "type": "bitview", "params": {"bits": 128}}
+  ],
+  "links": [["bits", "scope"], ["bits", "view"]],
+  "panes": [
+    {"type": "trace", "title": "Bits", "config": {"traces": ["fg_scope"]}},
+    {"type": "json", "title": "Bit view", "config": {"value": "fg_view"}}
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "description": "The text \"mailab\" sent as BPSK and received: the sliced bits in a bit view, and the slicer's EVM.",
+  "prompt": "Slice the received BPSK symbols to bits and show me the bits and the EVM.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "text:mailab ", "bitrate": 9600}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "bpsk", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 20}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "sl", "type": "slicer", "params": {"scheme": "bpsk"}},
+    {"id": "view", "type": "bitview", "params": {"bits": 96}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["ch", "sync"], ["sync", "sl"], ["sl", "view"]],
+  "panes": [
+    {"type": "json", "title": "Bits", "config": {"value": "fg_view"}},
+    {"type": "chart", "title": "EVM (dB)", "config": {"channels": ["fg_sl_evm"], "seconds": 8}}
+  ]
+}

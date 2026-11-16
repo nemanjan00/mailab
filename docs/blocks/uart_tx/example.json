@@ -1,0 +1,14 @@
+{
+  "description": "\"hello mailab\" at 9600 baud, 8 samples per bit: one frame on a triggered scope, and the bytes decoded back by uart_rx.",
+  "prompt": "Send \"hello mailab\" as 9600 8N1 UART and show me the waveform.",
+  "blocks": [
+    {"id": "tx", "type": "uart_tx", "params": {"text": "hello mailab\r\n", "baud": 9600, "sps": 8, "repeat_ms": 100}},
+    {"id": "scope", "type": "scope", "params": {"samples": 900, "trigger": "falling", "level": 0.5, "pretrigger": 0.05, "mode": "normal", "measure": []}},
+    {"id": "rx", "type": "uart_rx", "params": {"baud": 9600}}
+  ],
+  "links": [["tx", "scope"], ["tx", "rx"]],
+  "panes": [
+    {"type": "trace", "title": "UART line (falling-edge trigger)", "config": {"traces": ["fg_scope"]}, "w": 8},
+    {"type": "json", "title": "uart_rx", "config": {"value": "fg_rx"}, "w": 4}
+  ]
+}

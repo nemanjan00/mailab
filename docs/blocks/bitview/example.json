@@ -1,0 +1,15 @@
+{
+  "description": "The text \"mailab \" sent as BPSK and recovered: the received bits and their hex (`6d61696c616220` = \"mailab \").",
+  "prompt": "Show me the raw bits the BPSK receiver produces.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "text:mailab ", "bitrate": 9600}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "bpsk", "sps": 8}},
+    {"id": "sync", "type": "symbol_sync", "params": {"sps": 8}},
+    {"id": "sl", "type": "slicer", "params": {"scheme": "bpsk"}},
+    {"id": "view", "type": "bitview", "params": {"bits": 112}}
+  ],
+  "links": [["bits", "tx"], ["tx", "sync"], ["sync", "sl"], ["sl", "view"]],
+  "panes": [
+    {"type": "json", "title": "Bit view", "config": {"value": "fg_view"}, "w": 12}
+  ]
+}

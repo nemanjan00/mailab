@@ -1,0 +1,17 @@
+{
+  "description": "QPSK at 20 dB SNR: the eye before the matched filter (transmit RRC only) and after it (open eye).",
+  "prompt": "Show the eye diagram of the received QPSK before and after a matched filter.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 20000}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "qpsk", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 20}},
+    {"id": "eye_raw", "type": "eye", "params": {"sps": 8, "traces": 48}},
+    {"id": "mf", "type": "matched_filter", "params": {"sps": 8, "beta": 0.35}},
+    {"id": "eye", "type": "eye", "params": {"sps": 8, "traces": 48}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["ch", "eye_raw"], ["ch", "mf"], ["mf", "eye"]],
+  "panes": [
+    {"type": "trace", "title": "Eye before the matched filter", "config": {"traces": ["fg_eye_raw"]}},
+    {"type": "trace", "title": "Eye after the matched filter", "config": {"traces": ["fg_eye"]}}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "description": "A 440 Hz tone as an audio stream: the audio pane (level meter) and the waveform.",
+  "prompt": "Play a 440 Hz tone in my browser.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 48000, "freq": 440, "amp": 0.5, "noise": 0}},
+    {"id": "out", "type": "audio", "params": {"rate": 48000, "gain": 1.0}},
+    {"id": "scope", "type": "scope", "params": {"samples": 480, "measure": ["freq", "vrms"]}}
+  ],
+  "links": [["src", "out"], ["src", "scope"]],
+  "panes": [
+    {"type": "audio", "title": "Audio", "config": {"stream": "fg_out"}, "w": 4},
+    {"type": "trace", "title": "Waveform", "config": {"traces": ["fg_scope"]}, "w": 8}
+  ]
+}

@@ -36,6 +36,8 @@ class Block:
     kind = "dsp"          # source | dsp | sink
     params = {}           # name -> (default, doc)
     doc = ""
+    inputs = ""           # what the block expects (catalog / docs; "" for sources)
+    outputs = ""          # what it produces: downstream stream and/or lab traces, channels, values...
 
     def __init__(self, bid, params):
         self.id = bid
@@ -72,9 +74,11 @@ class Throttled(Block):
 # sources ------------------------------------------------------------------
 
 class SignalSource(Block):
+    inputs = ""
+    outputs = "complex IQ at `rate`"
     kind = "source"
     doc = "complex tone plus noise"
-    params = {"rate": (100e3, "sample rate"), "freq": (10e3, "tone Hz"), "amp": (1.0, ""), "noise": (0.01, "noise rms")}
+    params = {"rate": (100e3, "sample rate"), "freq": (10e3, "tone Hz"), "amp": (1.0, "tone amplitude (1.0 = 0 dBFS)"), "noise": (0.01, "noise rms")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -96,10 +100,12 @@ class SignalSource(Block):
 
 
 class ModulatedSource(Block):
+    inputs = ""
+    outputs = "complex IQ at `rate` (RRC-shaped symbols, `sps` samples each)"
     kind = "source"
     doc = "random symbols, RRC-shaped (test signal for constellation/eye/demod)"
     params = {"scheme": ("qpsk", "bpsk|qpsk|psk8|qam16|qam64|apsk16..."), "rate": (100e3, "sample rate"),
-              "sps": (8, "samples per symbol"), "beta": (0.35, "RRC roll-off"), "snr_db": (25.0, ""),
+              "sps": (8, "samples per symbol"), "beta": (0.35, "RRC roll-off"), "snr_db": (25.0, "AWGN SNR in dB (relative to signal power)"),
               "cfo": (0.0, "carrier offset Hz"), "phase": (0.0, "degrees")}
 
     def __init__(self, bid, params):
@@ -141,9 +147,11 @@ def _media_path(path, must_exist=True):
 
 
 class FileSource(Block):
+    inputs = ""
+    outputs = "complex IQ at `rate` (cf32 samples from the file)"
     kind = "source"
     doc = "raw cf32 IQ file, played back in real time"
-    params = {"path": ("", "cf32 file inside DATA_DIR/media or MAILAB_MEDIA_DIRS"), "rate": (1e6, "sample rate"), "loop": (True, "")}
+    params = {"path": ("", "cf32 file inside DATA_DIR/media or MAILAB_MEDIA_DIRS"), "rate": (1e6, "sample rate"), "loop": (True, "restart at the end of the file (false = stop)")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -169,11 +177,13 @@ class FileSource(Block):
 
 
 class AudioFileSource(Block):
+    inputs = ""
+    outputs = "real audio at `rate` (carried as complex with zero imaginary part)"
     kind = "source"
     doc = "audio file (wav/flac/mp3/ogg/… or a video's audio, decoded by ffmpeg) as real float samples"
     params = {"path": ("", "file inside DATA_DIR/media or MAILAB_MEDIA_DIRS"), "rate": (48000, "output sample rate"),
-              "channel": (0, "channel to take (0 = mix down to mono)"), "loop": (True, ""),
-              "realtime": (True, "pace like a live source; false = as fast as the graph runs"), "gain": (1.0, "")}
+              "channel": (0, "channel to take (0 = mix down to mono)"), "loop": (True, "restart at the end of the file (false = stop)"),
+              "realtime": (True, "pace like a live source; false = as fast as the graph runs"), "gain": (1.0, "linear gain applied to the samples")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -214,9 +224,11 @@ class AudioFileSource(Block):
 
 
 class SoapySource(Block):
+    inputs = ""
+    outputs = "complex IQ at `rate` (baseband around `freq`)"
     kind = "source"
     doc = "SoapySDR receiver (bladeRF, HackRF, RTL-SDR...)"
-    params = {"args": ("", "e.g. driver=bladerf"), "freq": (100e6, ""), "rate": (2e6, ""), "gain": (30.0, "")}
+    params = {"args": ("", "e.g. driver=bladerf"), "freq": (100e6, "center frequency Hz"), "rate": (2e6, "sample rate"), "gain": (30.0, "RX gain dB (overall, driver distributes it)")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -242,6 +254,8 @@ class SoapySource(Block):
 
 
 class AudioIn(Block):
+    inputs = ""
+    outputs = "real audio in [-1, 1) at the lab stream's rate"
     kind = "source"
     doc = ("lab audio stream in (e.g. a browser mic <device>_mic, or another graph's audio sink): "
            "real samples in [-1, 1) at the stream's rate")
@@ -292,6 +306,8 @@ class Stateful(Block):
 
 
 class Shift(Stateful):
+    inputs = "complex IQ"
+    outputs = "complex IQ, same rate"
     doc = "move a signal at +offset Hz to baseband"
     params = {"offset": (0.0, "Hz")}
 
@@ -300,6 +316,8 @@ class Shift(Stateful):
 
 
 class Resample(Stateful):
+    inputs = "complex IQ or real"
+    outputs = "same kind at `rate`"
     doc = "arbitrary-rate resampler"
     params = {"rate": (48e3, "output sample rate")}
 
@@ -311,14 +329,18 @@ class Resample(Stateful):
 
 
 class Lowpass(Stateful):
+    inputs = "complex IQ or real"
+    outputs = "same kind, same rate"
     doc = "Kaiser FIR low-pass"
-    params = {"cutoff": (10e3, "Hz"), "taps": (63, "")}
+    params = {"cutoff": (10e3, "Hz"), "taps": (63, "FIR length (more = sharper transition, more delay)")}
 
     def make(self, rate):
         return dsp.Lowpass(min(0.49, float(self.p["cutoff"]) / rate), int(self.p["taps"]))
 
 
 class Agc(Stateful):
+    inputs = "complex IQ"
+    outputs = "complex IQ normalized to unit power, same rate"
     doc = "automatic gain control (normalizes to unit power)"
     params = {"bandwidth": (1e-3, "loop bandwidth")}
 
@@ -327,6 +349,8 @@ class Agc(Stateful):
 
 
 class FmDemod(Stateful):
+    inputs = "complex IQ (FM centered at 0 Hz)"
+    outputs = "real audio, same rate"
     doc = "FM demodulator -> real audio"
     params = {"deviation": (5e3, "Hz")}
 
@@ -335,6 +359,8 @@ class FmDemod(Stateful):
 
 
 class AmDemod(Stateful):
+    inputs = "complex IQ (AM/SSB centered at 0 Hz)"
+    outputs = "real audio, same rate"
     doc = "AM/SSB demodulator -> real audio"
     params = {"mode": ("am", "am|usb|lsb")}
 
@@ -343,9 +369,11 @@ class AmDemod(Stateful):
 
 
 class SymbolSync(Stateful):
+    inputs = "complex IQ at `sps` samples per symbol (RRC-shaped)"
+    outputs = "complex symbols, one per symbol (rate / sps)"
     doc = ("RRC symbol timing recovery, one sample per symbol out. method liquid (polyphase, best for QAM64+) "
            "or gardner (matched filter + Gardner; use it for rectangular qam32, where the liquid loop mis-locks)")
-    params = {"sps": (8, "samples per symbol"), "beta": (0.35, ""), "bandwidth": (0.02, "loop bandwidth (high-order QAM: 0.001-0.003)"),
+    params = {"sps": (8, "samples per symbol"), "beta": (0.35, "RRC roll-off (same as the transmitter)"), "bandwidth": (0.02, "loop bandwidth (high-order QAM: 0.001-0.003)"),
               "method": ("liquid", "liquid | gardner")}
 
     def make(self, rate):
@@ -361,8 +389,10 @@ class SymbolSync(Stateful):
 
 
 class CarrierRecovery(Block):
+    inputs = "complex symbols (one sample per symbol)"
+    outputs = "phase/frequency-corrected complex symbols"
     doc = "decision-directed PLL on symbols (removes carrier offset / phase)"
-    params = {"scheme": ("qpsk", ""), "bandwidth": (0.02, "loop bandwidth")}
+    params = {"scheme": ("qpsk", "constellation the decisions are made against (bpsk|qpsk|psk8|qam16...)"), "bandwidth": (0.02, "loop bandwidth")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -386,9 +416,11 @@ class CarrierRecovery(Block):
 
 
 class Demod(Throttled):
+    inputs = "complex symbols (one sample per symbol)"
+    outputs = "symbol indices (float); channel <device>_<id>_evm (dB)"
     kind = "dsp"
     doc = "symbol decisions + EVM; outputs symbol indices, EVM -> channel <device>_<id>_evm"
-    params = {"scheme": ("qpsk", ""), "fps": (5, "EVM updates per second")}
+    params = {"scheme": ("qpsk", "constellation (bpsk|qpsk|psk8|qam16|qam64|apsk16...)"), "fps": (5, "EVM updates per second")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -402,6 +434,8 @@ class Demod(Throttled):
 
 
 class Mag(Block):
+    inputs = "complex IQ or real"
+    outputs = "real |x|, same rate"
     doc = "|x|"
 
     def work(self, x, rate):
@@ -409,8 +443,10 @@ class Mag(Block):
 
 
 class Decimate(Block):
+    inputs = "any"
+    outputs = "same kind at rate / n"
     doc = "keep every n-th sample (no filtering; put a lowpass first)"
-    params = {"n": (10, "")}
+    params = {"n": (10, "decimation factor (output rate = input rate / n)")}
 
     def work(self, x, rate):
         n = int(self.p["n"])
@@ -432,6 +468,8 @@ def _pattern_bits(pattern):
 
 
 class BitSource(Block):
+    inputs = ""
+    outputs = "bits (0/1 values) at `bitrate`"
     kind = "source"
     doc = "bits at `bitrate`: prbs7/9/15/23/31, or a repeated pattern (hex:… text:… bits:…), optionally behind a sync word"
     params = {"pattern": ("prbs9", "prbsN | hex:… | text:… | bits:…"), "bitrate": (9600, "bits per second"),
@@ -466,6 +504,8 @@ class BitSource(Block):
 
 
 class Modulate(Block):
+    inputs = "bits (0/1)"
+    outputs = "complex IQ at bitrate / bits-per-symbol * sps"
     doc = ("bits -> baseband IQ. Linear (liquid): bpsk qpsk psk8..256 dpsk* ask* qam4..256 apsk* ook pi4dqpsk V29 …; "
            "CPFSK: 2fsk 4fsk msk gfsk gmsk. Output rate = bitrate / bits-per-symbol * sps")
     params = {"scheme": ("qpsk", "modulation"), "sps": (8, "samples per symbol"), "beta": (0.35, "RRC roll-off (linear)"),
@@ -484,6 +524,8 @@ class Modulate(Block):
 
 
 class AnalogMod(Stateful):
+    inputs = "real audio (complex: real part)"
+    outputs = "complex baseband IQ, same rate"
     doc = "real audio -> AM / DSB / USB / LSB / FM / PM baseband"
     params = {"mode": ("fm", "am|dsb|usb|lsb|fm|pm"), "deviation": (5e3, "FM Hz"), "index": (0.8, "AM index / PM radians")}
 
@@ -502,8 +544,10 @@ class AnalogMod(Stateful):
 
 
 class Channel(Block):
+    inputs = "complex IQ (real input becomes complex)"
+    outputs = "complex IQ, same rate"
     doc = "test channel: AWGN at snr_db (relative to signal power), carrier offset, phase, gain"
-    params = {"snr_db": (20.0, ""), "cfo": (0.0, "Hz"), "phase": (0.0, "degrees"), "gain": (1.0, "")}
+    params = {"snr_db": (20.0, "AWGN SNR in dB (relative to the signal power)"), "cfo": (0.0, "carrier frequency offset Hz"), "phase": (0.0, "degrees"), "gain": (1.0, "linear gain")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -521,6 +565,8 @@ class Channel(Block):
 
 
 class Discriminator(Block):
+    inputs = "complex IQ (FSK/FM at `sps` samples per symbol)"
+    outputs = "real, ±1 per symbol level"
     doc = "FSK/FM discriminator -> real, scaled so CPFSK symbols are ±1 (±1/±3 for 4fsk); integrates over a symbol by default (fixes GMSK/GFSK ISI)"
     params = {"sps": (8, "samples per symbol"), "h": (1.0, "modulation index of the signal"), "integrate": (True, "average over one symbol")}
 
@@ -533,6 +579,8 @@ class Discriminator(Block):
 
 
 class ClockRecovery(Block):
+    inputs = "real or complex at `sps` samples per symbol"
+    outputs = "one sample per symbol (rate / sps)"
     doc = "Gardner timing recovery for real or complex input (FSK after discriminator, OOK magnitude): one sample per symbol out"
     params = {"sps": (8, "samples per symbol"), "bandwidth": (0.005, "loop gain"), "dc_block": (False, "remove the mean first (OOK)")}
 
@@ -545,6 +593,8 @@ class ClockRecovery(Block):
 
 
 class Slicer(Throttled):
+    inputs = "complex symbols (linear schemes) or real symbols (FSK)"
+    outputs = "bits (0/1); channel <device>_<id>_evm for complex input"
     kind = "dsp"
     doc = ("symbols -> bits. Complex input: liquid demod of `scheme` (+ EVM -> channel <device>_<id>_evm). "
            "Real input: `levels` 2 (adaptive threshold) or 4 (4fsk gray)")
@@ -568,9 +618,11 @@ class Slicer(Throttled):
 
 
 class Ber(Throttled):
+    inputs = "bits (0/1) carrying the PRBS"
+    outputs = "channels <device>_<id> (BER) and <device>_<id>_errors"
     kind = "sink"
     doc = "bit error rate against a PRBS (self-synchronizing, no alignment) -> channels <device>_<id> (BER) and _errors"
-    params = {"prbs": (9, "PRBS order sent by the transmitter"), "window": (100000, "bits per BER estimate"), "fps": (2, "")}
+    params = {"prbs": (9, "PRBS order sent by the transmitter"), "window": (100000, "bits per BER estimate"), "fps": (2, "channel updates per second")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -589,6 +641,8 @@ class Ber(Throttled):
 
 
 class Framer(Block):
+    inputs = "bits (0/1)"
+    outputs = "value <device>_<id> (frames: n, t, hex, ascii), blob <device>_<id> (payloads), channel <device>_<id>_count"
     kind = "sink"
     doc = "find a sync word in a bit stream, cut frames: value <device>_<id> (last frames: hex/ascii), blob of payloads, count channel"
     params = {"sync": ("2dd4", "sync word (hex)"), "max_errors": (0, "allowed bit errors in the sync word"),
@@ -627,9 +681,11 @@ class Framer(Block):
 
 
 class BitView(Throttled):
+    inputs = "bits (0/1)"
+    outputs = "value <device>_<id> (bitrate, bits, hex), blob <device>_<id>"
     kind = "sink"
     doc = "show a bit stream: value <device>_<id> with the last bits (binary + hex) and a running blob"
-    params = {"bits": (256, "bits shown"), "fps": (4, "")}
+    params = {"bits": (256, "bits shown"), "fps": (4, "value updates per second")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -650,17 +706,21 @@ class BitView(Throttled):
 
 
 class MatchedFilterBlock(Stateful):
+    inputs = "complex IQ at `sps` samples per symbol"
+    outputs = "complex IQ, same rate"
     doc = "RRC receive (matched) filter, same sps/beta as the transmitter; then e.g. clock_recovery"
-    params = {"sps": (8, ""), "beta": (0.35, "")}
+    params = {"sps": (8, "samples per symbol (as the transmitter)"), "beta": (0.35, "RRC roll-off (as the transmitter)")}
 
     def make(self, rate):
         return dsp.MatchedFilter(int(self.p["sps"]), beta=float(self.p["beta"]))
 
 
 class LevelTrigger(Block):
+    inputs = "complex IQ or real"
+    outputs = "gated samples while a burst is open (`pass`); per burst: log line, event + blob <device>_<id> (cf32), trace <device>_<id>_burst (dBFS envelope), channel <device>_<id>_count"
     doc = ("power squelch / level trigger: passes samples only while the level is above threshold_db (+ pretrigger, hold); "
            "each burst -> log, channel <device>_<id>_count, blob <device>_<id> (cf32 IQ) and trace <device>_<id>_burst (|x| dB)")
-    params = {"threshold_db": (-30.0, "dBFS"), "pretrigger_ms": (2.0, ""), "hold_ms": (20.0, "stay open after the level drops"),
+    params = {"threshold_db": (-30.0, "dBFS"), "pretrigger_ms": (2.0, "samples kept from before the trigger"), "hold_ms": (20.0, "stay open after the level drops"),
               "max_burst_ms": (2000.0, "cut very long bursts"), "pass": (True, "gate the stream to downstream blocks")}
 
     def __init__(self, bid, params):
@@ -720,9 +780,11 @@ class LevelTrigger(Block):
 
 
 class UartTx(Block):
+    inputs = ""
+    outputs = "real line levels (1 = idle/mark) at baud * sps"
     kind = "source"
     doc = "UART transmitter: text/hex -> line levels (idle high) at baud * sps; repeats every repeat_ms"
-    params = {"text": ("hello mailab\r\n", "text to send (or use hex)"), "hex": ("", "bytes as hex"), "baud": (9600, ""),
+    params = {"text": ("hello mailab\r\n", "text to send (or use hex)"), "hex": ("", "bytes as hex"), "baud": (9600, "bit rate"),
               "bits": (8, "data bits"), "parity": ("none", "none|even|odd"), "stop": (1, "stop bits"),
               "sps": (8, "samples per bit (1 = bit stream)"), "repeat_ms": (500, "0 = send once")}
 
@@ -753,10 +815,12 @@ class UartTx(Block):
 
 
 class UartRx(Block):
+    inputs = "real line levels (any oversampling) or bits"
+    outputs = "value <device>_<id> (text, hex, bytes, errors), blob <device>_<id>, device log line per text line, channel <device>_<id>_errors"
     kind = "sink"
     doc = ("UART receiver on line levels (logic or analog, any oversampling) or bits: bytes -> value <device>_<id> "
            "(text + hex), blob, and each text line into the device log (for classifiers/notifications); error count channel")
-    params = {"baud": (9600, ""), "bits": (8, ""), "parity": ("none", "none|even|odd"), "stop": (1, ""), "invert": (False, "")}
+    params = {"baud": (9600, "bit rate (oversampling = input rate / baud)"), "bits": (8, "data bits"), "parity": ("none", "none|even|odd"), "stop": (1, "stop bits"), "invert": (False, "inverted line (idle low, e.g. RS-232 levels)")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -791,6 +855,8 @@ class UartRx(Block):
 
 
 class Decode(Throttled):
+    inputs = "logic words (bit k = channel k) or analog/real (thresholded into channel 0)"
+    outputs = "value <device>_<id> (annotation table), event <device>_<id>, log lines, blob <device>_<id> (data bytes), channel <device>_<id>_count"
     kind = "sink"
     doc = ("protocol decoder on logic samples (bit k of each input word = channel k; analog/float input is thresholded "
            "into channel 0): libsigrokdecode decoder scripts (uart spi i2c can onewire_link spiflash... any installed id, "
@@ -864,6 +930,8 @@ class Decode(Throttled):
 
 
 class Python(Block):
+    inputs = "anything"
+    outputs = "whatever work() returns (default: same rate)"
     doc = "scriptable block: params.code defines work(x, rate) -> y or (y, rate); np, dsp, modem, lab (sample/log/event/value/blob) and state are in scope"
     params = {"code": ("def work(x, rate):\n    return x * 2", "python source")}
 
@@ -903,12 +971,14 @@ WINDOWS = {
 
 
 class Spectrum(Throttled):
+    inputs = "complex IQ or real"
+    outputs = "trace <device>_<id> (Hz vs dBFS, one series per `traces` entry)"
     doc = ("spectrum analyzer -> trace <device>_<id> (dBFS): RBW or FFT size, window, "
            "traces live / max / min / avg (power average over `average` frames), display points with peak/sample detector")
     params = {"rbw": (0.0, "resolution bandwidth Hz (0 = use fft)"), "fft": (1024, "FFT size when rbw is 0"),
               "window": ("hann", "hann|blackmanharris|flattop|rect"), "traces": (["live"], "any of live, max, min, avg"),
               "average": (8, "frames in the avg trace (exponential, power domain)"), "points": (0, "display points (0 = all bins)"),
-              "detector": ("peak", "peak|sample when reducing to points"), "fps": (10, ""), "center": (0.0, "Hz added to x axis"),
+              "detector": ("peak", "peak|sample when reducing to points"), "fps": (10, "trace updates per second"), "center": (0.0, "Hz added to x axis"),
               "onesided": ("auto", "auto (real input: positive frequencies only) | true | false"),
               "overlay": ([], "ids of other spectrum blocks drawn here too (before/after: put one before and one after a chain)")}
 
@@ -990,8 +1060,10 @@ class Spectrum(Throttled):
 
 
 class Constellation(Throttled):
+    inputs = "complex symbols"
+    outputs = "trace <device>_<id> (mode constellation)"
     doc = "I/Q scatter -> trace <device>_<id> (mode constellation)"
-    params = {"points": (2000, ""), "fps": (10, "")}
+    params = {"points": (2000, "most recent symbols plotted"), "fps": (10, "trace updates per second")}
 
     def work(self, x, rate):
         self.buf = np.concatenate([getattr(self, "buf", np.zeros(0, np.complex64)), x.astype(np.complex64)])[-int(self.p["points"]):]
@@ -1001,8 +1073,10 @@ class Constellation(Throttled):
 
 
 class Eye(Throttled):
+    inputs = "complex IQ or real at `sps` samples per symbol"
+    outputs = "trace <device>_<id> (mode eye)"
     doc = "eye diagram -> trace <device>_<id> (mode eye); input at sps samples/symbol"
-    params = {"sps": (8, "samples per symbol"), "traces": (64, ""), "fps": (5, ""), "part": ("real", "real|imag")}
+    params = {"sps": (8, "samples per symbol"), "traces": (64, "overlaid two-symbol segments"), "fps": (5, "trace updates per second"), "part": ("real", "real|imag")}
 
     def work(self, x, rate):
         sps = int(self.p["sps"])
@@ -1047,6 +1121,8 @@ MEASURE_UNITS = {"vpp": "V", "vmax": "V", "vmin": "V", "mean": "V", "vrms": "V",
 
 
 class Scope(Throttled):
+    inputs = "real, or complex (`part` picks real/imag/mag)"
+    outputs = "trace <device>_<id> (s vs V, with measurements), channels <device>_<id>_<measurement>"
     doc = ("oscilloscope -> trace <device>_<id>: trigger (rising/falling, level, auto/normal, pretrigger), "
            "traces live/max/min/avg, measurements (vpp vmax vmin mean vrms freq period duty) -> channels <device>_<id>_<m>")
     params = {"samples": (1000, "samples per capture"), "part": ("real", "real|imag|mag for complex input"),
@@ -1054,7 +1130,7 @@ class Scope(Throttled):
               "mode": ("auto", "auto (free-run without trigger) | normal (hold last trigger)"),
               "pretrigger": (0.1, "fraction of the capture before the trigger"),
               "traces": (["live"], "any of live, max, min, avg"), "average": (8, "captures in the avg trace"),
-              "measure": (["vpp", "freq"], "measurements to publish as channels"), "fps": (10, "")}
+              "measure": (["vpp", "freq"], "measurements to publish as channels"), "fps": (10, "captures per second")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
@@ -1117,8 +1193,10 @@ class Scope(Throttled):
 
 
 class Measure(Throttled):
+    inputs = "complex IQ or real"
+    outputs = "channel <device>_<id>"
     doc = "statistic of the stream -> channel <device>_<id>"
-    params = {"stat": ("power_db", "power_db|rms|mean|peak|last"), "fps": (10, ""), "unit": ("", "")}
+    params = {"stat": ("power_db", "power_db|rms|mean|peak|last"), "fps": (10, "channel samples per second"), "unit": ("", "channel unit (default dB for power_db)")}
 
     def work(self, x, rate):
         if not len(x) or not self.due():
@@ -1137,9 +1215,11 @@ class Measure(Throttled):
 
 
 class Audio(Block):
+    inputs = "real audio (complex: real part)"
+    outputs = "audio stream <device>_<id> (int16 PCM at `rate`)"
     kind = "sink"
     doc = "play in the browser (audio pane on stream <device>_<id>); real input, resampled to `rate`"
-    params = {"rate": (24000, "output sample rate"), "gain": (1.0, "")}
+    params = {"rate": (24000, "output sample rate"), "gain": (1.0, "linear gain before clipping to [-1, 1]")}
 
     def work(self, x, rate):
         y = np.real(x).astype(np.complex64)
@@ -1155,6 +1235,8 @@ class Audio(Block):
 
 
 class Wav(Block):
+    inputs = "real audio (complex: real part)"
+    outputs = "WAV file (16-bit mono) in the media dir"
     kind = "sink"
     doc = "record real samples to a WAV file"
     params = {"path": ("", "output file inside DATA_DIR/media or MAILAB_MEDIA_DIRS (default <media>/<block id>.wav)")}
@@ -1292,11 +1374,13 @@ class _NetEndpoint:
 
 
 NET_PARAMS = {"mode": ("tcp-server", "tcp-server|tcp-client|udp"), "host": ("127.0.0.1", "bind (server/udp in) or remote host"),
-              "port": (5600, ""),
+              "port": (5600, "TCP/UDP port (listen port for tcp-server / udp in, remote port otherwise)"),
               "format": ("cf32", "cf32|cs16|cu8 interleaved I/Q, or logic: u8|u16|u32 words per sample, bits (packed, MSB first)")}
 
 
 class NetSource(Block):
+    inputs = ""
+    outputs = "complex IQ (cf32/cs16/cu8) or logic words (u8/u16/u32/bits) at `rate`"
     kind = "source"
     doc = ("IQ in over TCP/UDP (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams; "
            "or logic samples (u8/u16/u32/bits) for decode")
@@ -1319,6 +1403,8 @@ class NetSource(Block):
 
 
 class NetSink(Block):
+    inputs = "complex IQ, or logic words for the u8/u16/u32/bits formats"
+    outputs = "raw bytes over TCP/UDP"
     kind = "sink"
     doc = "IQ out over TCP/UDP (raw interleaved cf32/cs16/cu8)"
     params = dict(NET_PARAMS)
@@ -1484,9 +1570,10 @@ def stats():
 bridge = lab.Bridge()
 
 
-@bridge.command("blocks", "block catalog: kind, doc, params with defaults")
+@bridge.command("blocks", "block catalog: kind, doc, inputs, outputs, params with defaults")
 def blocks(_args):
-    return {name: {"kind": cls.kind, "doc": cls.doc, "params": {k: {"default": v[0], "doc": v[1]} for k, v in cls.params.items()}}
+    return {name: {"kind": cls.kind, "doc": cls.doc, "inputs": cls.inputs, "outputs": cls.outputs,
+                   "params": {k: {"default": v[0], "doc": v[1]} for k, v in cls.params.items()}}
             for name, cls in BLOCKS.items()}
 
 

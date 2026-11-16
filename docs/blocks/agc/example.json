@@ -1,0 +1,16 @@
+{
+  "description": "A weak tone (amplitude 0.05, about -26 dBFS) brought to 0 dB: power before and after.",
+  "prompt": "The signal is too weak, normalize it with an AGC and show me the level before and after.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 100000.0, "freq": 5000.0, "amp": 0.05, "noise": 0.002}},
+    {"id": "pin", "type": "measure", "params": {"stat": "power_db"}},
+    {"id": "agc", "type": "agc", "params": {"bandwidth": 0.01}},
+    {"id": "pout", "type": "measure", "params": {"stat": "power_db"}},
+    {"id": "scope", "type": "scope", "params": {"samples": 200, "measure": ["vpp"]}}
+  ],
+  "links": [["src", "pin"], ["src", "agc"], ["agc", "pout"], ["agc", "scope"]],
+  "panes": [
+    {"type": "chart", "title": "Power in / out (dB)", "config": {"channels": ["fg_pin", "fg_pout"], "seconds": 8}},
+    {"type": "trace", "title": "Scope after AGC", "config": {"traces": ["fg_scope"]}}
+  ]
+}
