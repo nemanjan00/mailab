@@ -249,11 +249,18 @@ class AmDemod(Stateful):
 
 
 class SymbolSync(Stateful):
-    doc = "RRC symbol timing recovery: one sample per symbol out"
-    params = {"sps": (8, "samples per symbol"), "beta": (0.35, ""), "bandwidth": (0.02, "loop bandwidth")}
+    doc = ("RRC symbol timing recovery, one sample per symbol out. method liquid (polyphase, best for QAM64+) "
+           "or gardner (matched filter + Gardner; use it for rectangular qam32, where the liquid loop mis-locks)")
+    params = {"sps": (8, "samples per symbol"), "beta": (0.35, ""), "bandwidth": (0.02, "loop bandwidth (high-order QAM: 0.001-0.003)"),
+              "method": ("liquid", "liquid | gardner")}
 
     def make(self, rate):
-        return dsp.SymbolSync(int(self.p["sps"]), beta=float(self.p["beta"]), bandwidth=float(self.p["bandwidth"]))
+        sps = int(self.p["sps"])
+        if self.p["method"] == "gardner":
+            mf = dsp.MatchedFilter(sps, beta=float(self.p["beta"]))
+            g = modem.Gardner(sps, float(self.p["bandwidth"]))
+            return type("MfGardner", (), {"process": staticmethod(lambda x: g.process(mf.process(x)))})()
+        return dsp.SymbolSync(sps, beta=float(self.p["beta"]), bandwidth=float(self.p["bandwidth"]))
 
     def out_rate(self, rate):
         return rate / int(self.p["sps"])
@@ -420,12 +427,12 @@ class Channel(Block):
 
 
 class Discriminator(Block):
-    doc = "FSK/FM discriminator -> real, scaled so CPFSK symbols are ±1 (±1/±3 for 4fsk)"
-    params = {"sps": (8, "samples per symbol"), "h": (1.0, "modulation index of the signal")}
+    doc = "FSK/FM discriminator -> real, scaled so CPFSK symbols are ±1 (±1/±3 for 4fsk); integrates over a symbol by default (fixes GMSK/GFSK ISI)"
+    params = {"sps": (8, "samples per symbol"), "h": (1.0, "modulation index of the signal"), "integrate": (True, "average over one symbol")}
 
     def __init__(self, bid, params):
         super().__init__(bid, params)
-        self.d = modem.Discriminator(int(self.p["sps"]), float(self.p["h"]))
+        self.d = modem.Discriminator(int(self.p["sps"]), float(self.p["h"]), bool(self.p["integrate"]))
 
     def work(self, x, rate):
         return self.d.process(x), rate
@@ -545,6 +552,74 @@ class BitView(Throttled):
         self.buf = self.buf[whole:]
         lab.value(self.id, {"bitrate": rate, "bits": "".join(str(int(b)) for b in tail), "hex": modem.pack_bits(tail).hex()})
         lab.blob(self.id, self.stream)
+        return None
+
+
+class MatchedFilterBlock(Stateful):
+    doc = "RRC receive (matched) filter, same sps/beta as the transmitter; then e.g. clock_recovery"
+    params = {"sps": (8, ""), "beta": (0.35, "")}
+
+    def make(self, rate):
+        return dsp.MatchedFilter(int(self.p["sps"]), beta=float(self.p["beta"]))
+
+
+class LevelTrigger(Block):
+    doc = ("power squelch / level trigger: passes samples only while the level is above threshold_db (+ pretrigger, hold); "
+           "each burst -> log, channel <device>_<id>_count, blob <device>_<id> (cf32 IQ) and trace <device>_<id>_burst (|x| dB)")
+    params = {"threshold_db": (-30.0, "dBFS"), "pretrigger_ms": (2.0, ""), "hold_ms": (20.0, "stay open after the level drops"),
+              "max_burst_ms": (2000.0, "cut very long bursts"), "pass": (True, "gate the stream to downstream blocks")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.history = np.zeros(0, dtype=np.complex64)
+        self.burst = []
+        self.open = False
+        self.quiet = 0
+        self.count = 0
+
+    def finish(self, rate):
+        data = np.concatenate(self.burst) if self.burst else np.zeros(0, dtype=np.complex64)
+        self.burst, self.open = [], False
+        if not len(data):
+            return
+        self.count += 1
+        lab.log("%s: burst %d, %.1f ms, peak %.1f dBFS" % (self.id, self.count, len(data) / rate * 1e3,
+                                                        10 * np.log10(np.max(np.abs(data) ** 2) + 1e-20)), "info")
+        lab.sample(self.id + "_count", self.count, "")
+        lab.blob(self.id, data.astype(np.complex64).tobytes())
+        step = max(1, len(data) // 4000)
+        env = 10 * np.log10(np.abs(data[::step]) ** 2 + 1e-20)
+        lab.trace(self.id + "_burst", (np.arange(len(env)) * step / rate).tolist(), [{"label": "dBFS", "y": np.round(env, 2).tolist()}], "s", "dBFS")
+
+    def work(self, x, rate):
+        x = np.asarray(x, dtype=np.complex64)
+        pre = int(float(self.p["pretrigger_ms"]) * rate / 1e3)
+        hold = int(float(self.p["hold_ms"]) * rate / 1e3)
+        limit = int(float(self.p["max_burst_ms"]) * rate / 1e3)
+        above = 10 * np.log10(np.abs(x) ** 2 + 1e-20) > float(self.p["threshold_db"])
+        passed = []
+        if not self.open and np.any(above):
+            first = int(np.argmax(above))
+            self.open = True
+            self.quiet = 0
+            # pretrigger from history + this chunk before the edge
+            self.burst = [np.concatenate([self.history, x[:first]])[-pre:] if pre else np.zeros(0, np.complex64)]
+            x_rest, above_rest = x[first:], above[first:]
+        else:
+            x_rest, above_rest = x, above
+        if self.open:
+            last_above = np.nonzero(above_rest)[0]
+            if len(last_above):
+                self.quiet = len(above_rest) - 1 - int(last_above[-1])
+            else:
+                self.quiet += len(above_rest)
+            self.burst.append(x_rest)
+            passed.append(x_rest)
+            if self.quiet > hold or sum(len(b) for b in self.burst) > limit:
+                self.finish(rate)
+        self.history = np.concatenate([self.history, x])[-max(pre, 1):]
+        if self.p["pass"] and passed:
+            return np.concatenate(passed), rate
         return None
 
 
@@ -1000,6 +1075,7 @@ BLOCKS = {
     "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
     "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,
+    "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger,
 }
 
 

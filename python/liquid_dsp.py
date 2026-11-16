@@ -46,6 +46,7 @@ _freqmod_destroy = _sig("freqmod_destroy", _i, _p)
 _firfilt_create = _sig("firfilt_crcf_create_kaiser", _p, _u, _f, _f, _f)
 _firfilt_block = _sig("firfilt_crcf_execute_block", _i, _p, _p, _u, _p)
 _firfilt_destroy = _sig("firfilt_crcf_destroy", _i, _p)
+_firfilt_rnyquist = _sig("firfilt_crcf_create_rnyquist", _p, _i, _u, _u, _f, _f)
 _agc_create = _sig("agc_crcf_create", _p)
 _agc_bandwidth = _sig("agc_crcf_set_bandwidth", _i, _p, _f)
 _agc_block = _sig("agc_crcf_execute_block", _i, _p, _p, _u, _p)
@@ -218,6 +219,21 @@ class Lowpass(_Handle):
         y = np.empty(len(x), dtype=np.complex64)
         _firfilt_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
         return y
+
+
+class MatchedFilter(_Handle):
+    """Root-raised-cosine receive filter (matches RrcInterpolator), unit symbol energy."""
+    _destroy = staticmethod(_firfilt_destroy)
+
+    def __init__(self, sps, m=7, beta=0.35):
+        self._q = _firfilt_rnyquist(FIRFILT_RRC, sps, m, beta, 0.0)
+        self.scale = 1.0 / sps
+
+    def process(self, x):
+        x = _c64(x)
+        y = np.empty(len(x), dtype=np.complex64)
+        _firfilt_block(self._q, x.ctypes.data, len(x), y.ctypes.data)
+        return y * self.scale
 
 
 class Agc(_Handle):

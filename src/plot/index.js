@@ -68,6 +68,9 @@ const plot = (scopeFor, spec) => {
 		// array result: data expression, plotted against its index
 		if (Array.isArray(first)) {
 			const ys = toNumbers(math.evaluate(text, scope).value) || [];
+			if (ys.length < 2) {
+				throw new Error("no data yet for \"" + text + "\" (are its channels producing samples?)");
+			}
 			return { label: text, x: ys.map((_, i) => i), y: ys.map(finite) };
 		}
 		const f = math.compile(text);
