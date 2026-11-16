@@ -17,7 +17,11 @@ const DEFAULTS = {
 	PM3_CLIENT: "proxmark3",
 	CIV_PATH: path.join(os.homedir(), "ci-v"),
 	// "name:token[:rw|ro],..." enables auth for collaboration (empty = open)
-	MAILAB_TOKENS: ""
+	MAILAB_TOKENS: "",
+	// accept a non-loopback HOST without tokens (trusted networks only)
+	MAILAB_ALLOW_OPEN: "",
+	// extra Host names accepted without tokens, e.g. "lab.local"
+	MAILAB_ALLOWED_HOSTS: ""
 };
 
 const config = {

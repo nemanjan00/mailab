@@ -109,7 +109,8 @@ const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read",
  */
 const create = (lab, context) => {
 	const ctx = context || {};
-	const who = ctx.who || { name: "local", role: "rw" };
+	// no identity = read-only; only an explicit "rw" may change the lab
+	const who = ctx.who || { name: "anonymous", role: "ro" };
 	// "alice/claude-code" once the client introduced itself
 	const actor = () => {
 		const client = ctx.session && ctx.session.client;
@@ -123,7 +124,7 @@ const create = (lab, context) => {
 	// register a tool whose handler returns a value or promise; records activity
 	const tool = (name, description, shape, handler) => {
 		const guarded = (args) => {
-			if (who.role === "ro" && READ_TOOLS.indexOf(name) === -1) {
+			if (who.role !== "rw" && READ_TOOLS.indexOf(name) === -1) {
 				throw new Error(who.name + " is read-only: " + name + " is not allowed");
 			}
 			return handler(args);

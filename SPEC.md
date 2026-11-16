@@ -24,6 +24,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Frontend bundled with esbuild | ✅ | `public/` sources → `public/build/` (app.js + app.css); npm imports for qrp/uPlot/GridStack/KaTeX/marked instead of vendor script tags |
 | Frontend on qrp (github.com/nemanjan00/qrp) | 🟡 | app store is qrp `state()` (lab state, activity/chat feeds, live values at 4 Hz in `batch`); 4 panes migrated via the SDK; imperative panes still work against the same store |
 | Dracula theme | ✅ | default; cycles dracula → lab dark → light |
+| Auth hardening (reviewer feedback, round 2) | ✅ | token table is a `Map` (inherited keys like `constructor`/`__proto__` were accepted as tokens: fixed); writes need role `rw` exactly (REST + MCP); non-loopback `HOST` without tokens refuses to start (`MAILAB_ALLOW_OPEN=1` overrides; Docker README uses tokens); open mode accepts only loopback/`MAILAB_ALLOWED_HOSTS` Host headers and same-origin requests, which blocks DNS rebinding (REST, MCP, WS). Verified against a live server |
 | Hardware safety in drivers (reviewer feedback) | 🟡 | strict on/off parsing everywhere, mdp: required ID, 30 V/10 A limits, `set_current` gated. Still open: mp305 limits, TX allow-lists, a lab-wide safety policy |
 | HTTP MCP for collaboration | ✅ | Streamable HTTP MCP with sessions (stateless fallback); `MAILAB_TOKENS` name:token:rw/ro on UI/REST/WS/MCP; read-only = read tools + chat; activity shows `alice/claude-code`; remote via `HOST=0.0.0.0` |
 | Collab chat (web UI + MCP) with MCP push notifications | ✅ | chat pane (markdown/KaTeX) + `chat_send`/`chat_read`, persisted; push: stdio channel bridge `bin/channel.js` (`notifications/claude/channel`, verified end to end: push in, reply out); HTTP sessions get `notifications/message`. Claude Code channels are stdio-only research preview |
@@ -59,6 +60,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | liquid-dsp | ✅ | ctypes bindings (`python/liquid_dsp.py`): resampler, NCO, FIR, AGC, FM/AM/SSB demod, RRC interp, symbol sync, modem + EVM |
 | Composable components, GNU Radio-like | ✅ | `flowgraph` device: blocks + links, persisted, editable live by the user and the AI |
 | Scriptable blocks | ✅ | `python` block: `work(x, rate)` with numpy/dsp |
+| Modem toolkit: mod/demod 2FSK/4FSK, OOK, PSK/QAM up to QAM64; BER; sync; clock recovery; bit streams | 🟡 | flowgraph blocks: bit sources (PRBS/pattern/text), modulators, AWGN/CFO channel, FSK/OOK demod, clock recovery (Gardner/M&M on real signals; symbol_sync for linear), slicer → bits, sync-word framing, BER meter (PRBS self-sync), bit-stream sinks (value/blob) |
 | Demod, FFT, digital analysis | 🟡 | done: FM/AM/SSB, spectrum, symbol sync, carrier recovery, PSK/QAM demod + EVM. Planned: FSK/GFSK, baud estimation, bit/packet output, BLE/ESB decoding |
 | HackRF / bladeRF modulation (TX) | ⬜ | Soapy sink block, gated behind an explicit allow-TX + power limit |
 | SDR receive in the flowgraph | ✅ | `soapy` source block; untested on hardware |
@@ -204,3 +206,5 @@ Next:
 73. nanokvm+ as hw
 74. thunderscope
 75. gui sdk, for more readable individual components?
+76. reviewer: auth bypass via inherited object keys (constructor/__proto__/toString), role check should require rw, Docker HOST=0.0.0.0 open by default, no Origin check (DNS rebinding)
+77. build different mod, demod tools 2fsk, qam64, ook... ber, constellation, sync, clock recovery, bit stream...

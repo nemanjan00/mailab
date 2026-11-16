@@ -38,8 +38,13 @@ Then ask it something like *"add the sim device, chart it and tell me the RMS"*.
 
 ```sh
 docker build -t mailab .
-docker run --privileged --network host -v /dev:/dev -v mailab-data:/data mailab
+docker run --privileged --network host -v /dev:/dev -v mailab-data:/data \
+  -e MAILAB_TOKENS="me:$(openssl rand -hex 24):rw" mailab
 ```
+
+The container listens on all interfaces, so it requires `MAILAB_TOKENS`
+(it refuses to start without them; `MAILAB_ALLOW_OPEN=1` overrides that on a
+trusted network). Open the UI as `http://host:3000/?token=<token>` once.
 
 The image includes sigrok-cli, liquid-dsp, SoapySDR (HackRF/bladeRF/RTL-SDR),
 hackrf tools, ffmpeg/v4l-utils, uhubctl, pymp305 and findus. Not included:
@@ -69,7 +74,11 @@ Several people and AIs can share one lab:
 - `MAILAB_TOKENS="alice:secret:rw,bob:secret2:rw,viewer:secret3:ro"` turns on
   auth for the UI, REST, WebSocket and MCP (Bearer token, `?token=`, or the
   UI's cookie). `ro` tokens can look and chat but can't change the lab.
-  Set `HOST=0.0.0.0` to accept remote collaborators.
+  Set `HOST=0.0.0.0` to accept remote collaborators. A non-loopback `HOST`
+  without tokens is refused at startup.
+- Without tokens (local use) only loopback `Host` headers (plus
+  `MAILAB_ALLOWED_HOSTS`) and same-origin requests are accepted, which blocks
+  DNS-rebinding attacks from web pages.
 - Every MCP call is attributed (`alice/claude-code`) in the AI activity pane.
 - **Lab chat**: the chat pane for people, `chat_send` / `chat_read` for AIs.
 - **Push to Claude Code**: chat messages arrive in a Claude Code session as

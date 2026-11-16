@@ -1,6 +1,9 @@
 # mailab: node app + python DSP/instrument bridges + instrument CLIs.
 # Hardware access needs the host's USB/serial/video devices, e.g.
-#   docker run --privileged --network host -v /dev:/dev -v mailab-data:/data mailab
+#   docker run --privileged --network host -v /dev:/dev -v mailab-data:/data \
+#     -e MAILAB_TOKENS="me:<long-random-token>:rw" mailab
+# HOST is 0.0.0.0 here, so the server refuses to start without MAILAB_TOKENS
+# (MAILAB_ALLOW_OPEN=1 overrides that on a trusted network).
 # (host networking: SCPI over LAN, and MCP/UI reachable on the host's port)
 FROM node:24-trixie-slim
 

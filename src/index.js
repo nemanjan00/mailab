@@ -1,8 +1,21 @@
 // mailab web entry point: lab + web UI + MCP endpoint on one port.
 
 const config = require("./config");
+const auth = require("./auth");
 const labModule = require("./lab");
 const web = require("./web");
+
+// an open lab on a LAN address is a remote control for the bench: refuse it
+try {
+	auth.checkExposure({
+		host: config.get("HOST"),
+		tokens: auth.parseTokens(config.get("MAILAB_TOKENS")),
+		allowOpen: config.get("MAILAB_ALLOW_OPEN") === "1"
+	});
+} catch (err) {
+	console.error(err.message);
+	process.exit(1);
+}
 
 const lab = labModule.create({
 	dataDir: config.get("DATA_DIR"),
