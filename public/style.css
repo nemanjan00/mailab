@@ -287,3 +287,6 @@ details > summary { cursor: pointer; display: inline; }
 .fg-type { font-size: 11px; fill: var(--muted) !important; }
 .fg-info { font-size: 10px; fill: var(--c5) !important; }
 .fg-block.err .fg-info { fill: var(--err) !important; }
+
+.imgpane { position: relative; }
+.imgpane .snap { position: absolute; right: 8px; bottom: 8px; opacity: 0.85; }

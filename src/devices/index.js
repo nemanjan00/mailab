@@ -19,7 +19,8 @@ const DRIVERS = [
 	require("./soapy"),
 	require("./proxmark3"),
 	require("./picoglitcher"),
-	require("./flowgraph")
+	require("./flowgraph"),
+	require("./camera")
 ];
 
 const devices = {

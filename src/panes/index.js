@@ -24,8 +24,8 @@ const TYPES = {
 		config: { trace: "trace name", rows: "history rows (default 200)", min: "dB at bottom of colour scale", max: "dB at top" }
 	},
 	image: {
-		description: "latest image (e.g. scope screenshot)",
-		config: { image: "image name" }
+		description: "latest image: scope screenshot, live camera frames (<cam>_frame) or snapshots",
+		config: { image: "image name", device: "camera device id: adds a snapshot button" }
 	},
 	markdown: {
 		description: "notes; markdown with $inline$ and $$block$$ KaTeX math",

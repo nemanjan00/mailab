@@ -40,7 +40,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Readings table for spectrum markers | ⬜ | markers on trace panes (peak, delta, manual), table of freq/level/Δ |
 | findus map preview | ⬜ | binned delay × length heatmap of glitch results (success rate per cell), like findus' own web view |
 | audio output | ✅ | audio pane plays lab audio streams (WebAudio); flowgraph `audio` sink |
-| webcam / Linux video input: live stream + snapshot | ⬜ | V4L2 (ffmpeg) device: stream into an image/video pane, `snapshot` returns the image to the AI. Also the EVGA XR1 HDMI capture on `lab` |
+| webcam / Linux video input: live stream + snapshot | ✅ | V4L2 (ffmpeg) device: stream into an image/video pane, `snapshot` returns the image to the AI. Also the EVGA XR1 HDMI capture on `lab` |
 | flowgraph editor | ✅ | live rates/errors, add/connect/edit/remove blocks |
 | log console, activity, devices, channels, image, math | ✅ | |
 
@@ -92,7 +92,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 
 ## 6. Order of work from here
 
-1. Webcam / V4L2 stream + snapshot (+ XR1 capture, P2 Pro thermal)
+1. ~~Webcam / V4L2 stream + snapshot~~ ✅ (XR1 capture: use `camera` on `lab`; P2 Pro thermal still open)
 2. Spectrum markers + readings table
 3. Kaitai view (+ blobs: minipro dumps, captures)
 4. findus map preview (heatmap)
