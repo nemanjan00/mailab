@@ -100,7 +100,7 @@ const toContent = (value) => {
 
 // tools a read-only collaborator may use (chat is collaboration, so it's allowed)
 const READ_TOOLS = ["lab_overview", "lab_drivers", "device_log", "channel_read", "trace_read", "image_get", "value_read", "safety_overview",
-	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
+	"blob_read", "kaitai_parse", "blob_analyze", "blob_diff", "classifier_status", "trend_read", "lab_profiles", "subscribe", "unsubscribe", "subscriptions", "notifications_read", "math_eval", "pane_types", "chat_read", "chat_send"];
 
 /**
  * Build an MCP server bound to a lab.
@@ -508,6 +508,24 @@ const create = (lab, context) => {
 		last: z.number().optional().describe("default 50")
 	}, (a) => {
 		return lab.getChat({ since: a.since, last: a.last || 50 });
+	});
+
+	// ---- lab profiles ---------------------------------------------------------
+
+	tool("lab_profiles", "Saved lab setups (profiles)", {}, () => lab.profiles.list());
+
+	tool("lab_save", "Save the whole lab setup (devices + options, panes, derived channels, safety rules + policy, classifier templates, trend patterns) as a named profile", {
+		name: z.string()
+	}, (a) => lab.profiles.save(a.name));
+
+	tool("lab_load", "Replace the lab with a saved profile (stops all devices). Waits for a person's approval: it can replace safety rules", {
+		name: z.string()
+	}, (a) => {
+		const profile = lab.profiles.get(a.name);
+		return lab.safety.requestApproval({
+			who: actor(), device: "lab", command: "load", args: { profile: a.name },
+			reason: "replaces the whole lab with profile \"" + a.name + "\" (" + (profile.devices || []).length + " devices, safety rules included)"
+		}).then(() => lab.importState(profile)).then((state) => ({ loaded: a.name, devices: state.devices.map((d) => d.id + ":" + d.state) }));
 	});
 
 	// ---- long-term trends ----------------------------------------------------

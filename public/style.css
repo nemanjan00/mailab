@@ -370,3 +370,5 @@ dialog.help p { margin: 6px 0; }
 .c-chart { position: relative; height: 180px; }
 .c-image { max-width: 100%; }
 .c-text { padding: 0; }
+label.upload { cursor: pointer; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; }
+dialog.help a { color: var(--accent-2); }

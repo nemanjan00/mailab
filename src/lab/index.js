@@ -17,6 +17,7 @@ const plotModule = require("../plot");
 const safetyModule = require("../safety");
 const classifyModule = require("../classify");
 const trendsModule = require("../trends");
+const profilesModule = require("../profiles");
 const pathModule = require("path");
 const panesModule = require("../panes");
 const storeModule = require("../store");
@@ -728,6 +729,44 @@ const create = (options) => {
 			}));
 		},
 
+		// ---- whole-lab state (profiles) --------------------------------------
+
+		/**
+		 * Everything that defines the lab's setup (not its data).
+		 */
+		exportState: () => {
+			const snap = snapshot();
+			delete snap.chat;
+			return Object.assign({ mailab: 1, savedAt: new Date().toISOString() }, snap);
+		},
+
+		/**
+		 * Replace the lab's setup with `state` (from exportState / a profile):
+		 * stops all devices, applies everything, starts enabled devices.
+		 */
+		importState: (state) => {
+			if (!state || state.mailab !== 1) {
+				throw new Error("not a mailab lab state (expected {mailab: 1, ...})");
+			}
+			return Promise.all(Object.keys(instances).map((id) => lab.removeDevice(id))).then(() => {
+				Object.keys(derived).forEach((name) => lab.removeDerived(name));
+				(state.derived || []).forEach((d) => lab.defineDerived(d.name, d.expression, d.unit));
+				panes.replaceAll(state.panes || []);
+				lab.safety.load(state.safety || {});
+				lab.classifier.load((state.classifier && state.classifier.templates) || []);
+				if (state.trends && state.trends.patterns) {
+					lab.trends.setPatterns(state.trends.patterns);
+				}
+				return Promise.all((state.devices || []).map((d) => {
+					instances[d.id] = { id: d.id, driver: d.driver, options: d.options || {}, enabled: d.enabled, state: "stopped", detail: "", instance: null };
+					return d.enabled ? lab.startDevice(d.id) : null;
+				}));
+			}).then(() => {
+				changed();
+				return lab.state();
+			});
+		},
+
 		shutdown: () => {
 			if (stopSafety) {
 				stopSafety();
@@ -752,6 +791,7 @@ const create = (options) => {
 	lab.safety = safetyModule.create(lab, saved.safety);
 	lab.safety.changed = changed;
 	lab.trends = trendsModule.create(pathModule.join(options.dataDir, "trends"), saved.trends);
+	lab.profiles = profilesModule.create(lab, pathModule.join(options.dataDir, "profiles"));
 	lab.classifier = classifyModule.create(lab, saved.classifier);
 	lab.classifier.changed = changed;
 

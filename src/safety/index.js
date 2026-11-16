@@ -306,6 +306,18 @@ const create = (lab, saved) => {
 			return d;
 		}), policy: policy }),
 
+		/**
+		 * Replace rules and policy (loading a lab profile).
+		 */
+		load: (snap) => {
+			rules = [];
+			(snap.rules || []).forEach((spec) => {
+				rules.push(compileRule(spec));
+			});
+			policy = (snap.policy || DEFAULT_POLICY).slice();
+			safety.changed();
+		},
+
 		restore: () => {
 			(s.rules || []).forEach((spec) => {
 				try {

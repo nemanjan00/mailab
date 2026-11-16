@@ -4,6 +4,7 @@
 
 import { GridStack } from "gridstack";
 import { batch, state } from "@nemanjan00/qrp";
+import profilesDialog from "./profiles.js";
 import "gridstack/dist/gridstack.min.css";
 import "uplot/dist/uPlot.min.css";
 import "katex/dist/katex.min.css";
@@ -470,6 +471,10 @@ grid.on("change", (_event, items) => {
 // ---- toolbar ------------------------------------------------------------------
 
 document.getElementById("mcp-url").textContent = location.origin + "/mcp";
+
+document.getElementById("lab-menu").addEventListener("click", () => {
+	profilesDialog(document.getElementById("lab-dialog"), document.getElementById("lab-dialog-body"), ctx);
+});
 
 // "how do I connect my AI" help, filled with this lab's real address
 document.getElementById("mcp-help").addEventListener("click", () => {

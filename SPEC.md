@@ -41,7 +41,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Binary diff for blobs | ✅ | `blob_diff` + blob pane `compare`: merged changed ranges, side-by-side hex with highlights. Next: map changed ranges to Kaitai fields |
 | mailab-managed Python venv | ✅ | `src/services/pyenv`: venv in `DATA_DIR/python` (system site packages for apt SoapySDR/liquid), created on first use; Python drivers declare `requires` (flowgraph/soapy/harogic: numpy; mp305: pymp305, hidapi; picoglitcher: findus, pyserial), installed on device start if not importable, progress in the device log; serialized pip; opt-out `MAILAB_MANAGE_PYTHON=0` / `PYTHON`. Verified: venv creation, system numpy reuse, pymp305+hidapi install. Helpers that crash now show `error` + their last stderr line |
 | Test automation for python | ✅ | `python/test_modem.py` is pytest-style (4 tests) and runs from jest (`src/devices/flowgraph/__tests__/modem.test.js`), so the pre-commit hook covers the BER regression; skipped when numpy/liquid-dsp are missing |
-| Serializable lab state: save / load | ⬜ | named snapshots of the whole setup (devices + options, derived channels, panes, safety rules + policy, classifier templates, trend patterns) as files/downloads; load replaces the lab; MCP `lab_save`/`lab_load`/`lab_list`, UI menu |
+| Serializable lab state: save / load | ✅ | `lab.exportState()` / `importState()` (versioned `{mailab: 1}`: devices + options, derived, panes, safety rules + policy, classifier templates, trend patterns; not data/chat); profiles in `DATA_DIR/profiles` (`src/profiles`, safe names); REST list/save/download, load/upload/delete human-only; MCP `lab_profiles`, `lab_save`, `lab_load` (waits for approval: it can replace safety rules); header "lab" dialog (save as, load, download, delete, upload). Tests + UI verified |
 | Python UI SDK: custom panes | ✅ | `custom` pane renders a layout tree (row, col, text with `{{channel}}` live values, value, button, toggle, slider, number, chart, table, image); controls run device commands as the clicking person; `python/mailab_ui.py` builders + `lab.panel()` so bridges publish/update their own control panel; AI uses `pane_add type custom`. Verified: a python bridge's panel operated from the browser (setpoint 12 V + output on reached the device) |
 | Run on the lab host `nemanjan00@10.69.1.91` (`lab`) | ⬜ | Feather nRF52840, EVGA XR1 capture, sigrok, minipro and hackrf live there. Options: run mailab there, or add remote device agents. **Needs a decision** |
 
@@ -161,13 +161,15 @@ Docker, Harogic, net IQ, spectrum analyzer traces, triggered scope + measurement
 (tokens, sessions, chat, channel push), auth hardening, esbuild + qrp + GUI SDK, modem toolkit (all QAM sizes, FSK family, BER, framing), graphing calculator.
 
 Next:
-4. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
-5. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry
-6. MHO900 siggen; Soapy TX block with an allow-TX + power gate
-7. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, uhubctl, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, OpenOCD, flashrom, minipro, NanoKVM, ThunderScope, KC901K/KC908V
-8. Shared terminals (shell-session-mcp), protokai, OpenCV, analog video, journal, timebase, ngscopeclient-style decoders
-9. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
-10. Deployment on `lab`: waiting on your decision
+1. USB tree view + uhubctl hub power toggles
+2. libsigrokdecode on external bit streams; generic sweep & optimize; record & replay
+3. Finish the qrp/SDK migration of the remaining panes; markdown live values; tablet numeric entry
+4. MHO900 siggen; Soapy TX block with an allow-TX + power gate
+5. Drivers: nRF52840 modem, Bus Pirate, Glasgow, ChipWhisperer Husky, system monitor, InfiRay P2 Pro, rtl_power, JTAGulator, J-Link, BMP, OpenOCD, flashrom, minipro, Tigard, CatSniffer, NanoKVM, ThunderScope, KC901K/KC908V
+6. Boardview (PDF/photo layers, schematic tracing; ~/rib/docs sample)
+7. Shared terminals (shell-session-mcp), protokai, OpenCV, analog video, journal, timebase, ngscopeclient-style decoders, beamforming DoA
+8. Harogic IQ source; MHO900 VXI-11; WebSocket streams; WebGPU; native hot loops (then VOLK)
+9. Deployment on `lab`: waiting on your decision
 
 ## Appendix: requests in order (this session)
 
@@ -283,3 +285,5 @@ Next:
 110. usb tree view, like ~/projects/proxyslave, with togglable power hub toggles
 111. you made a typo? (a test lab.json committed under an ANSI-escaped directory name: removed, DATA_DIR guarded)
 112. seriazable lab state, savable and loadable
+113. just rm and commit, no history alteration (for the stray test file)
+114. update spec

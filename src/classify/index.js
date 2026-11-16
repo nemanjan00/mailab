@@ -167,6 +167,13 @@ const create = (lab, saved) => {
 
 		snapshot: () => templates.map((t) => ({ name: t.name, pattern: t.pattern, record: t.record })),
 
+		// replace templates (loading a lab profile); clusters keep their history
+		load: (list) => {
+			templates = [];
+			(list || []).forEach((spec) => templates.push(compile(spec)));
+			classifier.changed();
+		},
+
 		restore: () => {
 			((saved && saved.templates) || []).forEach((spec) => {
 				try {

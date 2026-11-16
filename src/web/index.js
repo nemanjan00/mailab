@@ -147,6 +147,32 @@ const api = (lab) => {
 		lab.trends.setPatterns(req.body.patterns || []);
 		return { patterns: lab.trends.getPatterns() };
 	}));
+	// lab profiles: saving is a normal write; loading/importing/deleting can
+	// replace safety rules and the policy, so only people do it
+	router.get("/profiles", route(() => lab.profiles.list()));
+	router.post("/profiles", route((req) => lab.profiles.save(req.body.name)));
+	router.get("/profiles/:name", (req, res) => {
+		try {
+			res.attachment(req.params.name + ".mailab.json").json(lab.profiles.get(req.params.name));
+		} catch (err) {
+			res.status(404).json({ error: err.message });
+		}
+	});
+	router.post("/profiles/:name/load", route((req) => {
+		human(req);
+		return lab.profiles.load(req.params.name);
+	}));
+	router.delete("/profiles/:name", route((req) => {
+		human(req);
+		return lab.profiles.remove(req.params.name);
+	}));
+	router.get("/lab/export", (req, res) => {
+		res.attachment("lab.mailab.json").json(lab.exportState());
+	});
+	router.post("/lab/import", route((req) => {
+		human(req);
+		return lab.importState(req.body);
+	}));
 	router.get("/classifier", route(() => lab.classifier.status({ limit: 200 })));
 	router.post("/classifier/templates", route((req) => lab.classifier.addTemplate(req.body)));
 	router.delete("/classifier/templates/:name", route((req) => lab.classifier.removeTemplate(req.params.name)));
