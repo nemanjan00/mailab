@@ -124,8 +124,8 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | sigrok, own libsigrok fork (Sipeed SLogic) | 🟡 | capture/decode/stream; demo driver verified |
 | ISDT MP305 (pymp305) | 🟡 | pymp305==0.6.3 (published to PyPI this session; venvs with 0.5.3 auto-upgrade via pyenv `upgrade` pins); 0xC2 telemetry (no 2 s stall); DC `set_output` (+OCP / reapply), modes dc/pd/program, USB-PD `pd_profiles` / `pd_set` / `pd_output`, programs list/read/write/run/stop, info, charge_state; BLE transport (bleak installed only for ble; never run); `maxVolts` ≤ 30 / `maxAmps` ≤ 5 on setpoints, program steps and PD voltages; approvals for >5 V on, mode, PD set/output, program write/run; custom pane. Tested against a simulated HID unit (pymp305's own protocol), not on hardware |
 | Rigol DM858E | 🟡 | SCPI preset |
-| Rigol MHO900 | 🟡 | SCPI capture/measure/screenshot. Unit at http://10.69.1.89/: LAN SCPI doesn't answer yet; 55555 is ADB |
-| MHO900 signal generator | ⬜ | `:SOURce` commands in the mho900 preset |
+| Rigol MHO900 | ✅ | deep integration (4-layer: UI/logic/state/sync-SCPI in src/devices/mho900/): synced settings model (channels/timebase/trigger/acquire/AWG), intent-level `set` with read-back, `watch` pushes trace+screen on every trigger, capture/measure/snapshot. Verified live on MHO98 (= patched MHO900) at 10.69.1.89:5555; settings pane in the UI; auto-sync every 30 s (autoSyncMs/autoSync options) |
+| MHO900 signal generator | ✅ | part of the settings model (`awg` section, `:SOURce<n>:VOLTage:AMPLitude/OFFSet`, `:OUTPut:STATe`); verified live: G1→CH1 loopback 1 MHz/1 Vpp set → 1.000 MHz/1.05 Vpp measured |
 | DeepAce KC9531B | 🟡 | |
 | Icom CI-V (ci-v) | 🟡 | cloned to `~/ci-v`, packaged as **icom-ci-v** (npm refused `ci-v` as too similar to `civ`). npm shows the staged `0.0.0-stage`, waiting for publish approval on npmjs.com |
 | tinySA / tinySA Ultra | 🟡 in progress (agent) | `tinysa` driver (USB serial shell): sweep/scan → `spectrum` trace (dBm), configurable start/stop/points/RBW, markers → readings, calibration/level output, device info; hardened from the actual firmware shell (`scanraw`, `data`, `sweep`, `marker`). Ultra vs basic differences handled. Untested on hardware |
@@ -135,7 +135,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | HackRF / bladeRF | 🟡 | hackrf_sweep, soapy bridge, flowgraph source |
 | Proxmark3 / Proxmark5 (node-proxmark3) | ✅ | runs on the lab's PM5 (AT32F437, Iceman firmware from ~/pm5-og): `PM3_CLIENT` defaults to ~/pm5-og/client/proxmark3 when built; `match` {serial} picks the Proxmark by USB serial; start timeout kills a client that never starts. node-proxmark3 0.0.12 on npm lacks json.lua (ignored via .gitignore) → mailab adds a LUA_PATH shim (dkjson); fixed upstream in node-proxmark3 8a33621 (0.0.13, not yet published to npm) |
 | PicoGlitcher (findus) | 🟡 | |
-| nRF52840 modem | ⬜ | the mdp-p906 bridge firmware as a generic 2.4 GHz ESB radio (listen/send) |
+| nRF52840 modem | 🟡 | ESB bridge driver (src/devices/esb, commit 4f2a3ff): configure ch/addr, send with auto-ACK + replies, listen windows, stats, UF2 bootloader; fake-bridge PTY tests. Firmware (~/mdp-p906/bridge, PlatformIO) builds with `pio run`; wire protocol untested, no bridge attached [HW] |
 | InfiRay P2 Pro thermal camera | ⬜ | UVC; false-colour image + min/max/centre temperature channels |
 | Bus Pirate | ⬜ | BPIO2, using the buspirate skill |
 | XGecu programmers (minipro) | 🟡 | `minipro` driver: presence, info, search, read_id, autodetect, read (→ blob + EEPROM blob + fuses value), verify, write, erase, blank/pin check (write/erase need approval). info/search/presence run for real; read_id/autodetect formats unverified on hardware (the programmer is on `lab`) |

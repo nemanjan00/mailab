@@ -660,3 +660,30 @@ body.has-maximized .grid-stack-item:not(.maximized) { visibility: hidden; }
 .vision-toolbar label { display: inline-flex; gap: 4px; align-items: center; }
 .vision-table input, .vision-table select { padding: 2px 6px; }
 .vision-stage.annotated .vision-roi text { display: none; }
+
+/* settings pane: schema-driven device settings editor */
+.settings-pane { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.settings-pane .toolbar { display: flex; gap: 8px; align-items: center; padding: 4px 6px; flex: none; border-bottom: 1px solid var(--line); }
+.settings-pane .toolbar button { width: auto; flex: none; padding: 1px 8px; }
+.settings-pane .toolbar .msg { flex: 1; font-size: 12px; color: var(--muted, #999); min-height: 1em; }
+.settings-pane .toolbar .msg.err { color: var(--err); }
+.settings-pane .toolbar .age { font-size: 11px; white-space: nowrap; }
+.settings-pane .form { flex: 1; overflow-y: auto; padding: 6px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; align-content: start; }
+.settings-pane fieldset { border: 1px solid var(--line); border-radius: 4px; margin: 0; padding: 4px 8px 8px; min-width: 0; }
+.settings-pane legend { padding: 0 6px; font-weight: 600; font-size: 12px; }
+.settings-pane label.row { display: grid; grid-template-columns: 5.5em 1fr auto; align-items: center; gap: 6px; margin: 4px 0; font-size: 13px; }
+.settings-pane label.row .k { color: var(--muted, #999); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-pane label.row .c { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.settings-pane label.row input[type="text"] { flex: 1; min-width: 0; padding: 2px 6px; }
+.settings-pane label.row input.num { text-align: right; font-family: var(--mono); }
+.settings-pane label.row select { flex: 1; min-width: 0; padding: 2px 4px; background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 3px; }
+.settings-pane label.row .unit { color: var(--muted, #999); font-size: 11px; white-space: nowrap; }
+.settings-pane label.row .mark { width: 1em; color: #6c6; font-size: 12px; }
+.settings-pane label.row.saving { opacity: 0.55; }
+.settings-pane label.row.bad input, .settings-pane label.row.bad select { border-color: var(--err); }
+.settings-pane input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent, #4a9); }
+.settings-pane table.kv { margin: 6px 8px; border-collapse: collapse; width: calc(100% - 16px); }
+.settings-pane table.kv th { text-align: left; vertical-align: top; padding: 2px 8px 2px 0; color: var(--muted, #999); white-space: nowrap; }
+.settings-pane table.kv td { padding: 2px 0; word-break: break-all; }
+.settings-pane .devstate { font-size: 11px; }
+.settings-pane.busy .form { opacity: 0.6; }

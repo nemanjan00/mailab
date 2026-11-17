@@ -20,6 +20,7 @@ import mathPane from "./panes/math.js";
 import log from "./panes/log.js";
 import activity from "./panes/activity.js";
 import devices from "./panes/devices.js";
+import settings from "./panes/settings.js";
 import channels from "./panes/channels.js";
 import audio from "./panes/audio.js";
 import json from "./panes/json.js";
@@ -41,7 +42,7 @@ import vnc from "./panes/vnc.js";
 import kvm from "./panes/kvm.js";
 import vision from "./panes/vision.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc, kvm, hex, vision };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, settings, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc, kvm, hex, vision };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;

@@ -1,6 +1,6 @@
 // Rigol MHO900: siggen (AWG :SOURce) commands against a fake SCPI client.
-// Hardware is unreachable (LAN SCPI doesn't answer yet), so the exact wire
-// syntax can't be verified here — these tests pin the command construction.
+// Wire syntax verified live on an MHO98 (patched MHO900) on LAN — see
+// manuals/rigol/mho900 programming guide §3.25 (SOURce:VOLTage:AMPLitude etc).
 
 const mho900 = require("..");
 
@@ -40,7 +40,7 @@ const makeFake = () => {
 
 const makeDriver = (fake) => {
 	fake.answers["*IDN"] = "RIGOL,MHO900,fake,1.0";
-	return mho900.create({ _open: () => Promise.resolve(fake) }, {
+	return mho900.create({ _open: () => Promise.resolve(fake), autoSync: false }, {
 		id: "mho",
 		log: () => {},
 		sample: () => {},
@@ -54,9 +54,9 @@ describe("mho900 siggen", () => {
 		const driver = makeDriver(fake);
 		fake.answers[":SOURce1:FUNCtion"] = "SINusoid";
 		fake.answers[":SOURce1:FREQuency"] = "1000";
-		fake.answers[":SOURce1:VOLTage"] = "2.5";
+		fake.answers[":SOURce1:VOLTage:AMPLitude"] = "2.5";
 		fake.answers[":SOURce1:VOLTage:OFFSet"] = "0.1";
-		fake.answers[":SOURce1:OUTPut"] = "1";
+		fake.answers[":SOURce1:OUTPut:STATe"] = "1";
 		return driver.start().then(() => {
 			return driver.command("siggen", {
 				source: 1, func: "sin", freq: 1000, amp: 2.5, offset: 0.1, state: true
@@ -65,9 +65,9 @@ describe("mho900 siggen", () => {
 			expect(fake.writes).toEqual([
 				":SOURce1:FUNCtion SINusoid",
 				":SOURce1:FREQuency 1000",
-				":SOURce1:VOLTage 2.5",
+				":SOURce1:VOLTage:AMPLitude 2.5",
 				":SOURce1:VOLTage:OFFSet 0.1",
-				":SOURce1:OUTPut ON"
+				":SOURce1:OUTPut:STATe ON"
 			]);
 			expect(state).toEqual({
 				source: 1, func: "SINusoid", freq: 1000, amp: 2.5, offset: 0.1, on: true
@@ -83,9 +83,9 @@ describe("mho900 siggen", () => {
 		const driver = makeDriver(fake);
 		fake.answers[":SOURce2:FUNCtion"] = "SQUare";
 		fake.answers[":SOURce2:FREQuency"] = "100";
-		fake.answers[":SOURce2:VOLTage"] = "1";
+		fake.answers[":SOURce2:VOLTage:AMPLitude"] = "1";
 		fake.answers[":SOURce2:VOLTage:OFFSet"] = "0";
-		fake.answers[":SOURce2:OUTPut"] = "OFF";
+		fake.answers[":SOURce2:OUTPut:STATe"] = "OFF";
 		return driver.start().then(() => {
 			return driver.command("siggen", { source: 2, func: "squ" });
 		}).then((state) => {
@@ -104,9 +104,9 @@ describe("mho900 siggen", () => {
 		const driver = makeDriver(fake);
 		fake.answers[":SOURce1:FUNCtion"] = "DC";
 		fake.answers[":SOURce1:FREQuency"] = "0";
-		fake.answers[":SOURce1:VOLTage"] = "0";
+		fake.answers[":SOURce1:VOLTage:AMPLitude"] = "0";
 		fake.answers[":SOURce1:VOLTage:OFFSet"] = "0";
-		fake.answers[":SOURce1:OUTPut"] = "0";
+		fake.answers[":SOURce1:OUTPut:STATe"] = "0";
 		return driver.start().then(() => {
 			return driver.command("siggen", { freq: 440 });
 		}).then(() => {
@@ -117,14 +117,20 @@ describe("mho900 siggen", () => {
 	it("siggen_on/off toggle the output", () => {
 		const fake = makeFake();
 		const driver = makeDriver(fake);
+		fake.answers[":SOURce1:OUTPut:STATe"] = "1";
+		fake.answers[":SOURce2:OUTPut:STATe"] = "0";
 		return driver.start().then(() => {
 			return driver.command("siggen_on", {});
 		}).then(() => {
 			return driver.command("siggen_off", { source: 2 });
 		}).then(() => {
 			expect(fake.writes).toEqual([
-				":SOURce1:OUTPut ON",
-				":SOURce2:OUTPut OFF"
+				":SOURce1:OUTPut:STATe ON",
+				":SOURce2:OUTPut:STATe OFF"
+			]);
+			expect(fake.queries.filter((q) => q.indexOf(":SOURce") === 0)).toEqual([
+				":SOURce1:OUTPut:STATe?",
+				":SOURce2:OUTPut:STATe?"
 			]);
 		});
 	});

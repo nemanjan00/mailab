@@ -119,7 +119,7 @@ export default {
 			const axes = [
 				// log axes hand unlabeled minor ticks in as null
 				Object.assign({}, axis, { values: (_u, ticks) => ticks.map((v) => (v === null ? "" : eng(v, 1) + trs[0].xUnit)) }),
-				Object.assign({}, axis, { size: 72, values: (_u, ticks) => ticks.map((v) => eng(v, 1)) })
+				Object.assign({}, axis, { size: 72, values: (_u, ticks) => ticks.map((v) => eng(v, 1) + trs[0].yUnit) })
 			];
 			if (rightAxis) {
 				axes.push(Object.assign({}, axis, { scale: "y2", side: 1, grid: { show: false } }));

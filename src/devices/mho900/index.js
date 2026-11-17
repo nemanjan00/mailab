@@ -1,84 +1,161 @@
-// Rigol MHO900 oscilloscope (SCPI): waveform capture -> trace, measurements,
-// screenshots -> image (also returned to the AI).
+// Rigol MHO900 oscilloscope, verified live on an MHO98 (= MHO900 with
+// patched FW, "NK TECHNOLOGIES" ID) on LAN port 5555.
+//
+// Four layers, events flowing down (intent) and up (state):
+//   UI (this file: MCP/GUI command surface, io.value/trace/image publishing)
+//   -> logic (logic.js: capture, watch policy — decides WHEN to push)
+//   -> state (scope.js: the synced settings model + raw state accessors,
+//      emits "change")
+//   -> state sync (sync.js: the only SCPI talker; serialized chain, emits
+//      "tx"/"rx"/"error")
+//
+// What the AI gets: no manual needed. `settings` is a synced model of
+// everything (channels, timebase, trigger, acquire, AWG); `set` changes it
+// with intent-level args ({ch: {1: {scale: 0.1}}, trigger: {level: 0.5},
+// awg: {1: {freq: 1e6, on: true}}}) — validated, written, read back; `watch`
+// makes the scope push the trace + screen to the web UI on every trigger.
+//
+// SCPI quirks of this FW (learned on the bench, encoded in settings.js):
+//   - one TCP session takes NO interleaved queries,
+//   - unknown headers TIME OUT (10 s) instead of erroring,
+//   - AWG amplitude is :SOURce<n>:VOLTage:AMPLitude, output :OUTPut:STATe,
+//     probe ratio :CHAN<n>:PROBe.
 
 const scpiDriver = require("../scpi");
-
-// :WAV:PRE? -> format,type,points,count,xinc,xorigin,xref,yinc,yorigin,yref
-const parsePreamble = (reply) => {
-	const f = reply.split(",").map(Number);
-	return {
-		points: f[2],
-		xincrement: f[4],
-		xorigin: f[5],
-		xreference: f[6],
-		yincrement: f[7],
-		yorigin: f[8],
-		yreference: f[9]
-	};
-};
+const settings = require("./settings");
+const syncLayer = require("./sync");
+const scopeLayer = require("./scope");
+const logicLayer = require("./logic");
 
 module.exports = scpiDriver.preset({
 	name: "mho900",
-	description: "Rigol MHO900 oscilloscope (SCPI): capture -> trace, measure, screenshot, siggen",
+	description: "Rigol MHO900 oscilloscope: settings model (channels/timebase/trigger/acquire/AWG) synced with the unit, intent-level set, auto push of trace + screen on every trigger, capture/measure/snapshot",
+	options: {
+		autoSyncMs: "settings re-sync period in ms (default 30000; 0 = only sync on start and on change)",
+		autoSync: "false disables the settings sync entirely (cache stays empty until `sync`)"
+	},
 	commandDocs: {
-		capture: "{sources: [\"CHAN1\", \"CHAN2\"], name} screen waveform -> trace (x = seconds)",
-		measure: "{item: VPP|VMAX|VMIN|VAVG|VRMS|FREQ|PER|RTIM|FTIM|PDUT, source: CHAN1}",
-		screenshot: "PNG of the screen (shown in image pane \"<device>_screen\" and returned)",
-		siggen: "{source: 1|2, func?, freq?, amp?, offset?, state?} AWG control; sets what's given, queries the rest back",
-		siggen_on: "{source} enable AWG output",
-		siggen_off: "{source} disable AWG output",
+		settings: "{} the synced settings model (value <device>_settings); syncs first if never synced",
+		sync: "{} re-read every setting from the unit into the model",
+		set: "{ch?: {1..4: {on?, scale? (V/div), offset? (V), probe?, coupling?, impedance?}}, timebase?: {scale? (s/div), offset?, mode?}, trigger?: {mode?, sweep?, source?, slope?, level? (V)}, acquire?: {type?, averages?, memdepth?}, awg?: {1|2: {on?, func?, freq? (Hz), amp? (Vpp), offset? (V)}}} change settings; each write is validated and read back",
+		settings_schema: "{} the form schema the settings pane renders",
+		watch: "{on: true|false, intervalMs?, screen?} push trace + screen image to the UI on every triggered acquisition",
+		capture: "{sources: [\"CHAN1\", ...], name?} screen waveform -> trace (x = seconds)",
+		measure: "{item: VPP|VMAX|VMIN|VAVG|VRMS|FREQ|PER|RTIM|FTIM|PDUT, source?: CHAN1}",
+		snapshot: "{} PNG of the screen -> image <device>_screen (returned too)",
+		screenshot: "alias of snapshot",
+		siggen: "{source?: 1|2, func?, freq?, amp?, offset?, state?} legacy AWG control = set({awg: {n: {...}}})",
+		siggen_on: "{source?} AWG output on", siggen_off: "{source?} AWG output off",
 		run: "", stop: "", single: "", autoscale: ""
 	},
-	commands: (client, io) => {
-		const waveform = (source) => {
-			return client.write(":WAV:SOUR " + source)
-				.then(() => {
-					return client.write(":WAV:MODE NORM");
+	commands: (client, io, options) => {
+		// wire the layers bottom-up; the sync layer logs every exchange to
+		// the device console as its tx/rx/error events
+		const sync = syncLayer.createSync(client, io);
+		const scope = scopeLayer.createScope(sync);
+		const logic = logicLayer.createLogic(scope);
+
+		// state layer -> UI: every model change republishes the value
+		scope.on("change", () => {
+			io.value("settings", scope.get());
+		});
+		sync.on("error", () => null); // already logged by the sync layer
+
+		// fetch the state once at start (not a poll: one query burst at
+		// connect), then re-sync every autoSyncMs (default 30 s; 0 disables
+		// the periodic refresh, autoSync: false skips everything — test seam).
+		// The timer lives on options so a reconnect replaces, not duplicates.
+		if (options.autoSync !== false) {
+			if (options._mhoStopAutoSync) {
+				options._mhoStopAutoSync();
+				options._mhoStopAutoSync = null;
+			}
+			scope.sync().catch(() => null);
+			const period = options.autoSyncMs === undefined ? 30000 : Number(options.autoSyncMs);
+			if (period > 0) {
+				logic.autoSync(period);
+				options._mhoStopAutoSync = logic.stop;
+				io.log("settings auto-sync: every " + period / 1000 + " s", "info");
+			}
+		}
+
+		const ensureSynced = () => {
+			return scope.isSynced() ? Promise.resolve(scope.get()) : scope.sync();
+		};
+
+
+		// scope context under the plot: timebase + trigger, from the model
+		const scopeReadings = () => {
+			const m = scope.get();
+			const out = [];
+			if (m.timebase && m.timebase.scale != null) {
+				out.push({ name: "t/div", value: m.timebase.scale, unit: "s" });
+			}
+			if (m.trigger) {
+				if (m.trigger.source) {
+					out.push({ name: "trig src", value: 0, unit: String(m.trigger.source) });
+				}
+				if (m.trigger.level != null) {
+					out.push({ name: "trig lvl", value: m.trigger.level, unit: "V" });
+				}
+				if (m.trigger.slope) {
+					out.push({ name: "trig slope", value: 0, unit: String(m.trigger.slope) });
+				}
+			}
+			return out;
+		};
+		// watch push adapter (logic decides when, this decides how it's shown)
+		const pushToUi = (waves, opts) => {
+			io.trace("scope", {
+				x: waves[0].x,
+				xUnit: "s",
+				yUnit: "V",
+				measurements: scopeReadings(),
+				series: waves.map((wave) => {
+					return { label: wave.source, y: wave.y };
 				})
-				.then(() => {
-					return client.write(":WAV:FORM BYTE");
-				})
-				.then(() => {
-					return client.query(":WAV:PRE?");
-				})
-				.then((reply) => {
-					const pre = parsePreamble(reply);
-					return client.queryBinary(":WAV:DATA?").then((data) => {
-						// TODO: verify BYTE scaling on MHO900 (12-bit ADC; WORD may be better)
-						const y = Array.from(data).map((b) => {
-							return (b - pre.yorigin - pre.yreference) * pre.yincrement;
-						});
-						const x = y.map((_, i) => {
-							return (i - pre.xreference) * pre.xincrement + pre.xorigin;
-						});
-						return { source: source, x: x, y: y, pre: pre };
-					});
+			});
+			io.value("acq", { status: "TD" });
+			if (opts.screen) {
+				return scope.screen().then((png) => {
+					io.image("screen", png, "image/png");
 				});
+			}
+			return Promise.resolve();
 		};
 
 		const simple = (command) => {
 			return () => {
-				return client.write(command).then(() => {
+				return scope.write(command).then(() => {
 					return { ok: true };
 				});
 			};
 		};
 
 		return {
+			settings: () => ensureSynced(),
+			sync: () => scope.sync(),
+			settings_schema: () => settings.schema(),
+			set: (args) => scope.set(args),
+
+			watch: (args) => {
+				const res = logic.watch(args, pushToUi);
+				if (res.watching) {
+					io.log("watch on (" + res.intervalMs + " ms poll" + (res.screen ? ", trace + screen" : ", trace") + ")", "info");
+				} else {
+					io.log("watch off", "info");
+				}
+				return res;
+			},
+
 			capture: (args) => {
-				const sources = args.sources || ["CHAN1"];
-				return sources.reduce((chain, source) => {
-					return chain.then((acc) => {
-						return waveform(source).then((wave) => {
-							return acc.concat([wave]);
-						});
-					});
-				}, Promise.resolve([])).then((waves) => {
-					const name = args.name || "scope";
+				return logic.capture((args && args.sources) || null).then((waves) => {
+					const name = (args && args.name) || "scope";
 					io.trace(name, {
 						x: waves[0].x,
 						xUnit: "s",
 						yUnit: "V",
+						measurements: scopeReadings(),
 						series: waves.map((wave) => {
 							return { label: wave.source, y: wave.y };
 						})
@@ -86,94 +163,54 @@ module.exports = scpiDriver.preset({
 					return {
 						trace: name,
 						points: waves[0].x.length,
-						sources: sources,
+						sources: waves.map((w) => w.source),
 						xincrement: waves[0].pre.xincrement
 					};
 				});
 			},
-			measure: (args) => {
-				return client.query(":MEASure:ITEM? " + args.item + "," + (args.source || "CHAN1")).then((reply) => {
-					return { item: args.item, source: args.source || "CHAN1", value: Number(reply) };
-				});
-			},
-			// AWG (2 source channels). Rigol :SOURce<n> syntax; the exact func
-			// enum names and whether the unit accepts :SOURce at all are
-			// unverified on hardware (LAN SCPI doesn't answer yet) [HW].
-			siggen: (args) => {
-				const src = args.source === 2 ? 2 : 1;
-				const root = ":SOURce" + src;
-				const chain = Promise.resolve();
-				const set = (c) => {
-					return client.write(c);
-				};
-				const funcs = ["SINusoid", "SQUare", "RAMP", "PULSe", "NOISe", "DC", "ARB"];
-				let p = chain;
-				if (args.func) {
-					const f = funcs.find((x) => {
-						return x.toUpperCase().startsWith(String(args.func).toUpperCase());
-					});
-					if (!f) {
-						return Promise.reject(new Error("func must be one of " + funcs.join("|")));
-					}
-					p = p.then(() => {
-						return set(root + ":FUNCtion " + f);
-					});
-				}
-				if (args.freq != null) {
-					p = p.then(() => {
-						return set(root + ":FREQuency " + Number(args.freq));
-					});
-				}
-				if (args.amp != null) {
-					p = p.then(() => {
-						return set(root + ":VOLTage " + Number(args.amp));
-					});
-				}
-				if (args.offset != null) {
-					p = p.then(() => {
-						return set(root + ":VOLTage:OFFSet " + Number(args.offset));
-					});
-				}
-				if (args.state != null) {
-					p = p.then(() => {
-						return set(root + ":OUTPut " + (args.state ? "ON" : "OFF"));
-					});
-				}
-				return p.then(() => {
-					return Promise.all([
-						client.query(root + ":FUNCtion?"),
-						client.query(root + ":FREQuency?"),
-						client.query(root + ":VOLTage?"),
-						client.query(root + ":VOLTage:OFFSet?"),
-						client.query(root + ":OUTPut?")
-					]);
-				}).then((r) => {
-					return {
-						source: src,
-						func: r[0],
-						freq: Number(r[1]),
-						amp: Number(r[2]),
-						offset: Number(r[3]),
-						on: Number(r[4]) === 1 || r[4].startsWith("ON")
-					};
-				});
-			},
-			siggen_on: (args) => {
-				return client.write(":SOURce" + (args.source === 2 ? 2 : 1) + ":OUTPut ON").then(() => {
-					return { ok: true };
-				});
-			},
-			siggen_off: (args) => {
-				return client.write(":SOURce" + (args.source === 2 ? 2 : 1) + ":OUTPut OFF").then(() => {
-					return { ok: true };
-				});
-			},
-			screenshot: () => {
-				return client.queryBinary(":DISPlay:DATA? PNG").then((png) => {
+
+			measure: (args) => scope.measure(args.item, args.source),
+
+			snapshot: () => {
+				return scope.screen().then((png) => {
 					io.image("screen", png, "image/png");
 					return { _image: { data: png.toString("base64"), mime: "image/png" } };
 				});
 			},
+			// the image pane snapshot button sends "snapshot"
+			screenshot: () => {
+				return scope.screen().then((png) => {
+					io.image("screen", png, "image/png");
+					return { _image: { data: png.toString("base64"), mime: "image/png" } };
+				});
+			},
+
+			// legacy AWG control, kept for existing scripts/tests: a thin shim
+			// over the settings model
+			siggen: (args) => {
+				const n = args.source === 2 ? 2 : 1;
+				const partial = { awg: {} };
+				partial.awg[n] = {};
+				["func", "freq", "amp", "offset"].forEach((k) => {
+					if (args[k] != null) {
+						partial.awg[n][k] = args[k];
+					}
+				});
+				if (args.state != null) {
+					partial.awg[n].on = Boolean(args.state);
+				}
+				if (!Object.keys(partial.awg[n]).length) {
+					return ensureSynced().then((m) => {
+						return Object.assign({ source: n }, m.awg[String(n)]);
+					});
+				}
+				return scope.set(partial).then((m) => {
+					return Object.assign({ source: n }, m.awg[String(n)]);
+				});
+			},
+			siggen_on: (args) => scope.set({ awg: { [args.source === 2 ? 2 : 1]: { on: true } } }).then(() => ({ ok: true })),
+			siggen_off: (args) => scope.set({ awg: { [args.source === 2 ? 2 : 1]: { on: false } } }).then(() => ({ ok: true })),
+
 			run: simple(":RUN"),
 			stop: simple(":STOP"),
 			single: simple(":SINGle"),

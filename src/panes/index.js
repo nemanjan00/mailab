@@ -152,6 +152,10 @@ const TYPES = {
 		description: "device list with status and start/stop",
 		config: {}
 	},
+	settings: {
+		description: "device settings: live state + options, plus a status command result (e.g. command \"siggen\" shows the AWG setpoints as the AI changes them); pairs with a log pane of the same device",
+		config: { device: "device id", command: "status command to query (e.g. siggen); empty = options only", interval: "auto-refresh seconds (0 = manual refresh button)" }
+	},
 	channels: {
 		description: "table of all channels with latest values",
 		config: {}
