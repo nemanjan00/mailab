@@ -97,7 +97,7 @@ describe("dm858 settings model", () => {
 		return dev.start().then(() => {
 			return dev.command("set", { measure: { func: "DCI", range: 0.05, nplc: "5" } });
 		}).then((model) => {
-			expect(model.measure.func).toBe("CURRent:DC");
+			expect(model.measure.func).toBe("DCI"); // model stores the UI label
 			expect(model.measure.range).toBe(0.05);
 			// func first, then the new function's nodes
 			expect(fake.writes[0]).toBe(":SENSe:FUNCtion \"CURRent:DC\"");

@@ -96,6 +96,9 @@ const labelToFunc = (label) => {
 	}
 	return normalizeFunc(label);
 };
+// and back: the MODEL stores labels (what the UI shows); canonical keys
+// only exist at the SCPI boundary
+const funcLabel = (canon) => (FUNCS[canon] ? FUNCS[canon].label : String(canon));
 
 const sections = [
 	{ key: "measure", title: "Measure", fields: {
@@ -190,7 +193,8 @@ const parseNum = Number;
 // ---- sync: the plan depends on the active function, so scope.syncAll
 // queries FUNCtion? first, then the per-function nodes ---------------------
 
-const syncForFunc = (func) => {
+const syncForFunc = (input) => {
+	const func = FUNCS[input] ? input : labelToFunc(input);
 	const f = FUNCS[func] || {};
 	const plan = [];
 	const push = (path, suffix, parse) => {
@@ -225,7 +229,7 @@ const commonSync = () => {
 	];
 };
 
-const FUNC_QUERY = { path: ["measure", "func"], query: ":SENSe:FUNCtion?", parse: normalizeFunc };
+const FUNC_QUERY = { path: ["measure", "func"], query: ":SENSe:FUNCtion?", parse: (reply) => funcLabel(normalizeFunc(reply)) };
 
 // ---- set: partial update -> validated SCPI writes -------------------------
 
@@ -282,7 +286,7 @@ const buildWrites = (partial, currentFunc) => {
 			if (!write) {
 				throw new Error(name + " is not settable");
 			}
-			writes.push({ path: path, value: name === "func" ? labelToFunc(value) : value, write: write, confirm: confirm });
+			writes.push({ path: path, value: name === "func" ? funcLabel(labelToFunc(value)) : value, write: write, confirm: confirm });
 		});
 	};
 	// func first so sub-function writes target the new function
@@ -308,7 +312,7 @@ const buildWrites = (partial, currentFunc) => {
 	return writes;
 };
 
-const unitOf = (func) => (FUNCS[func] || {}).unit || "";
+const unitOf = (func) => (FUNCS[func] || FUNCS[labelToFunc(func)] || {}).unit || "";
 
 module.exports = {
 	schema: schema,
@@ -318,6 +322,7 @@ module.exports = {
 	buildWrites: buildWrites,
 	normalizeFunc: normalizeFunc,
 	labelToFunc: labelToFunc,
+	funcLabel: funcLabel,
 	rangeNode: rangeNode,
 	unitOf: unitOf,
 	getPath: getPath,

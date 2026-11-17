@@ -42,6 +42,7 @@ module.exports = scpiDriver.preset({
 		monitor: "{on: true|false, intervalMs?} poll readings -> the reading channel ({unit} per active function)",
 		measure: "{} one reading {value, func, unit} in the active function",
 		screenshot: "{} PNG of the screen -> image <device>_screen (returned too)",
+		snapshot: "alias of screenshot (the image pane button sends \"snapshot\")",
 		zero: "{} shorthand: null the reading (NULL on, value = last reading)",
 		beep: "{} beep once"
 	},
@@ -77,6 +78,13 @@ module.exports = scpiDriver.preset({
 			}
 		}
 
+		const screenNow = () => {
+			return client.queryBinary(":HCOPy:SDUMp:DATA? PNG").then((png) => {
+				io.image("screen", png, "image/png");
+				return { _image: { data: png.toString("base64"), mime: "image/png" } };
+			});
+		};
+
 		const pushReading = (r) => {
 			io.sample("reading", r.value, { unit: r.unit });
 			io.value("reading", { value: r.value, func: r.func, unit: r.unit, t: Date.now() });
@@ -105,12 +113,9 @@ module.exports = scpiDriver.preset({
 				});
 			},
 
-			screenshot: () => {
-				return client.queryBinary(":HCOPy:SDUMp:DATA? PNG").then((png) => {
-					io.image("screen", png, "image/png");
-					return { _image: { data: png.toString("base64"), mime: "image/png" } };
-				});
-			},
+			screenshot: () => screenNow(),
+			// the image pane snapshot button sends "snapshot"
+			snapshot: () => screenNow(),
 
 			beep: () => meter.write(":SYSTem:BEEPer:IMMediate").then(() => ({ ok: true })),
 
