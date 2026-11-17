@@ -20,6 +20,7 @@ const DRIVERS = [
 	require("./soapy"),
 	require("./rfcat"),
 	require("./esb"),
+	require("./kc901"),
 	require("./proxmark3"),
 	require("./picoglitcher"),
 	require("./flowgraph"),
