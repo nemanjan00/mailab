@@ -35,6 +35,8 @@ Frequency shifting, resampling, filtering, gain control, gating.
 - [`agc`](agc/README.md): normalizes IQ to unit power
 - [`mag`](mag/README.md): magnitude |x|: envelope detector
 - [`decimate`](decimate/README.md): keeps every n-th sample (no filtering)
+- [`tie_jitter`](tie_jitter/README.md): TIE / jitter measurement against an ideal UI grid
+- [`cdr`](cdr/README.md): clock/data recovery (CDR) with a second-order PLL
 - [`video_decode`](video_decode/README.md): decode analog composite video (PAL/NTSC) into grayscale image frames
 - [`matched_filter`](matched_filter/README.md): RRC receive filter matching the transmitter
 - [`level_trigger`](level_trigger/README.md): power squelch: catches bursts above a level (blob, trace, log)
@@ -96,6 +98,7 @@ What makes a stream visible or audible: spectrum, scope, constellation, eye, mea
 - [`eye`](eye/README.md): eye diagram
 - [`scope`](scope/README.md): triggered oscilloscope with measurements
 - [`measure`](measure/README.md): one statistic of the stream as a channel
+- [`eye_mask`](eye_mask/README.md): eye diagram with a keep-out mask and hit statistics
 - [`audio`](audio/README.md): plays audio in the browser (lab audio stream)
 - [`wav`](wav/README.md): records audio to a WAV file
 

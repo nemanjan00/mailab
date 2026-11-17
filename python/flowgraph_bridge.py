@@ -1514,6 +1514,212 @@ class Eye(Throttled):
         return None
 
 
+class _Edges:
+    """Stateful mid-level crossing detector with hysteresis.
+
+    feed() returns interpolated crossing positions (in samples, relative to
+    the start of the chunk fed). Amplitude is learned from the first chunk
+    that actually swings; afterwards the mid level only tracks slowly, so a
+    quiet stretch can't drag the threshold into the noise.
+    """
+
+    def __init__(self):
+        self.state = None
+        self.prev = None
+        self.mid = None
+        self.amp = None
+
+    def feed(self, y):
+        y = np.asarray(y, dtype=np.float64)
+        if not len(y):
+            return np.zeros(0)
+        lo, hi = float(np.min(y)), float(np.max(y))
+        if self.mid is None:
+            if hi - lo <= 0:
+                return np.zeros(0)
+            self.mid = (hi + lo) / 2
+            self.amp = hi - lo
+            self.state = bool(y[0] > self.mid)
+        elif hi - lo > 0.7 * self.amp:
+            self.mid = 0.98 * self.mid + 0.02 * (hi + lo) / 2
+        hyst = self.amp * 0.05
+        out = []
+        for i, v in enumerate(y):
+            pv = self.prev if (i == 0 and self.prev is not None) else (y[i - 1] if i else v)
+            if self.state and v < self.mid - hyst:
+                self.state = False
+            elif not self.state and v > self.mid + hyst:
+                self.state = True
+                d = v - pv
+                out.append(i - 1 + (self.mid - pv) / d if d else float(i))
+        self.prev = float(y[-1])
+        return np.asarray(out)
+
+
+class TieJitter(Throttled):
+    inputs = "real waveform carrying a clock or line code at `bitrate`"
+    outputs = "trace <device>_<id> (TIE vs edge time, UI), channels <device>_<id>_rms / _pp, value <device>_<id>"
+    kind = "sink"
+    doc = ("time error of threshold crossings against an ideal UI grid (TIE) -> trace <device>_<id> "
+           "(x = edge time s, y = TIE UI), channels <device>_<id>_rms / _pp (UI), value summary. "
+           "libscopehal-style jitter measurement on synthetic or live line codes.")
+    params = {"bitrate": (1e6, "line rate Hz (UI rate)"), "keep": (1000, "TIE points kept"),
+              "fps": (5, "updates/s")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.det = _Edges()
+        self.pos = 0
+        self.anchor = None
+        self.tie = np.zeros(0)
+        self.tie_t = np.zeros(0)
+
+    def work(self, x, rate):
+        x = np.real(x) if np.iscomplexobj(x) else np.asarray(x, dtype=np.float64)
+        edges = self.det.feed(x)
+        ui = 1.0 / float(self.p["bitrate"])
+        if len(edges):
+            t = (self.pos + edges) / rate
+            if self.anchor is None:
+                self.anchor = t[0]
+            k = np.round((t - self.anchor) / ui)
+            tie = ((t - self.anchor) - k * ui) / ui
+            self.tie = np.concatenate([self.tie, tie])[-int(self.p["keep"]):]
+            self.tie_t = np.concatenate([self.tie_t, t])[-int(self.p["keep"]):]
+        self.pos += len(x)
+        if self.tie.size and self.due():
+            rms = float(np.sqrt(np.mean(self.tie ** 2)))
+            pp = float(np.ptp(self.tie))
+            lab.trace(self.id, np.round(self.tie_t, 6).tolist(),
+                      [{"label": "tie", "y": np.round(self.tie, 6).tolist()}], "s", "UI")
+            lab.sample(self.id + "_rms", round(rms, 6), "UI")
+            lab.sample(self.id + "_pp", round(pp, 6), "UI")
+            lab.value(self.id, {"n": int(self.tie.size), "rms_ui": round(rms, 6), "pp_ui": round(pp, 6)})
+        return None
+
+
+class CdrPLL(Throttled):
+    inputs = "real waveform carrying a clock or line code near `bitrate`"
+    outputs = "trace <device>_<id> (TIE vs tracked clock, UI), channels <device>_<id>_freq / _locked, value <device>_<id>"
+    kind = "sink"
+    doc = ("second-order PLL tracking the threshold crossings (CDR): recovers the line rate and measures "
+           "TIE against the tracked clock -> trace <device>_<id> (TIE UI), channels <device>_<id>_freq (Hz) "
+           "and <device>_<id>_locked (0/1), value summary. Kp/Ki are per-edge gains; the period is clamped "
+           "to +/-5 % of nominal so loss of lock resyncs instead of runaway.")
+    params = {"bitrate": (1e6, "nominal line rate Hz"), "kp": (0.3, "phase gain per edge"),
+              "ki": (0.1, "frequency gain per edge"), "keep": (1000, "TIE points kept"),
+              "fps": (5, "updates/s")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.det = _Edges()
+        self.pos = 0
+        self.period = None
+        self.pred = None
+        self.resyncs = 0
+        self.edges = 0
+        self.warm_resyncs = None  # resync count at the 50-edge warmup mark
+        self.tie = np.zeros(0)
+        self.tie_t = np.zeros(0)
+
+    def work(self, x, rate):
+        x = np.real(x) if np.iscomplexobj(x) else np.asarray(x, dtype=np.float64)
+        edges = self.det.feed(x)
+        nominal = 1.0 / float(self.p["bitrate"])
+        if self.period is None:
+            self.period = nominal
+        kp, ki = float(self.p["kp"]), float(self.p["ki"])
+        if len(edges):
+            t = (self.pos + edges) / rate
+            for te in t:
+                if self.pred is None:
+                    self.pred = te
+                    continue
+                err = te - self.pred
+                # fold to the nearest UI: err ~ one period is normal; a gap
+                # or extra edge shifts the grid by exactly one UI
+                k = round(err / self.period)
+                if abs(k) > 1:
+                    self.resyncs += 1
+                    self.pred = te + self.period
+                    continue
+                err -= k * self.period
+                self.period = min(max(self.period + ki * err, nominal * 0.95), nominal * 1.05)
+                self.pred = te + self.period + kp * err
+                self.edges += 1
+                if self.edges == 50 and self.warm_resyncs is None:
+                    self.warm_resyncs = self.resyncs
+                self.tie = np.concatenate([self.tie, [err / self.period]])[-int(self.p["keep"]):]
+                self.tie_t = np.concatenate([self.tie_t, [te]])[-int(self.p["keep"]):]
+        self.pos += len(x)
+        if self.edges and self.due():
+            freq = 1.0 / self.period
+            locked = int(self.warm_resyncs is not None
+                         and self.resyncs == self.warm_resyncs
+                         and abs(self.period / nominal - 1) < 0.005)
+            rms = float(np.sqrt(np.mean(self.tie ** 2)))
+            lab.trace(self.id, np.round(self.tie_t, 6).tolist(),
+                      [{"label": "tie", "y": np.round(self.tie, 6).tolist()}], "s", "UI")
+            lab.sample(self.id + "_freq", round(freq, 3), "Hz")
+            lab.sample(self.id + "_locked", locked, "")
+            lab.value(self.id, {"locked": locked, "freq": round(freq, 3), "edges": self.edges,
+                                "resyncs": self.resyncs, "rms_ui": round(rms, 6)})
+        return None
+
+
+def _in_poly(xs, ys, poly):
+    inside = np.zeros(len(xs), dtype=bool)
+    n = len(poly)
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        if y2 == y1:
+            continue
+        inside ^= ((y1 > ys) != (y2 > ys)) & (xs < (x2 - x1) * (ys - y1) / (y2 - y1) + x1)
+    return inside
+
+
+class EyeMask(Throttled):
+    inputs = "complex IQ or real at `sps` samples per symbol"
+    outputs = "trace <device>_<id> (mode eye), value <device>_<id> (mask hit stats)"
+    kind = "sink"
+    doc = ("eye diagram with a keep-out mask (libscopehal EyeMask style) -> trace <device>_<id> (mode eye) "
+           "plus value <device>_<id>: hits / samples / pct of overlay samples inside the mask. "
+           "Mask is a polygon [[x_ui, y], ...] with x in UI (0..2 across the two-symbol window) "
+           "and y in observed amplitude units; the classic shape is a hexagon around the crossings "
+           "at x = 1.")
+    params = {"sps": (8, "samples per symbol"), "traces": (128, "overlaid two-symbol segments"),
+              "fps": (5, "updates/s"), "part": ("real", "real|imag"),
+              "mask": ("[[0.55,-0.5],[0.85,-0.85],[1.15,-0.85],[1.45,-0.5],[1.45,0.5],[1.15,0.85],[0.85,0.85],[0.55,0.5]]",
+                       "keep-out polygon [[x_ui, y], ...]")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        import ast
+        self.mask = [list(map(float, pt)) for pt in ast.literal_eval(str(self.p["mask"]))]
+        if len(self.mask) < 3:
+            raise ValueError("mask needs at least 3 points")
+        self.buf = np.zeros(0, dtype=np.complex64)
+
+    def work(self, x, rate):
+        sps = int(self.p["sps"])
+        span = 2 * sps
+        self.buf = np.concatenate([self.buf, x.astype(np.complex64)])[-span * int(self.p["traces"]) - span:]
+        if not self.due() or len(self.buf) < span + 1:
+            return None
+        values = self.buf.real if self.p["part"] == "real" else self.buf.imag
+        segments = [values[i:i + span + 1] for i in range(0, len(values) - span, sps)][-int(self.p["traces"]):]
+        hits, total = 0, 0
+        for s in segments:
+            xs = np.arange(len(s)) / sps
+            hits += int(np.count_nonzero(_in_poly(xs, np.asarray(s, dtype=np.float64), self.mask)))
+            total += len(s)
+        tx = (np.arange(span + 1) / sps).tolist()
+        lab.trace(self.id, tx, [{"label": "", "y": np.round(seg, 4).tolist()} for seg in segments], "symbols", "", "eye")
+        lab.value(self.id, {"hits": hits, "samples": total, "pct": round(100.0 * hits / total, 3) if total else 0.0})
+        return None
+
+
 def measure(y, rate):
     """Scope-style measurements of a real waveform."""
     y = np.asarray(y, dtype=np.float64)
@@ -1994,6 +2200,7 @@ BLOCKS = {
     "python": Python,
     "soapy_sink": SoapySink,
     "spectrum": Spectrum, "constellation": Constellation, "eye": Eye, "scope": Scope, "measure": Measure,
+    "tie_jitter": TieJitter, "cdr": CdrPLL, "eye_mask": EyeMask,
     "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
     "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,

@@ -178,6 +178,62 @@ def test_external():
     check("external", values(anns, "rx-data"), b"OK")
 
 
+def usb_crc16(data):
+    """USB CRC-16 as transmitted: bit-serial over LSB-first bits (poly 0x8005,
+    init 0xFFFF), register complemented; returned little-endian on the wire."""
+    crc = 0xFFFF
+    for byte in data:
+        for i in range(8):
+            bit = (byte >> i) & 1
+            crc <<= 1
+            if bit != (crc >> 16):
+                crc ^= 0x18005
+            crc &= 0xFFFF
+    return (~crc) & 0xFFFF
+
+
+def usb_wave(payload, pid=0x3, sps=16, idle=8):
+    """FS USB packet on dp/dm as uint32 words (bit0=dp, bit1=dm). J=1, K=2, SE0=0."""
+    bits = []
+    for byte in [0x80] + [(pid & 0xF) | ((~pid & 0xF) << 4)] + list(payload):
+        bits += [(byte >> i) & 1 for i in range(8)]
+    crc = usb_crc16(payload)
+    bits += [(crc >> (15 - i)) & 1 for i in range(16)]
+    stuffed = []
+    ones = 0
+    for b in bits:
+        stuffed.append(b)
+        ones = ones + 1 if b else 0
+        if ones == 6:
+            stuffed.append(0)
+            ones = 0
+    level = 0                       # J
+    words = [1] * idle
+    for b in stuffed:               # NRZI: 0 = transition, 1 = hold
+        if not b:
+            level ^= 1
+        words += [2 if level else 1] * sps
+    words += [0] * sps * 2          # SE0 x2
+    words += [1] * sps + [1] * idle
+    return np.array(words, np.uint32)
+
+
+def test_usb():
+    if not (P.sigrok_has("usb_signalling") and P.sigrok_has("usb_packet")):
+        print("skip usb (sigrok decoders not installed)")
+        return
+    payload = b"\x01\x02\xa5\x5a\xff\x00"
+    x = usb_wave(payload)
+    anns = run(x, 12e6 * 16, "usb_signalling", chunk=137, engine="sigrok",
+               options={"signalling": "full-speed"},
+               channels={"dp": 0, "dm": 1}, stack=["usb_packet"])
+    assert not [a for a in anns if a["class"] in ("sync-err", "crc16-err", "packet-invalid")], anns
+    assert [a["class"] for a in anns].count("packet-data0") == 1, anns
+    assert [a["class"] for a in anns].count("sync-ok") == 1
+    assert [a["class"] for a in anns].count("crc16-ok") == 1
+    check("usb sigrok stack", values(anns, "data"), payload)
+
+
 if __name__ == "__main__":
     test_uart("builtin")
     test_spi("builtin")
@@ -191,3 +247,4 @@ if __name__ == "__main__":
         test_i2c("sigrok")
     else:
         print("skip sigrok (libsigrokdecode decoders not installed)")
+    test_usb()

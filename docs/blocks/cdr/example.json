@@ -1,0 +1,13 @@
+{
+  "description": "CDR on a clean 1 MHz clock: the PLL tracks the crossings, reports ~1 MHz on the freq channel and locks.",
+  "prompt": "Recover the clock with the CDR PLL and show the tracked frequency and lock state.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 16e6, "freq": 1e6, "amp": 1.0, "noise": 0.001}},
+    {"id": "cdr", "type": "cdr", "params": {"bitrate": 1e6, "keep": 500}}
+  ],
+  "links": [["src", "cdr"]],
+  "panes": [
+    {"type": "trace", "title": "TIE vs tracked clock", "config": {"traces": ["fg_cdr"]}},
+    {"type": "value", "title": "CDR", "config": {"values": ["fg_cdr"]}}
+  ]
+}

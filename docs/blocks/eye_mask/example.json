@@ -1,0 +1,14 @@
+{
+  "description": "Eye with mask compliance: PRBS9 as BPSK at 16 samples per symbol; RRC shaping carries the crossings through the keep-out mask.",
+  "prompt": "Show the eye with the keep-out mask and report the mask hit percentage.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 1000000}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "bpsk", "sps": 16, "beta": 0.35}},
+    {"id": "eye", "type": "eye_mask", "params": {"sps": 16, "traces": 256}}
+  ],
+  "links": [["bits", "tx"], ["tx", "eye"]],
+  "panes": [
+    {"type": "trace", "title": "Eye + mask", "config": {"traces": ["fg_eye"]}},
+    {"type": "value", "title": "Mask hits", "config": {"values": ["fg_eye"]}}
+  ]
+}

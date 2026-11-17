@@ -1,0 +1,13 @@
+{
+  "description": "TIE of a jittery clock: a 1 MHz sine clock with 0.1 UI of Gaussian edge jitter, measured against the ideal 1 UI grid.",
+  "prompt": "Measure the TIE of this clock against the ideal grid and show the jitter statistics.",
+  "blocks": [
+    {"id": "src", "type": "signal", "params": {"rate": 16e6, "freq": 1e6, "amp": 1.0, "noise": 0.001}},
+    {"id": "tie", "type": "tie_jitter", "params": {"bitrate": 1e6, "keep": 500}}
+  ],
+  "links": [["src", "tie"]],
+  "panes": [
+    {"type": "trace", "title": "TIE", "config": {"traces": ["fg_tie"]}},
+    {"type": "value", "title": "TIE stats", "config": {"values": ["fg_tie"]}}
+  ]
+}
