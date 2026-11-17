@@ -147,7 +147,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | NanoKVM / NanoKVM+ (Sipeed) | ⬜ in progress (agent) | IP-KVM as an instrument via its HTTP/WebSocket API: HDMI screen (MJPEG/H.264 → `<id>_screen` images at N fps, snapshot to the AI, vision watches), USB keyboard/mouse (type text, key combos, absolute click/move/drag — same command set as the `vnc` device so the AI drives either the same way), wait-for-screen-change, ATX power/reset/long-press (approval-gated), virtual media / mounted ISO, status (LEDs, resolution); a `kvm` pane (live screen + keyboard/mouse for people) |
 | JTAGulator | ⬜ | serial CLI: JTAG/SWD/UART pin discovery (IDCODE/BYPASS scans) → results as values |
 | J-Link | ⬜ | JLinkExe / pylink: connect, read/write memory, flash, halt/run, RTT → log |
-| OpenOCD | ⬜ | Tcl RPC (port 6666) / telnet: targets, mem read/write (dumps → blobs), flash, reset/halt |
+| OpenOCD | ✅ | driver over the telnet port (src/devices/openocd): targets, regs, mem read → blobs, writes, flash erase/program, spawn with free-form adapter args (e.g. Tigard port B) |
 | Black Magic Probe | ⬜ | gdb remote over its serial port (`monitor swdp_scan`, attach, load, mem dump) + its UART |
 | flashrom | ✅ | `flashrom` driver: probe, read (→ blob), verify, write, erase (write/erase need approval); verified against flashrom's dummy programmer (emulated W25Q128) in jest and over MCP; no real programmer yet |
 | XGecu (minipro) | 🟡 | see above |
