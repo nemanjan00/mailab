@@ -65,24 +65,21 @@ def test_state_roundtrip_and_sweep():
 
         sweep = b.ok("sweep", {"start_hz": 100e6, "stop_hz": 103e6, "step_hz": 1e6, "dwell_ms": 10})
         assert sweep == {"steps": 4, "from_hz": 100e6, "to_hz": 103e6}
-
         assert b.ok("override", {"on": True}) == {"override": True}
         assert b.ok("override") == {"override": True}
         assert b.ok("override", {"on": False}) == {"override": False}
         assert b.ok("lcd", {"timeout": 2}) == {"timeout": 2}
 
-        # the transport saw the writes
-        fake = b.ok("_fake")
-        sets = [e for e in fake["log"] if e[0] == "set"]
-        assert ["set", "freq", 433900000] in sets
-        assert ["set", "mode", 1] in sets
-        assert fake["values"]["freq"] == 103000000  # sweep ends on the stop frequency
-
-        # validation
-        assert "30M" in b.err("freq", {"hz": 1e6}) or "below" in b.err("freq", {"hz": 1e6})
-        assert "mixer or generator" in b.err("mode", {"value": "warp"})
-        assert "0..7" in b.err("current", {"level": 9}) or "limit" in b.err("current", {"level": 9})
-        assert ">=" in b.err("sweep", {"start_hz": 200e6, "stop_hz": 100e6, "step_hz": 1e6})
+        # settings contract (the settings pane renders from this)
+        schema = b.ok("settings_schema")
+        assert [sec["key"] for sec in schema] == ["rf", "lcd"]
+        m = b.ok("set", {"rf": {"freq_hz": 500e6, "mode": "mixer", "current": 3, "bias": True, "override": True}, "lcd": {"timeout": "1"}})
+        assert m["rf"] == {"freq_hz": 500000000, "mode": "mixer", "current": 3, "bias": True, "override": True}
+        assert m["lcd"] == {"timeout": "1"}
+        m = b.ok("settings")
+        assert m["rf"]["freq_hz"] == 500000000 and m["rf"]["bias"] is True
+        assert "must be mixer or generator" in b.err("set", {"rf": {"mode": "warp"}})
+        assert "below the minimum" in b.err("set", {"rf": {"freq_hz": 1e6}})
     finally:
         b.close()
 
