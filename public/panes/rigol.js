@@ -171,6 +171,21 @@ export default {
 					player.setOnCloseCallBack(closed);
 				}
 				player.connect("ws://" + h + ":" + videoPort());
+				// the MHO98 streams only after the SET_ENCODER handshake on the
+				// video socket itself (the DMM streams unprompted and accepts
+				// this too — its own control.html sends the same message)
+				const handshake = () => {
+					try {
+						player.ws.send(JSON.stringify({ type: "SET_ENCODER", size: null, rate: null }));
+					} catch (_err) {
+						// socket not ready; the open handler covers it
+					}
+				};
+				if (player.ws && player.ws.readyState === 1) {
+					handshake();
+				} else if (player.ws) {
+					player.ws.addEventListener("open", handshake);
+				}
 				status.text = "live";
 				paint();
 			}, (err) => {
