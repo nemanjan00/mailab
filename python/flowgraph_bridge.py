@@ -708,6 +708,129 @@ class Ber(Throttled):
         return None
 
 
+class BaudEst(Throttled):
+    inputs = "real discriminated FSK / FM or complex IQ"
+    outputs = "value <device>_<id> (baud, rate)"
+    kind = "sink"
+    doc = "estimate the symbol rate of a 2-level FSK signal from level crossings: value <device>_<id> with the baud estimate"
+    params = {"fps": (2, "value updates per second"),
+              "window": (262144, "samples kept for the estimate")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.win = np.zeros(0)
+
+    def work(self, x, rate):
+        x = np.asarray(x)
+        self.win = np.concatenate([self.win, x])[-int(self.p["window"]):]
+        if not self.due() or not len(self.win):
+            return None
+        baud = modem.baud_estimate(self.win, rate)
+        if baud is not None:
+            lab.value(self.id, {"baud": round(float(baud), 1), "rate": rate})
+        return None
+
+
+class PacketDecode(Block):
+    inputs = "bits (0/1) in on-air order (first bit first, each byte LSB first)"
+    outputs = "value <device>_<id> (decoded packets, CRC-checked), channel <device>_<id>_count"
+    kind = "sink"
+    doc = "decode BLE advertising or nRF Enhanced ShockBurst packets out of a raw bit stream: value <device>_<id> with the last decoded packets + CRC status, count channel"
+    params = {"protocol": ("ble", "ble (BLE advertising channels) or esb (nRF Enhanced ShockBurst)"),
+              "channel": (37, "BLE channel index, used for dewhitening"),
+              "address": ("e7e7e7e7e7", "ESB pipe address (hex, 3-5 bytes)"),
+              "max_errors": (0, "allowed bit errors in the access address / sync word"),
+              "keep": (20, "packets kept in the value")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        if self.p["protocol"] not in ("ble", "esb"):
+            raise ValueError("protocol must be ble or esb")
+        if self.p["protocol"] == "ble":
+            self.word = modem.unpack_bits_lsb(modem.BLE_ADV_AA.to_bytes(4, "little"))
+        else:
+            addr = bytes.fromhex(self.p["address"])
+            if not 3 <= len(addr) <= 5:
+                raise ValueError("address must be 3-5 bytes of hex")
+            self.word = modem.unpack_bits_lsb(addr)
+        self.buf = np.zeros(0, dtype=np.uint8)
+        self.next_scan = 0
+        self.packets = []
+        self.count = 0
+
+    def _ble_at(self, i):
+        """Try one BLE PDU at buf index i. -> (pkt, consumed) or None when the
+        buffer does not hold the whole PDU yet."""
+        body = self.buf[i + len(self.word):]
+        if len(body) < 16 + 24:
+            return None
+        white = modem.ble_white_bits(body, int(self.p["channel"]))
+        header = modem.pack_bits_lsb(white[:16])
+        if len(header) < 2:
+            return None
+        length = header[1] & 0x3F
+        need = 16 + 8 * (length + 3)
+        if len(white) < need:
+            return None
+        pdu = modem.pack_bits_lsb(white[:16 + 8 * length])
+        got_crc = int.from_bytes(modem.pack_bits_lsb(white[16 + 8 * length:need]), "little")
+        pkt = {"protocol": "ble", "pdu_type": header[0] & 0x0F, "length": length,
+               "crc_ok": modem.crc24_ble(pdu) == got_crc, "t": time.time(),
+               "payload": pdu[2:].hex(), "addr": pdu[2:8].hex() if length >= 6 else None}
+        return pkt, len(self.word) + need
+
+    def _esb_at(self, i):
+        """Try one ESB packet at buf index i. -> (pkt, consumed) or None when
+        the buffer does not hold the whole packet yet."""
+        rest = self.buf[i + len(self.word):]
+        if len(rest) < 9:
+            return None
+        pcf = 0
+        for k in range(9):
+            pcf |= int(rest[k]) << k
+        length, pid, noack = pcf & 0x3F, (pcf >> 6) & 0x03, (pcf >> 8) & 1
+        need = 9 + 8 * (length + 1)
+        if len(rest) < need:
+            return None
+        payload = modem.pack_bits_lsb(rest[9:9 + 8 * length])
+        got_crc = modem.pack_bits_lsb(rest[9 + 8 * length:need])[0]
+        addr = bytes.fromhex(self.p["address"])
+        want = modem.esb_crc8(addr + bytes([pcf & 0xFF, (pcf >> 8) & 1]) + payload)
+        pkt = {"protocol": "esb", "pid": pid, "noack": noack, "length": length,
+               "crc_ok": want == got_crc, "t": time.time(), "payload": payload.hex()}
+        return pkt, len(self.word) + need
+
+    def work(self, x, rate):
+        self.buf = np.concatenate([self.buf, np.asarray(x, dtype=np.uint8)])
+        if len(self.buf) > 262144:
+            drop = len(self.buf) - 262144
+            self.buf = self.buf[drop:]
+            self.next_scan = max(0, self.next_scan - drop)
+        decode = self._ble_at if self.p["protocol"] == "ble" else self._esb_at
+        me = int(self.p["max_errors"])
+        while True:
+            window = self.buf[self.next_scan:]
+            if len(window) < len(self.word):
+                break
+            hits = modem.find_sync(window, self.word, me)
+            if not hits:
+                self.next_scan = max(0, len(self.buf) - len(self.word))
+                break
+            i = self.next_scan + hits[0]
+            got = decode(i)
+            if got is None:
+                break  # wait for more samples
+            pkt, consumed = got
+            self.next_scan = i + consumed
+            self.count += 1
+            self.packets.append(pkt)
+        if self.packets:
+            self.packets = self.packets[-int(self.p["keep"]):]
+            lab.value(self.id, self.packets)
+            lab.sample(self.id + "_count", self.count, "")
+        return None
+
+
 class Framer(Block):
     inputs = "bits (0/1)"
     outputs = "value <device>_<id> (frames: n, t, hex, ascii), blob <device>_<id> (payloads), channel <device>_<id>_count"
@@ -1500,6 +1623,7 @@ BLOCKS = {
     "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
     "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,
+    "baud_est": BaudEst, "packet_decode": PacketDecode,
     "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger, "uart_tx": UartTx, "uart_rx": UartRx,
     "decode": Decode,
 }

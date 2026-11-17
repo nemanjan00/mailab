@@ -147,6 +147,82 @@ def test_lowpass_gain():
     print("ok lowpass")
 
 
+def test_baud_est():
+    rng = np.random.RandomState(42)
+    for _ in range(6):
+        bits = rng.randint(0, 2, 4000).astype(np.uint8)
+        est = M.baud_estimate(np.repeat(bits * 2 - 1, 8).astype(np.float64), 9600 * 8)
+        assert est and abs(est - 9600) / 9600 < 0.04, est
+    m = M.CpfskModulator("gfsk", sps=8, h=0.5)
+    bits = rng.randint(0, 2, 4000).astype(np.uint8)
+    z = m.process(bits)
+    est = M.baud_estimate(z, 9600 * 8)
+    assert est and abs(est - 9600) / 9600 < 0.08, est
+    d = M.Discriminator(8, 0.5)
+    est = M.baud_estimate(d.process(z), 9600 * 8)
+    assert est and abs(est - 9600) / 9600 < 0.08, est
+    assert M.baud_estimate(np.ones(4096), 9600 * 8) is None
+    print("ok baud")
+
+
+def _esb_frame_bits(addr, payload, pid=2, noack=1):
+    pcf = len(payload) | (pid << 6) | (noack << 8)
+    crc = M.esb_crc8(addr + bytes([pcf & 0xFF, (pcf >> 8) & 1]) + payload)
+    return np.concatenate([M.unpack_bits_lsb(addr),
+                           np.array([(pcf >> i) & 1 for i in range(9)], dtype=np.uint8),
+                           M.unpack_bits_lsb(payload),
+                           np.array([(crc >> i) & 1 for i in range(8)], dtype=np.uint8)])
+
+
+def test_esb_decode():
+    addr = bytes([0x12, 0x34, 0x56, 0x78, 0x9A])
+    payload = bytes(range(1, 12))
+    bits = _esb_frame_bits(addr, payload)
+    got = M.esb_decode_bits(bits, addr)
+    assert len(got) == 1, got
+    pkt = got[0]
+    assert pkt["crc_ok"] and pkt["length"] == 11 and pkt["pid"] == 2 and pkt["noack"] == 1, pkt
+    assert pkt["payload"] == payload.hex(), pkt
+    # every single-bit error must be caught (or destroy the sync word outright)
+    for i in range(len(bits)):
+        flipped = bits.copy()
+        flipped[i] ^= 1
+        hits = M.esb_decode_bits(flipped, addr)
+        assert not hits or not hits[0]["crc_ok"], i
+    # a different address must not sync
+    assert M.esb_decode_bits(bits, bytes([0xE7] * 5)) == []
+    print("ok esb")
+
+
+def test_ble_decode():
+    hdr = bytes([0x42, 0x0C]) + bytes.fromhex("998877665544") + b"hello!"
+    try:
+        from scapy.layers.bluetooth4LE import BTLE
+        crc = BTLE.compute_crc(hdr, 0x555555)
+        assert M.crc24_ble(hdr) == int.from_bytes(crc, "little")
+    except ImportError:
+        crc = M.crc24_ble(hdr).to_bytes(3, "little")
+    pdu = np.concatenate([M.unpack_bits_lsb(hdr), M.unpack_bits_lsb(crc)])
+    air = np.concatenate([M.unpack_bits_lsb(bytes([0xAA, 0xAA])),
+                          M.unpack_bits_lsb((0x8E89BED6).to_bytes(4, "little")),
+                          M.ble_white_bits(pdu, 37)])
+    got = M.ble_decode_bits(air, 37)
+    assert len(got) == 1, got
+    pkt = got[0]
+    assert pkt["crc_ok"] and pkt["pdu_type"] == 2 and pkt["length"] == 12, pkt
+    # ADV_IND payload is AdvA + advertising data
+    assert pkt["payload"] == (bytes.fromhex("998877665544") + b"hello!").hex(), pkt
+    assert pkt["addr"] == "998877665544", pkt
+    # crc failure is detected, whitening is self-inverse and channel-specific
+    broken = air.copy()
+    broken[-1] ^= 1
+    assert not M.ble_decode_bits(broken, 37)[0]["crc_ok"]
+    x = np.random.RandomState(1).randint(0, 2, 64).astype(np.uint8)
+    assert np.array_equal(M.ble_white_bits(M.ble_white_bits(x, 19), 19), x)
+    assert not np.array_equal(M.ble_white_bits(x, 19), M.ble_white_bits(x, 20))
+    print("ok ble")
+
+
 if __name__ == "__main__":
     test_lowpass_gain()
     test_linear()
@@ -156,3 +232,6 @@ if __name__ == "__main__":
     test_sync()
     test_uart()
     test_uart_over_fsk_idle()
+    test_baud_est()
+    test_esb_decode()
+    test_ble_decode()

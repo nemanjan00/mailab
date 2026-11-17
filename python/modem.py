@@ -34,6 +34,18 @@ def pack_bits(bits):
     return np.packbits(bits[: len(bits) - len(bits) % 8]).tobytes()
 
 
+def unpack_bits_lsb(data):
+    """bytes -> bit stream in on-air order (each byte LSB first, as UART/ BLE /
+    nRF Enhanced ShockBurst transmit them)."""
+    return np.unpackbits(np.frombuffer(bytes(data), dtype=np.uint8), bitorder="little")
+
+
+def pack_bits_lsb(bits):
+    """Inverse of unpack_bits_lsb: on-air bit order (first bit = bit 0) -> bytes."""
+    bits = np.asarray(bits, dtype=np.uint8)
+    return np.packbits(bits[: len(bits) - len(bits) % 8], bitorder="little").tobytes()
+
+
 class Prbs:
     """Fibonacci LFSR pseudo-random bit source."""
 
@@ -330,3 +342,145 @@ class UartDecoder:
         """-> list of (byte, error or None)"""
         words = self.input.process(np.asarray(x, dtype=np.float32))
         return [(value, error) for _ss, _es, value, error in self.line.process(words)]
+
+
+# ---- baud estimation ----------------------------------------------------------
+
+def baud_estimate(x, rate):
+    """Estimate the symbol rate of a 2-level FSK/FM waveform.
+
+    Random data crosses the mid-level once per two-bit run on average, so
+    baud = 2 * rate / mean crossing interval. Input is a real
+    discriminated signal (Discriminator output) or raw complex IQ (frequency
+    demodulated internally). Mean over the window of crossings rejects
+    jitter; short constant runs (idles) barely move it. Returns baud (float)
+    or None when there is not enough level activity.
+    """
+    if np.iscomplexobj(x):
+        z = np.asarray(x, dtype=np.complex128)
+        y = np.concatenate([[0.0], np.diff(np.unwrap(np.angle(z)))])
+    else:
+        y = np.asarray(x, dtype=np.float64)
+    if len(y) < 64:
+        return None
+    lo, hi = np.percentile(y, [5, 95])
+    if hi - lo < 1e-9:
+        return None
+    mid, h = (lo + hi) / 2.0, (hi - lo) * 0.1
+    up, down = mid + h, mid - h
+    state = 1 if y[0] > mid else -1
+    last, intervals = 0, []
+    for i in range(1, len(y)):
+        v = y[i]
+        if (state == 1 and v < down) or (state == -1 and v > up):
+            state = -1 if state == 1 else 1
+            intervals.append(i - last)
+            last = i
+    if len(intervals) < 8:
+        return None
+    # expected run is two bit periods (each boundary flips with p=0.5), so
+    # the mean interval is one bit period - the mean is used rather than the
+    # median because the run-length distribution is skewed (median run = 1)
+    mean = float(np.mean(intervals))
+    return 2.0 * rate / mean if mean > 0 else None
+
+
+# ---- BLE + nRF ESB packet decoding ---------------------------------------------
+
+BLE_ADV_AA = 0x8E89BED6
+_BLE_CRC_POLY = 0x5A6000  # x^24 + x^10 + x^9 + x^6 + x^4 + x^3 + x + 1, reflected
+_BLE_CRC_INIT = 0xAAAAAA  # 0x555555 with each byte bit-reversed (air order)
+ESB_CRC_POLY = 0x07       # x^8 + x^2 + x^1 + 1 (nRF Enhanced ShockBurst)
+ESB_CRC_INIT = 0xFF
+
+
+def crc24_ble(data):
+    """BLE CRC-24 over a PDU (header + payload), the way it is computed on air:
+    bytes LSB-first, reflected LFSR, no final XOR."""
+    state = _BLE_CRC_INIT
+    for byte in data:
+        for _ in range(8):
+            top = (state ^ byte) & 1
+            byte >>= 1
+            state >>= 1
+            if top:
+                state |= 1 << 23
+                state ^= _BLE_CRC_POLY
+    return state & 0xFFFFFF
+
+
+def esb_crc8(data):
+    """nRF Enhanced ShockBurst CRC-8: poly 0x07, init 0xFF, LSB-first."""
+    crc = ESB_CRC_INIT
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ (0xE0 if crc & 1 else 0)  # 0x07 reflected
+    return crc & 0xFF
+
+
+def ble_white_bits(bits, channel):
+    """BLE data whitening / dewhitening (self-inverse): 7-bit LFSR
+    x^7 + x^4 + 1 initialized with the channel index, MSB set."""
+    out = np.empty(len(bits), dtype=np.uint8)
+    s = int(channel) | 0x40
+    for i in range(len(bits)):
+        out[i] = bits[i] ^ (s & 1)
+        s = (s >> 1) | ((((s >> 6) ^ (s >> 3)) & 1) << 6)
+    return out
+
+
+def ble_decode_bits(bits, channel):
+    """BLE advertising-channel PDU decode out of a raw bit stream (bit 0 = first
+    on air). Finds the advertising access address, dewhitens, checks CRC-24.
+    Returns a list of dicts: pdu_type, length, addr (AdvA hex, when present),
+    payload hex, crc_ok."""
+    bits = np.asarray(bits, dtype=np.uint8)
+    aa = unpack_bits_lsb(BLE_ADV_AA.to_bytes(4, "little"))
+    hits = find_sync(bits, aa, 0)
+    packets = []
+    for i in hits:
+        body = bits[i + len(aa):]
+        if len(body) < 16 + 24:
+            break
+        white = ble_white_bits(body, channel)
+        header = pack_bits_lsb(white[:16])
+        if len(header) < 2:
+            continue
+        pdu_type, length = header[0] & 0x0F, header[1] & 0x3F
+        need = 16 + 8 * (length + 3)
+        if len(white) < need:
+            continue
+        pdu = pack_bits_lsb(white[:16 + 8 * length])
+        got_crc = int.from_bytes(pack_bits_lsb(white[16 + 8 * length:need]), "little")
+        pkt = {"pdu_type": pdu_type, "length": length, "crc_ok": crc24_ble(pdu) == got_crc,
+               "payload": pdu[2:].hex(), "addr": pdu[2:8].hex() if length >= 6 else None}
+        packets.append(pkt)
+    return packets
+
+
+def esb_decode_bits(bits, addr):
+    """nRF Enhanced ShockBurst decode out of a raw bit stream (bit 0 = first on
+    air). Searches for the address, reads the 9-bit packet control field
+    (length/PID/no-ack), payload and CRC-8 over address + PCF + payload.
+    Returns a list of dicts: pid, noack, length, payload hex, crc_ok."""
+    bits = np.asarray(bits, dtype=np.uint8)
+    word = unpack_bits_lsb(addr)
+    hits = find_sync(bits, word, 0)
+    packets = []
+    for i in hits:
+        rest = bits[i + len(word):]
+        if len(rest) < 9:
+            break
+        pcf = 0
+        for k in range(9):
+            pcf |= int(rest[k]) << k
+        length, pid, noack = pcf & 0x3F, (pcf >> 6) & 0x03, (pcf >> 8) & 1
+        need = 9 + 8 * length + 8
+        if len(rest) < need:
+            continue
+        payload = pack_bits_lsb(rest[9:9 + 8 * length])
+        got_crc = pack_bits_lsb(rest[9 + 8 * length:need])[0]
+        packets.append({"pid": pid, "noack": noack, "length": length, "payload": payload.hex(),
+                        "crc_ok": esb_crc8(bytes(addr) + bytes([pcf & 0xFF, (pcf >> 8) & 1]) + payload) == got_crc})
+    return packets

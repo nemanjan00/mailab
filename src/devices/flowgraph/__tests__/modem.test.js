@@ -20,7 +20,7 @@ maybe("every modulation survives AWGN with a low BER", () => {
 	if (run.status !== 0) {
 		throw new Error(run.stdout + run.stderr);
 	}
-	["lowpass", "bpsk", "qam256", "gfsk", "4fsk", "ook", "sync", "uart"].forEach((name) => {
+	["lowpass", "bpsk", "qam256", "gfsk", "4fsk", "ook", "sync", "uart", "baud", "esb", "ble"].forEach((name) => {
 		expect(run.stdout).toMatch(new RegExp("ok " + name));
 	});
 }, 150000);

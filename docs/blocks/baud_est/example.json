@@ -1,0 +1,16 @@
+{
+  "description": "A GFSK link at 9.6 kbaud through a channel: the discriminator output feeds a baud estimator that recovers the 9600 baud symbol rate live, shown as a number.",
+  "prompt": "Estimate the baud rate of a GFSK signal.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 9600}},
+    {"id": "tx", "type": "mod", "params": {"scheme": "gfsk", "sps": 8}},
+    {"id": "ch", "type": "channel", "params": {"snr_db": 16}},
+    {"id": "disc", "type": "discriminator", "params": {"sps": 8, "h": 0.5}},
+    {"id": "baud", "type": "baud_est", "params": {"fps": 4}}
+  ],
+  "links": [["bits", "tx"], ["tx", "ch"], ["ch", "disc"], ["disc", "baud"]],
+  "panes": [
+    {"type": "value", "title": "Baud", "config": {"channel": "fg_baud", "label": "estimated baud"}},
+    {"type": "trace", "title": "Discriminator", "config": {"traces": ["fg_disc"]}}
+  ]
+}

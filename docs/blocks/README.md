@@ -62,6 +62,8 @@ Bit sources and everything that consumes bits or logic samples.
 - [`ber`](ber/README.md): bit error rate against a PRBS, self-synchronizing
 - [`framer`](framer/README.md): finds a sync word and cuts frames from bits
 - [`bitview`](bitview/README.md): shows the last bits of a stream as binary and hex
+- [`baud_est`](baud_est/README.md): estimate the symbol rate of an FSK/OOK stream from its zero crossings
+- [`packet_decode`](packet_decode/README.md): decode BLE advertising or nRF Enhanced ShockBurst packets out of a raw bit stream
 - [`uart_tx`](uart_tx/README.md): UART transmitter: text or hex to line levels
 - [`uart_rx`](uart_rx/README.md): UART receiver: line levels or bits to text
 - [`decode`](decode/README.md): sigrok / builtin protocol decoder on logic samples (UART, SPI, I2C...)

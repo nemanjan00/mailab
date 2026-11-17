@@ -1,0 +1,16 @@
+{
+  "description": "A synthesizer python block emits a repeating nRF Enhanced ShockBurst frame (address e7e7e7e7e7, 8-byte payload); packet_decode syncs on the address, reads the PCF and verifies the CRC-8. The decoded packets (payload, PID, CRC status) and the packet count are shown live.",
+  "prompt": "Decode Enhanced ShockBurst packets from a bit stream.",
+  "blocks": [
+    {"id": "bits", "type": "bits", "params": {"pattern": "prbs9", "bitrate": 9600}},
+    {"id": "esb", "type": "python", "params": {"code": "def work(x, rate):\n    addr = bytes.fromhex('e7e7e7e7e7')\n    payload = bytes(range(1, 9))\n    pcf = len(payload) | (1 << 6)\n    body = np.concatenate([modem.unpack_bits_lsb(addr),\n                           np.array([(pcf >> i) & 1 for i in range(9)], dtype=np.uint8),\n                           modem.unpack_bits_lsb(payload)])\n    crc = modem.esb_crc8(addr + bytes([pcf & 0xFF, (pcf >> 8) & 0xFF]) + payload)\n    frame = np.concatenate([body, modem.unpack_bits_lsb(bytes([crc]))])\n    n = len(x)\n    return np.tile(frame, n // len(frame) + 1)[:n].astype(float), rate"}},
+    {"id": "rx", "type": "packet_decode", "params": {"protocol": "esb", "address": "e7e7e7e7e7"}},
+    {"id": "view", "type": "bitview", "params": {"bits": 128, "fps": 2}}
+  ],
+  "links": [["bits", "esb"], ["esb", "rx"], ["esb", "view"]],
+  "panes": [
+    {"type": "json", "title": "Packets", "config": {"channel": "fg_rx"}},
+    {"type": "value", "title": "Count", "config": {"channel": "fg_rx_count", "label": "packets decoded"}},
+    {"type": "value", "title": "Bits", "config": {"channel": "fg_view", "label": "bit stream"}}
+  ]
+}
