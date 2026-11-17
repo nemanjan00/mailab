@@ -116,6 +116,36 @@ export default {
 			}
 		};
 
+		// local zoom around the cursor, on either axis
+		const zoomAt = (ax, zoomIn, event) => {
+			const u = plot;
+			const sc = u.scales[ax];
+			if (sc.min === undefined || sc.max === undefined || sc.min === null || sc.max === null) {
+				return;
+			}
+			const rect = u.over.getBoundingClientRect();
+			const frac = ax === "x"
+				? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+				: Math.min(1, Math.max(0, 1 - (event.clientY - rect.top) / rect.height));
+			const pivot = sc.min + frac * (sc.max - sc.min);
+			const f = zoomIn ? 1 / 1.25 : 1.25;
+			const win = { min: pivot - (pivot - sc.min) * f, max: pivot + (sc.max - pivot) * f };
+			zoomState[ax] = win;
+			u.setScale(ax, win);
+		};
+		// after a modifier scroll the local zoom is an ESTIMATE of the new
+		// acquisition; it expires once the scope catches up (or after 2.5 s)
+		let scopeFitTimer = null;
+		const scopeEstimate = (ax, zoomIn, event) => {
+			zoomAt(ax, zoomIn, event);
+			clearTimeout(scopeFitTimer);
+			scopeFitTimer = setTimeout(() => {
+				zoomState.x = null;
+				zoomState.y = null;
+				render();
+			}, 2500);
+		};
+
 		// ctrl wheel -> scope timebase (t/div), shift wheel -> channel V/div;
 		// falls back to plain zoom for drivers without a settings model
 		const scopeWheel = (event, ax, zoomIn) => {
@@ -130,8 +160,7 @@ export default {
 						return;
 					}
 					const next = ladderStep(cur, zoomIn ? -1 : 1);
-					zoomState.x = null;
-					zoomState.y = null;
+					scopeEstimate(ax, zoomIn, event);
 					ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { timebase: { scale: next } } }).catch(() => null);
 					return;
 				}
@@ -144,8 +173,7 @@ export default {
 						return;
 					}
 					const next = ladderStep(cur, zoomIn ? -1 : 1);
-					zoomState.x = null;
-					zoomState.y = null;
+					scopeEstimate(ax, zoomIn, event);
 					ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { ch: { [n]: { scale: next } } } }).catch(() => null);
 				}
 			});
@@ -210,6 +238,7 @@ export default {
 
 		const teardown = () => {
 			trigDrag = null;
+			clearTimeout(scopeFitTimer);
 			if (plot) {
 				plot.destroy();
 				plot = null;
@@ -316,20 +345,7 @@ export default {
 					scopeWheel(event, ax, zoomIn);
 					return;
 				}
-				const u = plot;
-				const sc = u.scales[ax];
-				if (sc.min === undefined || sc.max === undefined || sc.min === null || sc.max === null) {
-					return;
-				}
-				const rect = u.over.getBoundingClientRect();
-				const frac = ax === "x"
-					? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
-					: Math.min(1, Math.max(0, 1 - (event.clientY - rect.top) / rect.height));
-				const pivot = sc.min + frac * (sc.max - sc.min);
-				const f = zoomIn ? 1 / 1.25 : 1.25;
-				const win = { min: pivot - (pivot - sc.min) * f, max: pivot + (sc.max - pivot) * f };
-				zoomState[ax] = win;
-				u.setScale(ax, win);
+				zoomAt(ax, zoomIn, event);
 			}, { passive: false });
 			// trigger marker dragging: grab near a line, drag, release to commit
 			plot.over.addEventListener("mousedown", (event) => {
