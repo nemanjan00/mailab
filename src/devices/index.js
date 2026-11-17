@@ -21,6 +21,7 @@ const DRIVERS = [
 	require("./rfcat"),
 	require("./esb"),
 	require("./kc901"),
+	require("./openocd"),
 	require("./proxmark3"),
 	require("./picoglitcher"),
 	require("./flowgraph"),
