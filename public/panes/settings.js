@@ -295,12 +295,11 @@ export default {
 		const offs = [
 			ctx.on("state", paintState),
 			ctx.on("value", (m) => {
-				if (m.name === pane.config.device + "_settings") {
-					api("GET", "/values/" + encodeURIComponent(m.name)).then((entry) => {
-						modelCache[m.name] = entry.value;
-						lastModelT = entry.t || Date.now();
-						paint();
-					}, () => null);
+				const entry = m.value || {};
+				if (entry.name === pane.config.device + "_settings") {
+					modelCache[entry.name] = entry.value;
+					lastModelT = entry.t || Date.now();
+					paint();
 				}
 			})
 		];

@@ -269,12 +269,14 @@ export default {
 			}
 			c.restore();
 		};
-		// coordinate helpers: uPlot's valToPos(..., true) is canvas-relative;
-		// the overlay element's origin sits bbox.left/top inside the canvas
-		const overX = (v) => plot.valToPos(v, "x", true) - plot.bbox.left;
-		const overY = (v) => plot.valToPos(v, "y", true) - plot.bbox.top;
-		const fromOverX = (px) => plot.posToVal(px + plot.bbox.left, "x");
-		const fromOverY = (px) => plot.posToVal(px + plot.bbox.top, "y");
+		// coordinate helpers: posToVal expects bbox-relative pixels and
+		// valToPos(..., false) returns exactly those — they are inverses.
+		// (valToPos(..., true) is CANVAS-relative: adds the axis gutters, only
+		// for drawing against u.bbox)
+		const overX = (v) => plot.valToPos(v, "x", false);
+		const overY = (v) => plot.valToPos(v, "y", false);
+		const fromOverX = (px) => plot.posToVal(px, "x");
+		const fromOverY = (px) => plot.posToVal(px, "y");
 
 		const teardown = () => {
 			trigDrag = null;
@@ -536,16 +538,15 @@ export default {
 			}),
 			ctx.on("value", (msg) => {
 				// the scope's settings: refresh the cache, follow its V/div, repaint markers
-				if (!pane.config.device || msg.name !== pane.config.device + "_settings") {
+				const entry = msg.value || {};
+				if (!pane.config.device || entry.name !== pane.config.device + "_settings") {
 					return;
 				}
-				ctx.api("GET", "/values/" + encodeURIComponent(msg.name)).then((entry) => {
-					scopeCache = { t: Date.now(), model: entry.value };
-					applyScopeRanges(entry.value);
-					if (plot) {
-						plot.redraw();
-					}
-				}, () => null);
+				scopeCache = { t: Date.now(), model: entry.value };
+				applyScopeRanges(entry.value);
+				if (plot) {
+					plot.redraw();
+				}
 			}),
 			ctx.on("theme", () => {
 				signature = "";
