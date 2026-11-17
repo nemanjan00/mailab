@@ -95,7 +95,13 @@ const create = (options, io) => {
 		return new Promise((resolve, reject) => {
 			execFile(cli, args, { maxBuffer: MAX_OUTPUT_BYTES, encoding: encoding || "utf8" }, (err, stdout, stderr) => {
 				if (err) {
-					reject(new Error((String(stderr || "") || err.message).trim()));
+					let message = (String(stderr || "") || err.message).trim();
+					// some distro sigrok-cli builds (0.7.x) crash in GVariant on ANY
+					// -P option value ("uart:rx=D0:baudrate=115200"); say so plainly
+					if (message.indexOf("g_variant_get_type") !== -1) {
+						message += " — this sigrok-cli build rejects decoder options; try a plain decoder name (defaults only) or a distro-fixed build";
+					}
+					reject(new Error(message));
 					return;
 				}
 				resolve(stdout);
