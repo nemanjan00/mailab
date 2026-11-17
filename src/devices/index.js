@@ -28,6 +28,8 @@ const DRIVERS = [
 	require("./glasgow"),
 	require("./catsniffer"),
 	require("./thunderscope"),
+	require("./chipwhisperer"),
+	require("./infray"),
 	require("./jtagulator"),
 	require("./proxmark3"),
 	require("./picoglitcher"),

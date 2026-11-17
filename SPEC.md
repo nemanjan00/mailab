@@ -160,7 +160,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | USB hub power control (uhubctl) | ✅ | on/off/cycle toggles on ppps hubs; `usb_power` MCP tool needs a person's approval (default policy); REST only for the human role; inputs validated. uhubctl missing → the pane says so. Not run against a real ppps hub yet |
 | udev-like notifications (in-app rules) | ✅ | not system udev: `udev_rule_add` / `udev_rules` / `udev_rule_remove` (+ REST `/api/udev`, form in the usb pane). USB inventory polled every 2 s; add / remove / change (drivers or /dev nodes bound) events matching a rule (globs on vid, pid, product, manufacturer, serial, driver, node, path) raise `{type: "udev"}` lab notifications, pushed to MCP sessions (the creating session is subscribed automatically; `subscribe` types `udev`, filter `rule`) and shown in the UI. Rules are part of lab state/profiles |
 | GPU / system monitor (nvtop-like) | ✅ | `sysmon` driver: CPU, memory, swap, hwmon temperatures, NVIDIA (nvidia-smi: load, VRAM, temp, power) and AMD GPUs (sysfs; fixture-tested only). Verified on this PC (RTX 5080) |
-| ChipWhisperer Husky | ⬜ | `chipwhisperer` python API: power/EM trace capture → traces, clock/voltage glitch (also `findus.HuskyGlitcher`); scatter/map views like the PicoGlitcher. Reference (not direct integration): github.com/nemanjan00/cw-scope |
+| ChipWhisperer Husky | 🟡 | python bridge (python/chipwhisperer_bridge.py + src/devices/chipwhisperer): gain/clock/decimate/IO pins, capture -> trace <id>_wave + float32 blob; simulated-scope tests (MAILAB_CHIPWHISPERER_FAKE=1); chipwhisperer==6.0.1 installs on first use; glitching + [HW] untested on a Husky |
 
 ## 5. Project
 
