@@ -38,6 +38,8 @@ const create = (options, io) => {
 	const dialect = DIALECTS[settings.dialect];
 	let ws = null;
 	let opening = null;
+	let reconnecting = null;
+	let stopped = false;
 	const stats = { sent: 0 };
 
 	const controlUrl = () => "ws://" + settings.host + ":" + settings.controlPort;
@@ -72,6 +74,14 @@ const create = (options, io) => {
 			sock.on("close", () => {
 				ws = null;
 				io.log("control ws closed (the instrument allows ONE control session — close its control.html if clicks die)", "warn");
+				// the seat goes to the most recent connection: keep re-taking it
+				// so mailab's taps win over a stale instrument web UI tab
+				if (!reconnecting && !stopped) {
+					reconnecting = setTimeout(() => {
+						reconnecting = null;
+						open().catch(() => null);
+					}, 1500);
+				}
 			});
 		});
 		return opening;
@@ -164,6 +174,8 @@ const create = (options, io) => {
 	return {
 		start: () => Promise.resolve(),
 		stop: () => {
+			stopped = true;
+			clearTimeout(reconnecting);
 			if (ws) {
 				try {
 					ws.close();
