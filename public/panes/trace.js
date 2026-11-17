@@ -100,6 +100,22 @@ export default {
 			}
 			return MANTISSAS[i] * p;
 		};
+		// the chart follows the scope's own windows: y = channel offset ± 4 divs
+		// (manual zoom wins until a modifier scroll clears it)
+		const applyScopeRanges = (model) => {
+			if (!plot || !model || !pane.config.device || zoomState.y) {
+				return;
+			}
+			const label = plot.series.length > 1 ? String(plot.series[1].label || "") : "";
+			const m = /CHAN(\d)/i.exec(label);
+			const ch = model.ch && model.ch[m ? m[1] : "1"];
+			if (ch && ch.scale) {
+				const off = Number(ch.offset) || 0;
+				const half = 4 * Number(ch.scale);
+				plot.setScale("y", { min: off - half, max: off + half });
+			}
+		};
+
 		// ctrl wheel -> scope timebase (t/div), shift wheel -> channel V/div;
 		// falls back to plain zoom for drivers without a settings model
 		const scopeWheel = (event, ax, zoomIn) => {
@@ -137,7 +153,63 @@ export default {
 
 		const loaded = () => names().map((n) => ctx.traces[n]).filter(Boolean);
 
+		// trigger markers (scope model): a draggable horizontal trigger-level
+		// line and a draggable vertical trigger-position line; committed to the
+		// scope through `set` on release
+		let trigDrag = null; // {kind: "level"|"offset", value}
+		const triggerGeom = () => {
+			const model = scopeCache.model;
+			if (!model || !pane.config.device || !model.trigger) {
+				return null;
+			}
+			return {
+				level: model.trigger.level,
+				offset: model.timebase ? model.timebase.offset : undefined
+			};
+		};
+		const drawTriggers = (u) => {
+			const g = triggerGeom();
+			if (!g) {
+				return;
+			}
+			const level = trigDrag && trigDrag.kind === "level" ? trigDrag.value : g.level;
+			const offset = trigDrag && trigDrag.kind === "offset" ? trigDrag.value : g.offset;
+			const c = u.ctx;
+			c.save();
+			c.font = "10px sans-serif";
+			if (typeof level === "number") {
+				const y = u.valToPos(level, "y", true);
+				if (y >= u.bbox.top && y <= u.bbox.top + u.bbox.height) {
+					c.strokeStyle = "#e0534f";
+					c.setLineDash([6, 4]);
+					c.beginPath();
+					c.moveTo(u.bbox.left, y);
+					c.lineTo(u.bbox.left + u.bbox.width, y);
+					c.stroke();
+					c.setLineDash([]);
+					c.fillStyle = "#e0534f";
+					c.fillText("T", u.bbox.left + 3, y - 3);
+				}
+			}
+			if (typeof offset === "number") {
+				const x = u.valToPos(offset, "x", true);
+				if (x >= u.bbox.left && x <= u.bbox.left + u.bbox.width) {
+					c.strokeStyle = "#e0a34f";
+					c.setLineDash([6, 4]);
+					c.beginPath();
+					c.moveTo(x, u.bbox.top);
+					c.lineTo(x, u.bbox.top + u.bbox.height);
+					c.stroke();
+					c.setLineDash([]);
+					c.fillStyle = "#e0a34f";
+					c.fillText("trig", x + 3, u.bbox.top + 10);
+				}
+			}
+			c.restore();
+		};
+
 		const teardown = () => {
+			trigDrag = null;
 			if (plot) {
 				plot.destroy();
 				plot = null;
@@ -217,9 +289,11 @@ export default {
 				hooks: {
 					draw: [(u) => {
 						drawMarkers(u, readings);
+						drawTriggers(u);
 					}]
 				}
 			}, size()), tables.length === 1 ? tables[0] : uPlot.join(tables), plotEl);
+			window.__tracePlot = plot; // debug/verification handle
 			plotEl.title = "scroll h: time zoom, v: V zoom" + (pane.config.device ? "; ctrl: t/div, shift: V/div (scope)" : "");
 			// shift-click: marker at the cursor's x
 			plot.over.addEventListener("click", (event) => {
@@ -255,8 +329,74 @@ export default {
 				const f = zoomIn ? 1 / 1.25 : 1.25;
 				const win = { min: pivot - (pivot - sc.min) * f, max: pivot + (sc.max - pivot) * f };
 				zoomState[ax] = win;
-				u.setScale(Object.assign({}, ax === "x" ? { x: win } : { y: win }));
+				u.setScale(ax, win);
 			}, { passive: false });
+			// trigger marker dragging: grab near a line, drag, release to commit
+			plot.over.addEventListener("mousedown", (event) => {
+				const g = triggerGeom();
+				if (!g || event.button !== 0) {
+					return;
+				}
+				const rect = plot.over.getBoundingClientRect();
+				const mx = event.clientX - rect.left;
+				const my = event.clientY - rect.top;
+				if (typeof g.level === "number" && Math.abs(plot.valToPos(g.level, "y", true) - my) < 7) {
+					trigDrag = { kind: "level", value: g.level };
+				} else if (typeof g.offset === "number" && Math.abs(plot.valToPos(g.offset, "x", true) - mx) < 7) {
+					trigDrag = { kind: "offset", value: g.offset };
+				}
+				if (trigDrag) {
+					plot.cursor.drag.x = false;
+					event.preventDefault();
+					event.stopPropagation();
+				}
+			});
+			plot.over.addEventListener("mousemove", (event) => {
+				const rect = plot.over.getBoundingClientRect();
+				const mx = event.clientX - rect.left;
+				const my = event.clientY - rect.top;
+				if (trigDrag) {
+					trigDrag.value = trigDrag.kind === "level"
+						? plot.posToVal(my, "y")
+						: plot.posToVal(mx, "x");
+					plot.redraw();
+					return;
+				}
+				// hover affordance: flag the lines as draggable near the cursor
+				const g = triggerGeom();
+				if (!g) {
+					return;
+				}
+				let cursor = "";
+				if (typeof g.level === "number" && Math.abs(plot.valToPos(g.level, "y", true) - my) < 7) {
+					cursor = "ns-resize";
+				} else if (typeof g.offset === "number" && Math.abs(plot.valToPos(g.offset, "x", true) - mx) < 7) {
+					cursor = "ew-resize";
+				}
+				if (plot.over.style.cursor !== cursor) {
+					plot.over.style.cursor = cursor;
+				}
+			});
+			const trigRelease = () => {
+				if (!trigDrag || !plot) {
+					return;
+				}
+				const drag = trigDrag;
+				trigDrag = null;
+				plot.cursor.drag.x = true;
+				plot.redraw();
+				const args = drag.kind === "level" ? { trigger: { level: drag.value } } : { timebase: { offset: drag.value } };
+				ctx.api("POST", "/devices/" + pane.config.device + "/command", { command: "set", args: args }).catch(() => null);
+			};
+			plot.over.addEventListener("mouseup", trigRelease);
+			plot.over.addEventListener("mouseleave", trigRelease);
+			// follow the scope's V/div window, and fetch the model for markers
+			scopeModel().then((model) => {
+				applyScopeRanges(model);
+				if (plot) {
+					plot.redraw();
+				}
+			});
 		};
 
 		const render = frameThrottle(() => {
@@ -304,15 +444,14 @@ export default {
 			});
 			refreshReadings(trs);
 			plot.setData(tables.length === 1 ? tables[0] : uPlot.join(tables), !(zoomState.x || zoomState.y));
-			if (zoomState.x || zoomState.y) {
-				const s = {};
-				if (zoomState.x) {
-					s.x = zoomState.x;
-				}
-				if (zoomState.y) {
-					s.y = zoomState.y;
-				}
-				plot.setScale(s);
+			if (zoomState.x) {
+				plot.setScale("x", zoomState.x);
+			}
+			if (zoomState.y) {
+				plot.setScale("y", zoomState.y);
+			} else {
+				// no manual zoom: keep following the scope's V/div window
+				applyScopeRanges(scopeCache.model);
 			}
 		});
 
@@ -327,6 +466,19 @@ export default {
 				if (names().indexOf(tr.name) !== -1) {
 					render();
 				}
+			}),
+			ctx.on("value", (msg) => {
+				// the scope's settings: refresh the cache, follow its V/div, repaint markers
+				if (!pane.config.device || msg.name !== pane.config.device + "_settings") {
+					return;
+				}
+				ctx.api("GET", "/values/" + encodeURIComponent(msg.name)).then((entry) => {
+					scopeCache = { t: Date.now(), model: entry.value };
+					applyScopeRanges(entry.value);
+					if (plot) {
+						plot.redraw();
+					}
+				}, () => null);
 			}),
 			ctx.on("theme", () => {
 				signature = "";
