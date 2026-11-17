@@ -359,6 +359,7 @@ Next:
 166. SCPI over the instrument's WebSocket command channel ✅ — src/services/scpiws (hex text frames = binary-safe IEEE blocks; greeting consumption; serialized; self-heals by reconnecting before the next exchange after a drop — the channel is single-seat and idle-times out); scpi driver `transport: "ws"` option (tcp default | usbtmc | ws). KEY FINDING: the DM858 locks its front panel ("remote mode") while a raw TCP SCPI session (5025) is open, but the WS channel (9004) drives the identical SCPI grammar WITHOUT locking — verified live
 167. dm858 over ws:9004 ✅ — settings model, readings monitor, and screenshots all ride the WebSocket channel on the bench + lab instances; front panel never locks; 4 fake-server tests + live verification
 168. mp305 on the lab host ✅ — verified live (telemetry, DC control surface); the full pymp305 GUI feature set (charge config/control, PDO select, current-over, energy reset, remote hold) is exposed as driver commands; 🟡 the rich control pane matching the desktop GUI's layout is in progress
+169. testing documentation ✅ — TESTING.md: how the suite works (109 suites / 721 tests), what each test style proves and does not, per-area inventory, test seams (fake transports, PTY pairs, MAILAB_*_FAKE bridges, _open/_onData, exe stubs, CDP), and a repeatable real-hardware verification checklist (what 'live-verified' means in HW.md/SPEC.md)
 
 
 ## Lab host

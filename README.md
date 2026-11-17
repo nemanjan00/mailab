@@ -26,7 +26,7 @@ plus a live web UI where you watch, steer and collaborate with it.
 - **Everything else:** a system monitor (CPU, memory, temperatures, GPU), a
   replay device for recorded sessions, and any program that speaks JSON lines.
 
-[HW.md](HW.md) tracks what has been verified on hardware.
+[HW.md](HW.md) tracks what has been verified on hardware; [TESTING.md](TESTING.md) documents how the 109-suite suite works (fakes/PTYs/bridge stubs), its seams, and the checklist for verifying a driver against a real unit.
 
 **DSP flowgraph**: GNU Radio-style blocks (numpy + liquid-dsp) that you or
 the AI wire up live:

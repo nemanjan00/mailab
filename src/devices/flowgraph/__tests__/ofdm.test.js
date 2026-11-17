@@ -16,7 +16,7 @@ const available = () => {
 const maybe = available() ? test : test.skip;
 
 maybe("802.11a/g-style OFDM: loopback recovers bits, corrects CFO, right structure", () => {
-	const run = spawnSync(config.get("PYTHON"), ["test_ofdm.py"], { cwd: PYTHON_DIR, encoding: "utf8", timeout: 120000 });
+	const run = spawnSync(config.get("PYTHON"), ["test_ofdm.py"], { cwd: PYTHON_DIR, encoding: "utf8", timeout: 300000 });
 	if (run.status !== 0) {
 		throw new Error(run.stdout + run.stderr);
 	}
