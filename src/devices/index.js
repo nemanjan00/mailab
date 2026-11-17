@@ -33,7 +33,8 @@ const DRIVERS = [
 	require("./cynthion"),
 	require("./vnc"),
 	require("./nanokvm"),
-	require("./morfeus")
+	require("./morfeus"),
+	require("./shell")
 ];
 
 const devices = {

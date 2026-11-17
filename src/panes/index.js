@@ -85,8 +85,8 @@ const TYPES = {
 		config: { device: "flowgraph device id" }
 	},
 	terminal: {
-		description: "web terminal (xterm.js, Dracula colors) for a uart device: ANSI colors and TUIs, raw keystrokes or line mode, live baud / format / line ending / hex view",
-		config: { device: "uart device id", mode: "raw (default) | line" }
+		description: "web terminal (xterm.js, Dracula colors) for a uart device or a shell device's PTY sessions: ANSI colors and TUIs, raw keystrokes or line mode, live baud / format / line ending / hex view (uart); session picker (shell)",
+		config: { device: "uart or shell device id", mode: "raw (default) | line", session: "shell session name (shell devices)" }
 	},
 	board: {
 		description: "board tracing: PDF pages / photos as background layers, trace parts, pins and wires over them; nets come from the drawn geometry; "

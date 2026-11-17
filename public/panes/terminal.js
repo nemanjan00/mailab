@@ -48,11 +48,29 @@ const select = (values, current, onchange, title) => el("select", { title: title
 	...values.map((v) => el("option", { value: v, selected: () => String(current()) === String(v) }, String(v))));
 
 const terminal = (ctx, p, device) => {
-	const view = state({ status: null, error: "", mode: (p.pane.config.mode === "line" ? "line" : "raw") });
+	const view = state({
+		status: null,
+		error: "",
+		mode: (p.pane.config.mode === "line" ? "line" : "raw"),
+		session: p.pane.config.session || ""
+	});
 	let term = null;
 	let line = "";
 	const history = [];
 	let historyAt = 0;
+	const setConfig = (key, value) => ctx.api("PATCH", "/panes/" + p.pane.id, { config: { [key]: value } });
+	// shell devices run several PTY sessions on one device; a uart is a single
+	// stream (no session)
+	const isShell = () => view.status && Array.isArray(view.status.sessions);
+	const sessionNames = () => (isShell() ? view.status.sessions.filter((s) => s.running).map((s) => s.name) : []);
+	const pickSession = (name) => {
+		view.session = name;
+		setConfig("session", name);
+		if (term) {
+			term.reset();
+			loadScroll();
+		}
+	};
 
 	const command = (name, args) => ctx.api("POST", "/devices/" + device + "/command", { command: name, args: args || {} });
 	const fail = (err) => {
@@ -61,6 +79,18 @@ const terminal = (ctx, p, device) => {
 	const refresh = () => command("status").then((s) => {
 		view.status = s;
 		view.error = "";
+		// shell device: pin the pane to the first session unless one is picked
+		if (isShell() && !view.session) {
+			const names = sessionNames();
+			if (names.length) {
+				view.session = names[0];
+				setConfig("session", view.session);
+				if (term) {
+					term.reset();
+					loadScroll();
+				}
+			}
+		}
 	}, fail);
 	const set = (changes) => command("set", changes).then((s) => {
 		view.status = s;
@@ -74,7 +104,12 @@ const terminal = (ctx, p, device) => {
 		term.write(view.status && view.status.display === "hex" ? hexLine(bytes) : bytes);
 	};
 
-	const sendRaw = (text) => ctx.api("POST", "/devices/" + device + "/term", { data: toBase64(text) }).catch(fail);
+	const sendRaw = (text) => ctx.api("POST", "/devices/" + device + "/term", { data: toBase64(text), session: view.session || undefined }).catch(fail);
+	const loadScroll = () => ctx.api("GET", "/devices/" + device + "/term" + (view.session ? "?session=" + encodeURIComponent(view.session) : "")).then((r) => {
+		if (r.data && term) {
+			term.write(fromBase64(r.data));
+		}
+	}, fail);
 
 	// line mode: local editing, the whole line goes out on Enter
 	const lineInput = (data) => {
@@ -106,7 +141,7 @@ const terminal = (ctx, p, device) => {
 
 	refresh();
 	onDispose(ctx.on("term", (msg) => {
-		if (msg.device === device) {
+		if (msg.device === device && (view.session ? msg.session === view.session : !msg.session)) {
 			show(fromBase64(msg.data));
 		}
 	}));
@@ -136,11 +171,7 @@ const terminal = (ctx, p, device) => {
 				sendRaw(data);
 			}
 		});
-		ctx.api("GET", "/devices/" + device + "/term").then((r) => {
-			if (r.data) {
-				term.write(fromBase64(r.data));
-			}
-		}, fail);
+		loadScroll();
 		return {
 			resize: () => fit.fit(),
 			destroy: () => {
@@ -156,10 +187,16 @@ const terminal = (ctx, p, device) => {
 		toolbar(
 			el("span", { class: () => "state " + (view.status && view.status.connected ? "running" : "error"), title: () => (view.status && view.status.path) || "" },
 				() => (view.status ? (view.status.connected ? String(view.status.path).split("/").pop() : "disconnected") : "…")),
-			select(BAUDS, st("baud"), (v) => set({ baud: Number(v) }), "baud"),
-			select(FORMATS, st("format"), (v) => set({ format: v }), "data bits, parity, stop bits"),
-			select(EOLS, st("eol"), (v) => set({ eol: v }), "line ending sent in line mode"),
-			select(["text", "hex"], st("display"), (v) => set({ display: v }), "how received bytes are shown and logged"),
+			when(() => isShell(),
+				() => el("select", { title: "PTY session (session_start on the device adds more)", onchange: (e) => pickSession(e.target.value) },
+					() => sessionNames().map((name) => el("option", { value: name, selected: name === view.session }, name)))),
+			when(() => !isShell() && view.status,
+				() => [
+					select(BAUDS, st("baud"), (v) => set({ baud: Number(v) }), "baud"),
+					select(FORMATS, st("format"), (v) => set({ format: v }), "data bits, parity, stop bits"),
+					select(EOLS, st("eol"), (v) => set({ eol: v }), "line ending sent in line mode"),
+					select(["text", "hex"], st("display"), (v) => set({ display: v }), "how received bytes are shown and logged")
+				]),
 			select(["raw", "line"], () => view.mode, (v) => {
 				view.mode = v;
 				line = "";
@@ -168,7 +205,7 @@ const terminal = (ctx, p, device) => {
 				}
 			}, "raw: keystrokes go out as typed; line: edit locally, send on Enter"),
 			iconButton("⌫", "clear screen", () => term && term.clear()),
-			el("span", { class: "muted mono" }, () => (view.status ? "rx " + view.status.rxBytes + " / tx " + view.status.txBytes + " B" : ""))),
+			when(() => !isShell() && view.status, () => el("span", { class: "muted mono" }, () => "rx " + (view.status ? view.status.rxBytes : 0) + " / tx " + (view.status ? view.status.txBytes : 0) + " B"))),
 		when(() => view.error, () => el("div", { class: "error pad" }, () => view.error)),
 		screen);
 };
@@ -176,5 +213,5 @@ const terminal = (ctx, p, device) => {
 export default pane((ctx, p) => when(
 	() => p.pane.config.device,
 	(device) => terminal(ctx, p, device),
-	() => empty("set config.device to a uart device id")
+	() => empty("set config.device to a uart or shell device id")
 ));

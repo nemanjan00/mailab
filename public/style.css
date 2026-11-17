@@ -110,6 +110,11 @@ textarea { font-family: var(--mono); font-size: 12px; min-height: 160px; resize:
 code, .mono { font-family: var(--mono); font-size: 12px; }
 
 /* top bar */
+.bypass-banner[hidden],
+.tx-banner[hidden] {
+	display: none;
+}
+
 .bypass-banner {
 	position: sticky;
 	top: 0;

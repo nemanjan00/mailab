@@ -386,14 +386,15 @@ const create = (options) => {
 		 * Raw terminal bytes of a console device (ANSI colors and all), for web
 		 * terminals: kept as a short scrollback and pushed as they arrive.
 		 */
-		pushTerm: (device, data) => {
-			const prev = terms[device] || Buffer.alloc(0);
+		pushTerm: (device, data, session) => {
+			const key = session ? device + "\n" + session : device;
+			const prev = terms[key] || Buffer.alloc(0);
 			const next = Buffer.concat([prev, data]);
-			terms[device] = next.length > TERM_SCROLLBACK ? next.subarray(next.length - TERM_SCROLLBACK) : next;
-			events.emit("term", { device: device, data: data.toString("base64") });
+			terms[key] = next.length > TERM_SCROLLBACK ? next.subarray(next.length - TERM_SCROLLBACK) : next;
+			events.emit("term", { device: device, session: session || undefined, data: data.toString("base64") });
 		},
 
-		getTerm: (device) => (terms[device] || Buffer.alloc(0)).toString("base64"),
+		getTerm: (device, session) => (terms[session ? device + "\n" + session : device] || Buffer.alloc(0)).toString("base64"),
 
 		log: (device, text, level) => {
 			const entry = { t: Date.now(), device: device, level: level || "info", text: String(text) };
@@ -600,6 +601,10 @@ const create = (options) => {
 				event: (name, data) => {
 					lab.notify(Object.assign({ type: "trigger", device: id, name: field(name) }, data || {}));
 				},
+				// free-form device notification (activity stream, ws push)
+				notify: (event) => {
+					lab.notify(Object.assign({ device: id }, event || {}));
+				},
 				audio: (name, rate, data, channels) => {
 					lab.pushAudio(field(name), rate, data, channels);
 				},
@@ -611,8 +616,8 @@ const create = (options) => {
 						events.removeListener("audio", handler);
 					};
 				},
-				term: (data) => {
-					lab.pushTerm(id, data);
+				term: (data, session) => {
+					lab.pushTerm(id, data, session);
 				},
 				// drivers persisting their own state (e.g. a flowgraph) into options
 				setOptions: (changes) => {
