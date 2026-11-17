@@ -1,7 +1,8 @@
 # Hardware TODO
 
 Status of every instrument mailab knows about. Verified on real lab hardware
-so far: only the **Rigol MHO900** (bench, 10.69.1.89). Everything else is
+so far: the **Rigol MHO900** (bench, 10.69.1.89), and the **Proxmark5** only
+lightly (driving the client, no card operations). Everything else is
 tested with fakes, emulators, dummy programmers or this PC's own system
 (sysmon, USB tree, headless-Chrome media, QEMU VNC), which says nothing about
 the instrument. Drivers marked *protocol from docs* were written from
@@ -25,7 +26,7 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | LiteVNA 64 | `litevna` | NanoVNA-V2 binary protocol | V2 protocol docs | 🧪 *protocol from docs* |
 | HackRF One | `hackrf` | `hackrf_sweep` | – | 🧪 |
 | bladeRF / HackRF / RTL-SDR | `soapy` | SoapySDR + liquid-dsp | `python/soapy_bridge.py` | 🧪 (DSP ✅ on synthetic IQ) |
-| Proxmark3 / Proxmark5 | `proxmark3` | Iceman client (`~/pm5-og` build) | `node-proxmark3` ≥ 0.0.13 | 🧪 (earlier ✅ for PM5 `hw version` / `hw status` not confirmed on hardware) |
+| Proxmark3 / Proxmark5 | `proxmark3` | Iceman client (`~/pm5-og` build) | `node-proxmark3` ≥ 0.0.13 | 🧪 PM5 lightly: the driver drives the client (`hw version`, `hw status` over MCP); no card / RF operations yet |
 | USB-UART adapters (Tigard port A, CP210x, CH340, FTDI, CDC-ACM) | `uart` | tty by stable identity | – | 🧪 (socat pty ✅) |
 | USB hubs (port power) | USB tree + `usb_power` | uhubctl | proxyslave inventory logic | 🧪 tree ✅ on this PC; no ppps hub / uhubctl here |
 | Web browser mic + camera | `browser` | getUserMedia over the UI WebSocket | – | ✅ headless Chrome fake media; 📝 real phone over https |
