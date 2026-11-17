@@ -268,7 +268,9 @@ const create = (options) => {
 
 		getTrace: (name) => {
 			if (!traces[name]) {
-				throw new Error("unknown trace: " + name);
+				const err = new Error("unknown trace: " + name);
+				err.status = 404;
+				throw err;
 			}
 			return traces[name];
 		},

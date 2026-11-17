@@ -530,8 +530,13 @@ export default {
 			}
 		});
 
+		// fetch a missing trace's data once; live updates arrive over the
+		// "trace" ws event (they carry the full trace), so no polling — a
+		// missing trace must not 400-spam the console until data exists
+		const tried = {};
 		const fetchMissing = () => {
-			names().filter((n) => !ctx.traces[n]).forEach((n) => {
+			names().filter((n) => !ctx.traces[n] && !tried[n]).forEach((n) => {
+				tried[n] = true;
 				ctx.fetchTrace(n).catch(() => null);
 			});
 		};
@@ -539,6 +544,7 @@ export default {
 		const offs = [
 			ctx.on("trace", (tr) => {
 				if (names().indexOf(tr.name) !== -1) {
+					delete tried[tr.name];
 					render();
 				}
 			}),
