@@ -2,6 +2,7 @@
 // queries feeding channels. Presets (dm858, mho900) add their own commands.
 
 const scpi = require("../../services/scpi");
+const scpiws = require("../../services/scpiws");
 
 const DEFAULT_POLL_MS = 500;
 
@@ -84,7 +85,10 @@ const create = (options, io, preset) => {
 	return {
 		start: () => {
 			// options._open: test seam replacing scpi.open (returns client promise)
-			return (options._open || scpi.open)(options)
+			const open = options.transport === "ws"
+				? () => scpiws.create({ host: options.host, port: options.port, url: options.url })
+				: () => (options._open || scpi.open)(options);
+			return open()
 				.then((opened) => {
 					client = opened;
 					extra = (p.commands && p.commands(client, io, options)) || {};
@@ -125,7 +129,7 @@ const create = (options, io, preset) => {
 };
 
 const OPTIONS = {
-	transport: "tcp (default) | usbtmc",
+	transport: "tcp (default) | usbtmc | ws (SCPI over the instrument's WebSocket command channel, RIGOL port 9004: does not lock the front panel)",
 	host: "instrument IP (tcp)",
 	port: "TCP port (default 5555)",
 	path: "/dev/usbtmcN (usbtmc)",
