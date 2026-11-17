@@ -355,3 +355,15 @@ Next:
 161. reviewer: 2.4 GHz isn't in any REGIONS band, so a bladeRF Wi-Fi TX is refused by default — confirmed INTENDED. 2.4 GHz ISM is unlicensed but a raw SDR there interferes with certified Wi-Fi/BLE, so it stays out of the default allow-list; reach it only via operator-set MAILAB_RF_TX_EXTRA (2400M-2483.5M) or chamber bypass, rationale documented
 163. html5 tab navigation: dashboard tabs behave like browser tabs — Ctrl+Tab / Ctrl+Shift+Tab cycle, Ctrl+1..9 jump, tab strip with keyboard focus, middle-click closes
 164. CachyOS install with all deps, fullscreen web page as the DE (kiosk), whole PC an MCP host; ISO builder in os/ (subdir, parallel agent) — reference: lab host 10.69.1.91 + ~/lab/shack-ansible
+
+
+## Lab host
+
+mailab runs on the lab host (nemanjan00@10.69.1.91) in a detached tmux
+session (`mailab`), cloned at ~/mailab, listening on 0.0.0.0:3000 with
+MAILAB_TOKENS (viewer ro + ai rw) — pi reaches it as an MCP server via a
+Bearer header. Local devices enumerated and live: DM858 multimeter
+(10.69.2.52:5025, id `dmm`, deep integration verified live) and the
+nRF52840 ESB bridge (Adafruit Feather at /dev/ttyACM0, id `esb`, firmware
+config query verified). The MHO98 scope (10.69.1.89:5555) is driven from
+the bench host instead, to avoid two controllers polling it at once.
