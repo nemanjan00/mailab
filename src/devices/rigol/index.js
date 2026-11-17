@@ -38,9 +38,12 @@ const create = (options, io) => {
 	const dialect = DIALECTS[settings.dialect];
 	let ws = null;
 	let opening = null;
-	let reconnecting = null;
-	let stopped = false;
+	let idleTimer = null;
 	const stats = { sent: 0 };
+	// the meter locks its front panel ("remote mode") while a web-control
+	// session is attached; release the seat a few seconds after the last
+	// injected event so the local panel unlocks
+	const idleCloseMs = Math.max(500, Number(options.idleCloseMs) || 3000);
 
 	const controlUrl = () => "ws://" + settings.host + ":" + settings.controlPort;
 
@@ -73,23 +76,30 @@ const create = (options, io) => {
 			});
 			sock.on("close", () => {
 				ws = null;
-				io.log("control ws closed (the instrument allows ONE control session — close its control.html if clicks die)", "warn");
-				// the seat goes to the most recent connection: keep re-taking it
-				// so mailab's taps win over a stale instrument web UI tab
-				if (!reconnecting && !stopped) {
-					reconnecting = setTimeout(() => {
-						reconnecting = null;
-						open().catch(() => null);
-					}, 1500);
-				}
 			});
 		});
 		return opening;
 	};
 
+	const armIdleClose = () => {
+		clearTimeout(idleTimer);
+		idleTimer = setTimeout(() => {
+			if (ws) {
+				io.log("control idle — releasing the session (front panel unlocks)", "info");
+				try {
+					ws.close();
+				} catch (_err) {
+					// already closed
+				}
+				ws = null;
+			}
+		}, idleCloseMs);
+	};
+
 	const send = (obj) => {
 		const line = JSON.stringify(obj);
 		return open().then((sock) => {
+			armIdleClose();
 			return new Promise((resolve, reject) => {
 				const timer = setTimeout(() => {
 					reject(new Error("rigol control send timeout: " + line));
@@ -174,8 +184,7 @@ const create = (options, io) => {
 	return {
 		start: () => Promise.resolve(),
 		stop: () => {
-			stopped = true;
-			clearTimeout(reconnecting);
+			clearTimeout(idleTimer);
 			if (ws) {
 				try {
 					ws.close();
@@ -202,6 +211,7 @@ module.exports = {
 		host: "instrument IP (required)",
 		videoPort: "screen-video WebSocket port (default 9001)",
 		controlPort: "input-injection WebSocket port (default 9002)",
+		idleCloseMs: "release the web-control session this long after the last injected event (default 3000; the meter locks its front panel while a session is attached)",
 		dialect: "rigol (CONTROL_KEY_*, DM858) | dom (onmouse*, MHO98 patched FW)"
 	},
 	commands: {
