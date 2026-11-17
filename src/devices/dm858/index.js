@@ -80,14 +80,6 @@ module.exports = scpiDriver.preset({
 		}
 
 
-		// monitorOnStart: poll readings through the serialized chain from the
-		// start (a raw preset poll races the settings sync and times out behind
-		// long integrations or function switches)
-		if (options.monitorOnStart) {
-			const res = logic.monitor({ on: true, intervalMs: options.monitorMs || 1000 }, pushReading);
-			io.log("monitor on (" + res.intervalMs + " ms, monitorOnStart)", "info");
-		}
-
 		const screenNow = () => {
 			return client.queryBinary(":HCOPy:SDUMp:DATA? PNG").then((png) => {
 				io.image("screen", png, "image/png");
@@ -100,6 +92,15 @@ module.exports = scpiDriver.preset({
 			io.sample("reading", r.value, { unit: r.unit });
 			io.value("reading", { value: r.value, func: r.func, unit: r.unit, t: Date.now() });
 		};
+
+		// monitorOnStart: poll readings through the serialized chain from the
+		// start (a raw preset poll races the settings sync and times out behind
+		// long integrations or function switches)
+		if (options.monitorOnStart) {
+			const res = logic.monitor({ on: true, intervalMs: options.monitorMs || 1000 }, pushReading);
+			io.log("monitor on (" + res.intervalMs + " ms, monitorOnStart)", "info");
+		}
+
 
 		return {
 			settings: () => meter.isSynced() ? Promise.resolve(meter.get()) : meter.sync(),
