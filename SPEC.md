@@ -148,7 +148,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | JTAGulator | 🟡 | serial menu driver (src/devices/jtagulator): transcript `menu` + voltage/JTAG/IDCODE/UART scan wrappers; menu letters best-effort [HW] |
 | J-Link | ⬜ | JLinkExe / pylink: connect, read/write memory, flash, halt/run, RTT → log |
 | OpenOCD | ✅ | driver over the telnet port (src/devices/openocd): targets, regs, mem read → blobs, writes, flash erase/program, spawn with free-form adapter args (e.g. Tigard port B) |
-| Black Magic Probe | ⬜ | gdb remote over its serial port (`monitor swdp_scan`, attach, load, mem dump) + its UART |
+| Black Magic Probe | 🟡 | GDB RSP driver (src/devices/bmp + src/services/gdbrsp): monitor (qRcmd) swdp_scan/jtag_scan/attach/reset, halt (interrupt)/resume/step, memory read -> blobs, writes, registers; [HW] untested on the bench |
 | flashrom | ✅ | `flashrom` driver: probe, read (→ blob), verify, write, erase (write/erase need approval); verified against flashrom's dummy programmer (emulated W25Q128) in jest and over MCP; no real programmer yet |
 | XGecu (minipro) | 🟡 | see above |
 | binwalk | ✅ | `blob_analyze` + blob pane: signatures (offset/type/size/description) from binwalk 3 JSON. Next: extraction |
