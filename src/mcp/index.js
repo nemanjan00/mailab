@@ -381,6 +381,27 @@ const create = (lab, context) => {
 		};
 	});
 
+	tool("journal_list", "Experiment journal: notes with evidence tags ([HW] when they link to real data, [INF] when nothing backs them) and recorded runs (device options, setpoints, data).", {
+		filter: z.string().optional()
+	}, (a) => {
+		return { notes: lab.journal.notes(a.filter), runs: lab.journal.runs().map((r) => {
+			return { id: r.id, name: r.name, t: r.t, ok: r.ok, devices: r.devices.length, setpoints: r.setpoints.length, data: r.data };
+		}) };
+	});
+
+	tool("journal_note", "Add a conclusion to the experiment journal. Link it to the data that backs it (channel/trace/value/blob/image/run names); a note with at least one resolved link is tagged [HW] automatically, otherwise [INF]. Unresolvable links are reported back.", {
+		text: z.string(),
+		links: z.array(z.string()).optional()
+	}, (a) => {
+		return lab.journal.addNote({ text: a.text, links: a.links || [], who: actor() });
+	});
+
+	tool("journal_export", "Export a recorded run to markdown (devices with options, setpoints, data references, linked notes).", {
+		name: z.string()
+	}, (a) => {
+		return { markdown: lab.journal.exportRun(a.name) };
+	});
+
 	tool("blob_write", "Store binary data as a blob (from base64 or hex), e.g. to parse with kaitai_parse or show in a kaitai pane", {
 		name: z.string(),
 		base64: z.string().optional(),
@@ -1364,7 +1385,14 @@ const create = (lab, context) => {
 					throw err;
 				});
 		};
-		return batch.run(a.steps, { loop: a.loop, stopOnError: a.stopOnError }, invoke);
+		const snap = lab.journal ? lab.journal.snapshot() : null;
+		return batch.run(a.steps, { loop: a.loop, stopOnError: a.stopOnError }, invoke).then((result) => {
+			if (lab.journal) {
+				// record the run (devices, setpoints, data) without delaying the reply
+				lab.journal.recordRun("batch-" + new Date().toISOString(), snap, () => Promise.resolve(result)).catch(() => {});
+			}
+			return result;
+		});
 	});
 
 	return server;

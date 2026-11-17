@@ -20,6 +20,7 @@ const txpolicy = require("../txpolicy");
 const classifyModule = require("../classify");
 const trendsModule = require("../trends");
 const recordingsModule = require("../recordings");
+const journalModule = require("../journal");
 const profilesModule = require("../profiles");
 const boardModule = require("../board");
 const pathModule = require("path");
@@ -1077,6 +1078,8 @@ const create = (options) => {
 	lab.safety.changed = changed;
 	lab.trends = trendsModule.create(pathModule.join(options.dataDir, "trends"), saved.trends);
 	lab.recordings = recordingsModule.create(lab, pathModule.join(options.dataDir, "recordings"));
+	// notes + run records live in their own file next to lab.json
+	lab.journal = journalModule.create(lab, pathModule.join(options.dataDir, "journal.json"));
 	lab.profiles = profilesModule.create(lab, pathModule.join(options.dataDir, "profiles"));
 	// boards are stored next to lab.json, not in it (layers are big)
 	lab.boards = boardModule.create(pathModule.join(options.dataDir, "boards"), { onChange: (name) => events.emit("board", { name: name }) });
