@@ -1,10 +1,10 @@
 # Hardware TODO
 
-Status of every instrument mailab knows about. Run on real hardware so far:
-the **Proxmark5** (on this PC's USB), the **system monitor** (CPU, hwmon,
-NVIDIA GPU), the USB tree, webcams through the browser capture pane, and VNC
-against QEMU. Everything else is tested with fakes, emulators or dummy
-programmers only. Drivers marked *protocol from docs* were written from
+Status of every instrument mailab knows about. Verified on real lab hardware
+so far: only the **Rigol MHO900** (bench, 10.69.1.89). Everything else is
+tested with fakes, emulators, dummy programmers or this PC's own system
+(sysmon, USB tree, headless-Chrome media, QEMU VNC), which says nothing about
+the instrument. Drivers marked *protocol from docs* were written from
 documentation or memory; expect fixes on first contact.
 
 Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · ⚠️ known gap
@@ -17,7 +17,7 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | Miniware MDP-P906 PSU | `mdp` | nRF52840 radio bridge | `~/mdp-p906/host` | 🧪 |
 | ISDT MP305A/B PSU | `mp305` | USB-HID / BLE | `pymp305` 0.6.3 | 🧪 (bridge tested against a simulated unit) |
 | Rigol DM858/DM858E DMM | `dm858` | SCPI over LAN / usbtmc | programming guide | 🧪 |
-| Rigol MHO900 scope | `mho900` | SCPI over LAN / usbtmc | DHO-family SCPI | 🧪 *protocol from docs* |
+| Rigol MHO900 scope | `mho900` | SCPI over LAN / usbtmc | DHO-family SCPI | ✅ on the bench scope |
 | Sipeed SLogic / DSLogic | `sigrok` | sigrok-cli | `nemanjan00/libsigrok` (slogic-dev) | 🧪 (demo ✅) |
 | DeepAce KC9531B RF power meter | `kc9531b` | USB serial | `kc9531b` (npm) | 🧪 |
 | Icom radios (IC-705…) | `civ` | CI-V over USB serial | `~/ci-v` | 🧪 |
@@ -25,7 +25,7 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | LiteVNA 64 | `litevna` | NanoVNA-V2 binary protocol | V2 protocol docs | 🧪 *protocol from docs* |
 | HackRF One | `hackrf` | `hackrf_sweep` | – | 🧪 |
 | bladeRF / HackRF / RTL-SDR | `soapy` | SoapySDR + liquid-dsp | `python/soapy_bridge.py` | 🧪 (DSP ✅ on synthetic IQ) |
-| Proxmark3 / Proxmark5 | `proxmark3` | Iceman client (`~/pm5-og` build) | `node-proxmark3` ≥ 0.0.13 | ✅ PM5 (`hw version`, `hw status` over MCP; picked by USB serial) |
+| Proxmark3 / Proxmark5 | `proxmark3` | Iceman client (`~/pm5-og` build) | `node-proxmark3` ≥ 0.0.13 | 🧪 (earlier ✅ for PM5 `hw version` / `hw status` not confirmed on hardware) |
 | USB-UART adapters (Tigard port A, CP210x, CH340, FTDI, CDC-ACM) | `uart` | tty by stable identity | – | 🧪 (socat pty ✅) |
 | USB hubs (port power) | USB tree + `usb_power` | uhubctl | proxyslave inventory logic | 🧪 tree ✅ on this PC; no ppps hub / uhubctl here |
 | Web browser mic + camera | `browser` | getUserMedia over the UI WebSocket | – | ✅ headless Chrome fake media; 📝 real phone over https |
