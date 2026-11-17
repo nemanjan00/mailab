@@ -25,17 +25,18 @@ const create = (options) => {
 	const port = Number(options.port) || DEFAULT_PORT;
 	const url = options.url || ("ws://" + host + ":" + port);
 	let ws = null;
-	let greeting = null; // resolves once the connect greeting is consumed
+	let greeting = null; // non-null while a connect greeting is being consumed
 	let chain = Promise.resolve();
 
 	const connect = () => {
 		return new Promise((resolve, reject) => {
+			greeting = true;
 			const timer = setTimeout(() => {
 				reject(new Error("scpiws connect timeout: " + url));
 			}, CONNECT_TIMEOUT_MS);
 			const sock = new WS(url, { perMessageDeflate: false });
-			let waiters = [];
 			let hello = [];
+			let waiters = [];
 
 			sock.on("open", () => {
 				ws = { sock: sock, waiters: waiters };
@@ -49,6 +50,7 @@ const create = (options) => {
 					if (hello.length >= 2 || hello.some((h) => h.toString("latin1").indexOf("Rigol") !== -1)) {
 						clearTimeout(timer);
 						greeting = null;
+						hello = [];
 						resolve(api);
 					}
 					return;
@@ -94,9 +96,18 @@ const create = (options) => {
 		return job;
 	};
 
+	// the meter idle-times-out WS sessions: reconnect transparently before
+	// the next exchange instead of erroring forever
+	const ensureOpen = () => {
+		if (ws && ws.sock.readyState === 1) {
+			return Promise.resolve();
+		}
+		return connect();
+	};
+
 	const exchange = (line, wantReply, timeoutMs) => {
 		return exclusive(() => {
-			return new Promise((resolve, reject) => {
+			return ensureOpen().then(() => new Promise((resolve, reject) => {
 				if (!ws) {
 					reject(new Error("scpiws not connected"));
 					return;
@@ -118,7 +129,7 @@ const create = (options) => {
 					clearTimeout(waiter.timer);
 					waiter.resolve(Buffer.alloc(0));
 				}
-			});
+			}));
 		});
 	};
 

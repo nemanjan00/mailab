@@ -81,6 +81,22 @@ describe("scpiws service", () => {
 		});
 	});
 
+	test("reconnects transparently after the socket drops (meter idle-timeout)", () => {
+		let client = null;
+		return open().then((c) => {
+			client = c;
+			return c.query(":CONF?");
+		}).then((conf) => {
+			expect(conf).toBe("VOLT 1.0");
+			return client.close(); // simulate the meter timing the session out
+		}).then(() => {
+			return client.query(":CONF?"); // must heal, not error
+		}).then((conf) => {
+			expect(conf).toBe("VOLT 1.0");
+			return client.close();
+		});
+	});
+
 	test("queries are serialized: replies match their commands", () => {
 		return open().then((c) => {
 			return Promise.all([c.query("*IDN?"), c.query(":CONF?")]).then((r) => {
