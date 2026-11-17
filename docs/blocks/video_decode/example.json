@@ -1,0 +1,15 @@
+{
+  "description": "A python block synthesizes a monochrome PAL test pattern (625-line interlace timing, sync tips at 0, blanking at 0.3, a vertical-brightness gradient with a horizontal ramp); video_decode slices the syncs, assembles 576 rows per field and publishes grayscale PNG frames plus stats.",
+  "prompt": "Decode a composite PAL video signal into image frames.",
+  "blocks": [
+    {"id": "clock", "type": "signal", "params": {"rate": 4000000, "freq": 1000, "amp": 0.01, "noise": 0}},
+    {"id": "pal", "type": "python", "params": {"code": "def work(x, rate):\n    rate = 4000000.0\n    n = len(x)\n    k0 = state.get('k', 0)\n    k = k0 + np.arange(n)\n    state['k'] = k0 + n\n    line = 256                    # 64 us line at 4 MS/s (PAL)\n    pos = k % line\n    ln = (k // line) % 625\n    act = (ln >= 45) & (ln < 621)\n    ramp = np.clip((pos - 40) / 200.0, 0, 1)\n    bright = ((ln - 45) % 576) / 575.0\n    level = 0.3 + 0.7 * np.clip(0.65 * bright + 0.35 * ramp, 0, 1)\n    y = np.where(act, level, 0.3)\n    y = np.where(pos < 20, 0.0, y)                 # hsync, 5 us\n    y = np.where((ln == 0) & (pos < 100), 0.0, y)  # vsync, 25 us\n    y += 0.01 * np.random.randn(n)\n    return y.astype(np.float64), rate"}},
+    {"id": "vid", "type": "video_decode", "params": {"standard": "pal", "width": "720", "fps": "2"}}
+  ],
+  "links": [["clock", "pal"], ["pal", "vid"]],
+  "panes": [
+    {"type": "image", "title": "Frame", "config": {"image": "fg_vid"}},
+    {"type": "json", "title": "Stats", "config": {"channel": "fg_vid"}},
+    {"type": "value", "title": "Frames", "config": {"channel": "fg_vid_frames", "label": "fields decoded"}}
+  ]
+}

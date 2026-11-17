@@ -20,6 +20,7 @@ import struct
 import subprocess
 import time
 import wave
+import zlib
 
 import numpy as np
 
@@ -66,6 +67,19 @@ def _tx_bands_check(freq_hz, half_bw):
     raise ValueError("TX refused: %.6f MHz (+-%.1f kHz) is outside the allowed bands (%s)"
                      % (freq_hz / 1e6, half_bw / 1e3,
                         ", ".join("%.3f-%.3f MHz" % (b[0] / 1e6, b[1] / 1e6) for b in TX_BANDS) or "none"))
+
+
+def _png_gray(width, height, gray):
+    """minimal 8-bit grayscale PNG encoder (no PIL dependency)"""
+    raw = b"".join(b"\x00" + np.ascontiguousarray(gray[r]).tobytes() for r in range(height))
+
+    def chunk(tag, payload):
+        return (struct.pack(">I", len(payload)) + tag + payload
+                + struct.pack(">I", zlib.crc32(tag + payload) & 0xFFFFFFFF))
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
 
 
 # ---- block library ------------------------------------------------------------
@@ -877,6 +891,176 @@ class SyncMark(Block):
             lab.sample(self.id + "_count", self.count, "")
         self.n += n
         return None
+
+
+class VideoDecode(Block):
+    """PAL/NTSC composite video decoder: H/V sync detection + line assembly.
+
+    Sync tips sit at the bottom of the composite waveform; blanking is ~30 %
+    and white ~100 % of the observed range. Horizontal syncs are short
+    (<6.5 us) low runs, vertical syncs long (>20 us) ones. Slicing is done
+    in raw units between the sync-tip cluster (5th percentile) and the
+    blanking level (12th, just above the tip cluster), EMA-smoothed across
+    buffers so a vsync interval flooding the low end can't collapse the
+    estimate. This survives dark/compressed fields where a fixed fraction of
+    the observed range would drown in noise. Horizontal syncs are short
+    (<6.5 us) low runs; the line period is a running median of the gaps
+    between them, immune to noise blips that fake extra syncs. Vertical
+    syncs are long (>20 us) runs. Active video is resampled per
+    line into a fixed-width grayscale row; a full field set becomes a PNG
+    frame on the lab image stream.
+    """
+    kind = "dsp"
+    inputs = "real composite video (~1 Vpp; e.g. an FM-discriminated FPV downlink) at >= 2 MS/s"
+    outputs = "grayscale frames on the image stream (<device>_<id>) + stats value + frame counter"
+    params = {
+        "standard": ("pal", "pal or ntsc (line count / timing)"),
+        "invert": ("false", "invert video polarity (inverted video, some FM links)"),
+        "width": ("720", "frame width in pixels (rows are resampled to this)"),
+        "fps": ("2", "max published frames per second (stats still update every field)"),
+        "thresh": ("0.5", "sync slicing point, fraction of the way from the sync-tip level (5th pct) to the blanking level (12th pct); keep well below blanking"),
+    }
+    doc = "decode analog composite video (PAL/NTSC) into grayscale image frames"
+
+    LINE_US = {"pal": 64.0, "ntsc": 63.556}
+    ACTIVE_LINES = {"pal": 576, "ntsc": 480}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.standard = str(self.p["standard"]).lower()
+        if self.standard not in self.LINE_US:
+            raise ValueError("standard must be pal or ntsc")
+        self.invert = lab.parse_switch(self.p["invert"])
+        self.out_w = int(lab.parse_number(self.p["width"], "width", 64, 1920))
+        self.max_fps = lab.parse_number(self.p["fps"], "fps", 0.1, 30)
+        self.thresh = lab.parse_number(self.p["thresh"], "thresh", 0.05, 0.9)
+        self.buf = np.zeros(0)
+        self.lines = []
+        self.gaps = []
+        self.line_period = None
+        self.tip_est = None
+        self.blank_est = None
+        self.frame = 0
+        self.last_pub = 0.0
+
+    def work(self, x, rate):
+        x = np.asarray(x)
+        if np.iscomplexobj(x):
+            x = np.real(x)
+        x = np.ascontiguousarray(x, dtype=np.float64)
+        if rate < 2e6:
+            raise ValueError("video_decode needs >= 2 MS/s composite video (got %g MS/s)" % (rate / 1e6))
+        self.buf = np.concatenate([self.buf, x])
+        cap = int(rate * 0.05)
+        # scan in bounded windows: a chunk larger than the window must not
+        # evict lines that haven't been scanned yet
+        while True:
+            if len(self.buf) <= cap:
+                trim = self._scan(self.buf, rate)
+                if trim:
+                    self.buf = self.buf[trim:]
+                break
+            trim = self._scan(self.buf[:cap], rate)
+            if trim:
+                self.buf = self.buf[trim:]
+            else:
+                # a whole window without a single sync: not video, drop it
+                self.buf = self.buf[-cap:]
+        return None
+
+    def _scan(self, window, rate):
+        """One bounded scan pass over a buffer window; returns the index from
+        which the buffer should be kept (everything before is consumed)."""
+        if len(window) < int(rate * 0.001):
+            return None
+        lo, hi = np.percentile(window, [1, 99])
+        sig = -window if self.invert else window
+        tip = float(np.percentile(sig, 5))
+        blank = float(np.percentile(sig, 12))
+        if self.tip_est is None:
+            self.tip_est, self.blank_est = tip, blank
+        else:
+            self.tip_est += 0.2 * (tip - self.tip_est)
+            self.blank_est += 0.2 * (blank - self.blank_est)
+        if self.blank_est - self.tip_est < 1e-9:
+            return None
+        norm = (window - lo) / (hi - lo)
+        if self.invert:
+            norm = 1.0 - norm
+        sync = sig < (self.tip_est + self.thresh * (self.blank_est - self.tip_est))
+        d = np.diff(sync.astype(np.int8))
+        starts = np.nonzero(d == 1)[0] + 1
+        ends = np.nonzero(d == -1)[0] + 1
+        if sync[0]:
+            starts = np.concatenate([[0], starts])
+        if sync[-1]:
+            ends = np.concatenate([ends, [len(sync)]])
+        us = rate / 1e6  # samples per microsecond
+        i = 0
+        trim = None  # buffer index from which to keep: everything before is
+        # either assembled into a row or belongs to a closed frame
+        while i < len(starts) and i < len(ends):
+            s, e = int(starts[i]), int(ends[i])
+            dur = (e - s) / us
+            if dur > 20.0:
+                # vertical sync: frame boundary
+                self._end_frame(rate)
+                self.lines = []
+                trim = e
+            elif 2.5 <= dur <= 6.5:
+                # horizontal sync: track the line period (running median of
+                # the gaps, so noise blips faking extra syncs can't poison
+                # it), then assemble the line
+                if i + 1 < len(starts):
+                    self.gaps.append(float(starts[i + 1] - s))
+                    if len(self.gaps) > 21:
+                        self.gaps = self.gaps[-21:]
+                    self.line_period = float(np.median(self.gaps))
+                if self.line_period and i + 1 < len(starts):
+                    a0 = e + int(1.5 * us)
+                    a1 = min(int(starts[i + 1]) - int(1.0 * us),
+                             s + int(0.97 * self.line_period))
+                    if a1 > a0 + 8:
+                        row = norm[a0:a1]
+                        idx = np.linspace(0, len(row) - 1, self.out_w)
+                        row = np.interp(idx, np.arange(len(row), dtype=np.float64), row)
+                        self.lines.append(np.clip(row * 255.0, 0, 255).astype(np.uint8))
+                        if len(self.lines) > 700:
+                            self.lines = self.lines[-700:]
+                        # the row is complete up to the next sync: drop the
+                        # rest so the next call never re-assembles it
+                        trim = int(starts[i + 1])
+                    # else: the next sync is far too close for a real line
+                    # (a noise blip pair) — skip this fake sync; the real
+                    # hsync of the same line is the next run
+                else:
+                    # trailing sync with no successor yet: the line is still
+                    # arriving, keep the sync and assemble on the next call
+                    trim = s
+                    break
+            i += 1
+        # consumed input is dropped by work(); only an unassembled line's
+        # tail survives (trim left at its sync start)
+        return trim
+
+    def _end_frame(self, rate):
+        want = self.ACTIVE_LINES[self.standard]
+        if len(self.lines) < want // 2:
+            return
+        rows = self.lines[-want:]
+        height = len(rows)
+        self.frame += 1
+        lab.value(self.id, {
+            "frame": self.frame, "standard": self.standard,
+            "width": self.out_w, "height": height,
+            "lines": len(self.lines),
+            "line_us": round(self.line_period / rate * 1e6, 3) if self.line_period else None,
+        })
+        lab.sample(self.id + "_frames", self.frame, "")
+        now = time.time()
+        if now - self.last_pub >= 1.0 / self.max_fps:
+            self.last_pub = now
+            lab.image(self.id, _png_gray(self.out_w, height, np.stack(rows)))
 
 
 class Framer(Block):
@@ -1814,7 +1998,7 @@ BLOCKS = {
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
     "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,
     "sync_mark": SyncMark,
-    "baud_est": BaudEst, "packet_decode": PacketDecode,
+    "baud_est": BaudEst, "packet_decode": PacketDecode, "video_decode": VideoDecode,
     "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger, "uart_tx": UartTx, "uart_rx": UartRx,
     "decode": Decode,
 }

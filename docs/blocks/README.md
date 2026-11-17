@@ -35,6 +35,7 @@ Frequency shifting, resampling, filtering, gain control, gating.
 - [`agc`](agc/README.md): normalizes IQ to unit power
 - [`mag`](mag/README.md): magnitude |x|: envelope detector
 - [`decimate`](decimate/README.md): keeps every n-th sample (no filtering)
+- [`video_decode`](video_decode/README.md): decode analog composite video (PAL/NTSC) into grayscale image frames
 - [`matched_filter`](matched_filter/README.md): RRC receive filter matching the transmitter
 - [`level_trigger`](level_trigger/README.md): power squelch: catches bursts above a level (blob, trace, log)
 
