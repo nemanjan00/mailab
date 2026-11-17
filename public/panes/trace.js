@@ -210,12 +210,14 @@ export default {
 			const level = trigDrag && trigDrag.kind === "level" ? trigDrag.value : g.level;
 			const offset = trigDrag && trigDrag.kind === "offset" ? trigDrag.value : g.offset;
 			const c = u.ctx;
-			const flag = (x, y, dir, color, label) => {
+			const flag = (x, y, dir, color, label, hollow) => {
 				// scope-style marker: a square on the plot edge with a filled
-				// triangle pointer at the trigger value
+				// triangle pointer at the trigger value; hollow = the value is
+				// off-screen and the flag is pinned to the edge
 				const s = 14;
 				const t = 9;
 				c.fillStyle = color;
+				c.globalAlpha = hollow ? 0.65 : 1;
 				c.beginPath();
 				if (dir === "left") {
 					c.moveTo(x, y);
@@ -236,12 +238,17 @@ export default {
 				c.fillText(label, x, y + 0.5);
 				c.textAlign = "left";
 				c.textBaseline = "alphabetic";
+				c.globalAlpha = 1;
 			};
 			c.save();
 			c.font = "10px sans-serif";
+			// scope behaviour: flags are ALWAYS visible — a trigger value
+			// outside the view pins its flag to the nearest edge (hollow);
+			// the dashed line only draws while the value is on-screen
 			if (typeof level === "number") {
-				const y = u.valToPos(level, "y", true);
-				if (y >= u.bbox.top && y <= u.bbox.top + u.bbox.height) {
+				const yRaw = u.valToPos(level, "y", true);
+				const y = Math.max(u.bbox.top + 6, Math.min(u.bbox.top + u.bbox.height - 6, yRaw));
+				if (yRaw === y) {
 					c.strokeStyle = "#e0534f";
 					c.setLineDash([6, 4]);
 					c.beginPath();
@@ -249,14 +256,13 @@ export default {
 					c.lineTo(u.bbox.left + u.bbox.width, y);
 					c.stroke();
 					c.setLineDash([]);
-					// the flag sits on the plot edge, half inside it, so the grab
-					// area stays inside the overlay that receives pointer events
-					flag(u.bbox.left + u.bbox.width - 8, y, "left", "#e0534f", "T");
 				}
+				flag(u.bbox.left + u.bbox.width - 8, y, "left", "#e0534f", "T", yRaw !== y);
 			}
 			if (typeof offset === "number") {
-				const x = u.valToPos(offset, "x", true);
-				if (x >= u.bbox.left && x <= u.bbox.left + u.bbox.width) {
+				const xRaw = u.valToPos(offset, "x", true);
+				const x = Math.max(u.bbox.left + 6, Math.min(u.bbox.left + u.bbox.width - 6, xRaw));
+				if (xRaw === x) {
 					c.strokeStyle = "#e0a34f";
 					c.setLineDash([6, 4]);
 					c.beginPath();
@@ -264,8 +270,8 @@ export default {
 					c.lineTo(x, u.bbox.top + u.bbox.height);
 					c.stroke();
 					c.setLineDash([]);
-					flag(x, u.bbox.top + u.bbox.height - 8, "up", "#e0a34f", "trig");
 				}
+				flag(x, u.bbox.top + u.bbox.height - 8, "up", "#e0a34f", "trig", xRaw !== x);
 			}
 			c.restore();
 		};
