@@ -29,8 +29,9 @@ const logicLayer = require("./logic");
 module.exports = scpiDriver.preset({
 	name: "dm858",
 	description: "Rigol DM858/DM858E bench multimeter: synced settings model (function/range/NPLC/null/calculate/trigger/beeper), intent-level set, reading monitor -> channel, screenshot",
-	poll: [{ field: "value", query: "READ?" }],
 	options: {
+		monitorOnStart: "start the reading monitor (value channel) when the device starts",
+		monitorMs: "monitor poll period (default 1000; keep it slower than the integration time)",
 		autoSyncMs: "settings re-sync period in ms (default 30000; 0 = only sync on start and on change)",
 		autoSync: "false disables the settings sync entirely (cache stays empty until `sync`)"
 	},
@@ -78,6 +79,15 @@ module.exports = scpiDriver.preset({
 			}
 		}
 
+
+		// monitorOnStart: poll readings through the serialized chain from the
+		// start (a raw preset poll races the settings sync and times out behind
+		// long integrations or function switches)
+		if (options.monitorOnStart) {
+			const res = logic.monitor({ on: true, intervalMs: options.monitorMs || 1000 }, pushReading);
+			io.log("monitor on (" + res.intervalMs + " ms, monitorOnStart)", "info");
+		}
+
 		const screenNow = () => {
 			return client.queryBinary(":HCOPy:SDUMp:DATA? PNG").then((png) => {
 				io.image("screen", png, "image/png");
@@ -86,6 +96,7 @@ module.exports = scpiDriver.preset({
 		};
 
 		const pushReading = (r) => {
+			io.sample("value", r.value, { unit: r.unit });
 			io.sample("reading", r.value, { unit: r.unit });
 			io.value("reading", { value: r.value, func: r.func, unit: r.unit, t: Date.now() });
 		};

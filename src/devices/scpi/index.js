@@ -65,7 +65,13 @@ const create = (options, io, preset) => {
 		query: (args) => {
 			io.log(args.command, "tx");
 			return client.query(args.command).then((reply) => {
-				io.log(reply.slice(0, 500), "rx");
+				// binary replies (screenshots, waveform dumps) must not be
+				// dumped into the console as raw bytes
+				const text = String(reply);
+				// eslint-disable-next-line no-control-regex
+				const binary = /[\x00-\x08\x0e-\x1f]/.test(text);
+				const shown = binary ? "<binary " + text.length + " bytes>" : text.slice(0, 500);
+				io.log(shown, "rx");
 				return { reply: reply };
 			});
 		},

@@ -197,8 +197,10 @@ const syncForFunc = (input) => {
 	const func = FUNCS[input] ? input : labelToFunc(input);
 	const f = FUNCS[func] || {};
 	const plan = [];
+	// NULL/NPLC/RESolution live directly under the function; the VOLTage
+	// subnode only holds RANGe (the input voltage level for freq/period)
 	const push = (path, suffix, parse) => {
-		plan.push({ path: path, query: ":SENSe:" + (f.voltRange ? func + ":VOLTage" : func) + ":" + suffix + "?", parse: parse });
+		plan.push({ path: path, query: ":SENSe:" + func + ":" + suffix + "?", parse: parse });
 	};
 	if (f.range || f.voltRange) {
 		push(["measure", "range"], "RANGe", parseNum);
