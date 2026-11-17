@@ -182,6 +182,71 @@ def main():
         lab.sample("bias", 1 if on else 0)
         return {"bias": on}
 
+    SCHEMA = [
+        {"key": "rf", "title": "RF", "fields": [
+            {"key": "freq_hz", "label": "frequency", "type": "number", "unit": "Hz", "min": 30e6, "max": 6e9},
+            {"key": "mode", "label": "mode", "type": "enum", "options": ["mixer", "generator"]},
+            {"key": "current", "label": "mixer current", "type": "number", "min": 0, "max": 7},
+            {"key": "bias", "label": "bias-T", "type": "bool"},
+            {"key": "override", "label": "freq override", "type": "bool"},
+        ]},
+        {"key": "lcd", "title": "LCD", "fields": [
+            {"key": "timeout", "label": "backlight", "type": "enum", "options": ["0", "1", "2"]},
+        ]},
+    ]
+
+    def read_model():
+        bias = bool(get(transport, PARAMS["bias"]))
+        current = get(transport, PARAMS["current"])
+        raw_mode = get(transport, PARAMS["mode"])
+        mode = Mode(raw_mode).name.lower() if raw_mode in [m.value for m in Mode] else "unknown(%d)" % raw_mode
+        freq_hz = get(transport, PARAMS["freq"])
+        override = bool(get(transport, PARAM_OVERRIDE))
+        lcd_timeout = get(transport, PARAM_BACKLIGHT)
+        model = {
+            "rf": {"freq_hz": freq_hz, "mode": mode, "current": current, "bias": bias, "override": override},
+            "lcd": {"timeout": str(lcd_timeout)},
+        }
+        lab.sample("freq", freq_hz / 1e6, unit="MHz")
+        return model
+
+    @bridge.command("settings_schema", "the form schema the settings pane renders")
+    def settings_schema(_a):
+        return SCHEMA
+
+    @bridge.command("settings", "{} the synced settings model (value <id>_settings); syncs first")
+    def settings(_a):
+        model = read_model()
+        lab.value("settings", model)
+        return model
+
+    @bridge.command("sync", "{} re-read every setting from the device into the model")
+    def sync(_a):
+        return settings(_a)
+
+    @bridge.command("set", "{rf?: {freq_hz?, mode?, current?, bias?, override?}, lcd?: {timeout?}} change settings; each write is read back")
+    def set_cmd(a):
+        rf = a.get("rf") or {}
+        lcd = a.get("lcd") or {}
+        if "freq_hz" in rf:
+            set_(transport, PARAMS["freq"], lab.parse_number(rf["freq_hz"], "freq_hz", 30e6, 6e9))
+        if "mode" in rf:
+            name = str(rf["mode"]).strip().upper()
+            if name not in Mode.__members__:
+                raise Exception("mode must be mixer or generator")
+            set_(transport, PARAMS["mode"], Mode[name].value)
+        if "current" in rf:
+            set_(transport, PARAMS["current"], lab.parse_number(rf["current"], "current", 0, 7))
+        if "bias" in rf:
+            set_(transport, PARAMS["bias"], 1 if rf["bias"] else 0)
+        if "override" in rf:
+            set_(transport, PARAM_OVERRIDE, 1 if rf["override"] else 0)
+        if "timeout" in lcd:
+            set_(transport, PARAM_BACKLIGHT, lab.parse_number(lcd["timeout"], "timeout", 0, 2))
+        model = read_model()
+        lab.value("settings", model)
+        return model
+
     @bridge.command("override", "{on?} read or set the frequency override (undocumented param 0x87)")
     def override(a):
         if a.get("on") is not None:

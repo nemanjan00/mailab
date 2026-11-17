@@ -747,3 +747,23 @@ dialog form.toolbar,
 .toolbar label.upload {
 	white-space: nowrap;
 }
+
+/* rigol pane: flex layout; the canvas keeps its native size, CSS scales */
+.rigol-wrap {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+.rigol-stage {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+.rigol-stage canvas {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}

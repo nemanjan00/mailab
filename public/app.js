@@ -39,10 +39,11 @@ import capture from "./panes/capture.js";
 import board from "./panes/board.js";
 import datasheets from "./panes/datasheets.js";
 import vnc from "./panes/vnc.js";
+import rigol from "./panes/rigol.js";
 import kvm from "./panes/kvm.js";
 import vision from "./panes/vision.js";
 
-const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, settings, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc, kvm, hex, vision };
+const PANES = { chart, value, trace, waterfall, image, markdown, math: mathPane, log, activity, devices, settings, channels, audio, json, flowgraph, kaitai, chat, graph, blob, classifier, trend, custom, usb, terminal, capture, board, datasheets, vnc, kvm, hex, vision, rigol };
 const HISTORY_SECONDS = 600;
 const MAX_POINTS = 120000;
 const PALETTE_SIZE = 8;

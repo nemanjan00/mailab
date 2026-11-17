@@ -3534,6 +3534,11 @@ i@0.3.x:
   resolved "https://registry.yarnpkg.com/i/-/i-0.3.7.tgz#2a7437a923d59c14b17243dc63a549af24d85799"
   integrity sha512-FYz4wlXgkQwIPqhzC5TdNMLSE5+GS1IIDJZY/1ZiEPCT2S3COUVZeT5OW4BmW4r5LHLQuOosSwsvnroG9GR59Q==
 
+icom-ci-v@0.0.1:
+  version "0.0.1"
+  resolved "https://registry.yarnpkg.com/icom-ci-v/-/icom-ci-v-0.0.1.tgz#9bdc7703ee045fc1f207862104ff6f32a5a779b3"
+  integrity sha512-exmvZYujNfxzr1pWii3YoZA/27MlKPHjHK1kv1SKBUoDWXr3bTDolt1+KokHvWssRDQHQ/mZtOMvL1LfU60Iaw==
+
 iconv-lite@^0.7.3, iconv-lite@~0.7.0:
   version "0.7.3"
   resolved "https://registry.yarnpkg.com/iconv-lite/-/iconv-lite-0.7.3.tgz#84ee12f963e7de50bc01a13e160a078b3b0f415f"
@@ -4583,6 +4588,13 @@ mathjs@^15.2.0:
     tiny-emitter "^2.1.0"
     typed-function "^4.2.1"
 
+mdp-host@0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/mdp-host/-/mdp-host-0.1.0.tgz#a8ea7631b312ffb85e595811b5a8052586bae90e"
+  integrity sha512-GYdOnytxwBaJKzlpp7EKzKMMp+7vRtOrB/iWNJm8v4vVd7dudRWGCh6EsExq9WiKFv6pdrETohnrCf24ynu5FQ==
+  dependencies:
+    queue-promised "^0.0.31"
+
 media-typer@^1.1.0:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/media-typer/-/media-typer-1.1.1.tgz#6f035400dfe3ab9d5607bc77546ce30cc2f9c6b8"
@@ -5290,6 +5302,11 @@ qs@^6.16.0, qs@^6.16.1, qs@^6.17.1:
   dependencies:
     es-define-property "^1.0.1"
     side-channel "^1.1.1"
+
+queue-promised@^0.0.31:
+  version "0.0.31"
+  resolved "https://registry.yarnpkg.com/queue-promised/-/queue-promised-0.0.31.tgz#a2b35c934a55472982515b2822015cbce493a894"
+  integrity sha512-unSDvFWoNLZ6fePrYt5hER5WkUtWPDGJfsgmA+2zDScw412vCZoprDsn6Y1S4LHUf01r4Rc9773ezEbaB+v/aA==
 
 range-parser@^1.2.1:
   version "1.3.0"

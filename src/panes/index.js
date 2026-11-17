@@ -97,6 +97,10 @@ const TYPES = {
 		description: "live remote desktop of a vnc device (noVNC): see and drive legacy GUIs with the AI; scale to fit, view-only, Ctrl-Alt-Del, clipboard send, screenshot to the lab",
 		config: { device: "vnc device id", viewOnly: "start view-only (default false)" }
 	},
+	rigol: {
+		description: "live screen of a RIGOL Web Control instrument (DM858/MHO98): the device's own H.264 player + touch-input injection (drive the front panel from the pane); view-only, open the instrument UI",
+		config: { device: "rigol device id (host from its options)", host: "or a plain instrument IP", viewOnly: "start view-only (default false)" }
+	},
 	kvm: {
 		description: "live screen of a nanokvm device (MJPEG through the lab, credentials stay server-side); keyboard / mouse capture and ATX power buttons for people, screenshot to the lab, LED status",
 		config: { device: "nanokvm device id", viewOnly: "start view-only (default false)" }

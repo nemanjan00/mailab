@@ -49,7 +49,7 @@ SPEC.md lists every request with its status; update it as soon as a request come
 - Channel names are `<deviceId>_<field>` and must match `[A-Za-z_][A-Za-z0-9_]*` (mathjs symbols)
 - New pane type: add it to `TYPES` in `src/panes`, write `public/panes/<type>.js` with the GUI SDK (`public/sdk`: `export default pane((ctx, p) => table({...}))`), register it in `public/app.js`. Read qrp's SHARP-EDGES (thunk vs value, `list()` for arrays) before writing views
 - ESLint 10 flat config (`eslint.config.js`): same rules as the usual `.eslintrc.json`
-- External libs that aren't on npm (mdp-p906 host, ci-v) load from configurable paths (`MDP_HOST_PATH`, `CIV_PATH`)
+- External libs: ci-v is the npm package `icom-ci-v` (github nemanjan00/ci-v; `CIV_PATH` falls back to a checkout); the mdp-p906 host library is the npm package `mdp-host` (github nemanjan00/mdp-p906 host/; `MDP_HOST_PATH` falls back to a checkout)
 - husky hooks are active (yarn ran `prepare`); commits run lint-staged + jest
 - Vendor SDK files (e.g. `htra_api.h`) never go into the repo; bind via ctypes from layouts
 - Python driver `requires` are pinned (`==x.y` or `name @ git+…@<40-hex sha>`); `{spec, upgrade: true}` replaces an older installed copy (default: pins only apply to fresh installs). Optional sets go in `extras` + `extrasFor(options)` (mp305: bleak for BLE)

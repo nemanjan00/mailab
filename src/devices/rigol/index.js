@@ -33,7 +33,7 @@ const create = (options, io) => {
 		host: options.host,
 		videoPort: Number(options.videoPort) || 9001,
 		controlPort: Number(options.controlPort) || 9002,
-		dialect: DIALECTS[options.dialect] ? options.dialect : "rigol"
+		dialect: DIALECTS[options.dialect] ? options.dialect : "dom"
 	};
 	const dialect = DIALECTS[settings.dialect];
 	let ws = null;
@@ -212,7 +212,7 @@ module.exports = {
 		videoPort: "screen-video WebSocket port (default 9001)",
 		controlPort: "input-injection WebSocket port (default 9002)",
 		idleCloseMs: "release the web-control session this long after the last injected event (default 3000; the meter locks its front panel while a session is attached)",
-		dialect: "rigol (CONTROL_KEY_*, DM858) | dom (onmouse*, MHO98 patched FW)"
+		dialect: "dom (onmouse*, default — both the DM858 and MHO98 live FW) | rigol (CONTROL_KEY_*, from a stale cached page)"
 	},
 	commands: {
 		tap: "{x, y} tap the screen (native screen coordinates, DM858: 1024x600)",

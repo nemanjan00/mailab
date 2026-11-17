@@ -18,12 +18,26 @@ const HW_MAX_VOLTS = 30;
 const HW_MAX_AMPS = 10;
 const ID_HELP = "the module's radio ID (hex4), printed by `mdp pair` and kept in mdp-p906 p906_backups/radio_id.txt";
 
+// npm package mdp-host when installed, else a local clone (MDP_HOST_PATH)
 const loadHost = (hostPath) => {
-	const base = hostPath || config.get("MDP_HOST_PATH");
-	return {
-		bridge: require(path.join(base, "src", "services", "bridge")),
-		psu: require(path.join(base, "src", "psu"))
-	};
+	if (hostPath) {
+		return {
+			bridge: require(path.join(hostPath, "src", "services", "bridge")),
+			psu: require(path.join(hostPath, "src", "psu"))
+		};
+	}
+	try {
+		return {
+			bridge: require("mdp-host/src/services/bridge"),
+			psu: require("mdp-host/src/psu")
+		};
+	} catch (_err) {
+		const base = config.get("MDP_HOST_PATH");
+		return {
+			bridge: require(path.join(base, "src", "services", "bridge")),
+			psu: require(path.join(base, "src", "psu"))
+		};
+	}
 };
 
 // port -> {opening: Promise<bridge>, owners: [], lock, linkKey}
@@ -282,7 +296,7 @@ module.exports = {
 		allowSetCurrent: "enable set_current although its unit is unconfirmed (default false)",
 		model: "model code (default 2)",
 		pollMs: "status poll period (default 300)",
-		hostPath: "path to mdp-p906/host (default MDP_HOST_PATH)"
+		hostPath: "path to a mdp-p906/host checkout (default: npm mdp-host, else MDP_HOST_PATH)"
 	},
 	commands: {
 		status: "raw status",

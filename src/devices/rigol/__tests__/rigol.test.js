@@ -33,16 +33,27 @@ describe("rigol driver", () => {
 
 	const make = () => rigol.create({ host: "127.0.0.1", controlPort: port }, fakeIo());
 
-	test("tap sends down+up at the native coordinates", () => {
+	test("tap sends down+up at the native coordinates (default dom dialect)", () => {
 		const dev = make();
 		return dev.start()
 			.then(() => dev.command("tap", { x: 512, y: 300 }))
 			.then(() => new Promise((r) => setTimeout(r, 200)))
 			.then(() => {
 				expect(frames).toEqual([
-					{ type: "CONTROL_KEY_DOWN", downDelta: 0, clientX: 512, clientY: 300 },
-					{ type: "CONTROL_KEY_UP", downDelta: 120, clientX: 512, clientY: 300 }
+					{ type: "onmousedown", downDelta: null, clientX: 512, clientY: 300 },
+					{ type: "onmouseup", downDelta: 120, clientX: 512, clientY: 300 }
 				]);
+			})
+			.then(() => dev.stop());
+	});
+
+	test("the rigol dialect is still available for CONTROL_KEY_* frames", () => {
+		const dev = rigol.create({ host: "127.0.0.1", controlPort: port, dialect: "rigol" }, fakeIo());
+		return dev.start()
+			.then(() => dev.command("tap", { x: 7, y: 9 }))
+			.then(() => new Promise((r) => setTimeout(r, 200)))
+			.then(() => {
+				expect(frames[0]).toEqual({ type: "CONTROL_KEY_DOWN", downDelta: 0, clientX: 7, clientY: 9 });
 			})
 			.then(() => dev.stop());
 	});
@@ -55,10 +66,10 @@ describe("rigol driver", () => {
 			.then(() => dev.command("swipe", { from_x: 0, from_y: 0, to_x: 100, to_y: 0, steps: 2 }))
 			.then(() => new Promise((r) => setTimeout(r, 300)))
 			.then(() => {
-				expect(frames[0]).toEqual({ type: "CONTROL_KEY_MOVE", downDelta: 0, clientX: 10, clientY: 20 });
+				expect(frames[0]).toEqual({ type: "onmousemove", downDelta: null, clientX: 10, clientY: 20 });
 				expect(frames[1]).toEqual({ type: "CONTROL_BACK" });
 				const types = frames.slice(2).map((f) => f.type);
-				expect(types).toEqual(["CONTROL_KEY_DOWN", "CONTROL_KEY_MOVE", "CONTROL_KEY_MOVE", "CONTROL_KEY_UP"]);
+				expect(types).toEqual(["onmousedown", "onmousemove", "onmousemove", "onmouseup"]);
 				const last = frames[frames.length - 1];
 				expect([last.clientX, last.clientY]).toEqual([100, 0]);
 			})
