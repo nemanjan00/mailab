@@ -1,8 +1,6 @@
 # Hardware TODO
 
-Status of every instrument mailab knows about. Verified on real lab hardware
-so far: the **Rigol MHO900** (bench, 10.69.1.89), and the **Proxmark5** only
-lightly (driving the client, no card operations). Everything else is
+Status of every instrument mailab knows about. Verified on real lab hardware: the **Rigol MHO98** scope (bench, 10.69.1.89 — SCPI, deep settings integration, Web Control video + touch), the **Rigol DM858** DMM (lab, 10.69.2.52 — SCPI over its WebSocket channel so the panel never locks, deep settings integration, Web Control video + touch), the **ISDT MP305B** PSU (lab host, USB-HID — telemetry + DC control), and the **Othernet Morfeus** (USB HID — full control incl. the undocumented freq override). The **Proxmark5** only lightly (driving the client, no card operations). Everything else is tested with fakes, emulators, dummy programmers or this PC's own system, which says nothing about the instrument. Drivers marked *protocol from docs* were written from documentation or memory; expect fixes on first contact.
 tested with fakes, emulators, dummy programmers or this PC's own system
 (sysmon, USB tree, headless-Chrome media, QEMU VNC), which says nothing about
 the instrument. Drivers marked *protocol from docs* were written from
@@ -16,8 +14,8 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | Anything printing lines | `serial` | USB serial (tty) | – | 🧪 |
 | Any JSON-lines helper | `process` | stdio | `python/mailab_bridge.py` | ✅ (fake helper) |
 | Miniware MDP-P906 PSU | `mdp` | nRF52840 radio bridge | `~/mdp-p906/host` | 🧪 |
-| ISDT MP305A/B PSU | `mp305` | USB-HID / BLE | `pymp305` 0.6.3 | 🧪 (bridge tested against a simulated unit) |
-| Rigol DM858/DM858E DMM | `dm858` | SCPI over LAN / usbtmc | programming guide | 🧪 |
+| ISDT MP305A/B PSU | `mp305` | USB-HID / BLE | `pymp305` 0.6.3 | ✅ verified on the lab unit (telemetry, DC control); BLE never run |
+| Rigol DM858/DM858E DMM | `dm858` | SCPI over the Web Control WS channel (9004; never 5025 — that locks the panel) / usbtmc | programming guide | ✅ deep integration live (settings model, monitor, screenshots) |
 | Rigol MHO900 scope | `mho900` | SCPI over LAN / usbtmc | DHO-family SCPI | ✅ on the bench scope |
 | Sipeed SLogic / DSLogic | `sigrok` | sigrok-cli | `nemanjan00/libsigrok` (slogic-dev) | 🧪 (demo ✅) |
 | DeepAce KC9531B RF power meter | `kc9531b` | USB serial | `kc9531b` (npm) | 🧪 |
