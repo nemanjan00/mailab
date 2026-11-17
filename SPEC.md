@@ -137,7 +137,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | PicoGlitcher (findus) | 🟡 | |
 | nRF52840 modem | 🟡 | ESB bridge driver (src/devices/esb, commit 4f2a3ff): configure ch/addr, send with auto-ACK + replies, listen windows, stats, UF2 bootloader; fake-bridge PTY tests. Firmware (~/mdp-p906/bridge, PlatformIO) builds with `pio run`; wire protocol untested, no bridge attached [HW] |
 | InfiRay P2 Pro thermal camera | ⬜ | UVC; false-colour image + min/max/centre temperature channels |
-| Bus Pirate | ⬜ | BPIO2, using the buspirate skill |
+| Bus Pirate | 🟡 | classic binary mode driver (src/devices/buspirate): BBIO1 entry, I2C/SPI/UART/1-Wire/raw sub-modes, power/pullups/AUX/CS, ADC + freq channels, PWM, bulk transfers; PTY-tested; [HW] untested on hardware |
 | XGecu programmers (minipro) | 🟡 | `minipro` driver: presence, info, search, read_id, autodetect, read (→ blob + EEPROM blob + fuses value), verify, write, erase, blank/pin check (write/erase need approval). info/search/presence run for real; read_id/autodetect formats unverified on hardware (the programmer is on `lab`) |
 | Glasgow | ⬜ | `glasgow` CLI applets |
 | RTL-SDR | 🟡 | via `soapy` driver / flowgraph `soapy` source with `driver=rtlsdr`. `rtl_power` driver (rtl_power / soapy_power → `<id>_spectrum` trace + peak channels; range, bin, gain, interval, ppm, crop, offset): parser + fake-tool tested, no dongle attached yet; soapy_power args unrun. Planned: `rtl_tcp` interop |
