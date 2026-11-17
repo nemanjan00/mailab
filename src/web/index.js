@@ -648,6 +648,18 @@ const create = (lab, options) => {
 		res.json({ enabled: auth.enabled, host: req.headers.host || "" });
 	});
 
+	// sign out: drop the HttpOnly cookie and land back on the login page
+	app.get("/api/auth/logout", (req, res) => {
+		res.clearCookie("mailab_token", { path: "/" });
+		res.redirect(302, "/");
+	});
+
+	// HTML5 tab navigation: /tab/<name> is a real URL (deep links, reload,
+	// back/forward); serve the app for it, the client reads the path
+	app.get(/^\/tab(\/.*)?$/, auth.login, (req, res) => {
+		res.sendFile(path.join(ROOT, "public", "index.html"));
+	});
+
 	// the kvm pane: MJPEG proxy, status, power (people only); GETs are reads
 	const kvm = kvmPane.create(lab, auth);
 	app.use("/api/kvm", auth.middleware(), kvm.router);

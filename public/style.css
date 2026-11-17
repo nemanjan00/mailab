@@ -722,3 +722,28 @@ body.has-maximized .grid-stack-item:not(.maximized) { visibility: hidden; }
 	font-size: 13px;
 	line-height: 1.5;
 }
+
+/* header actions (qrp-mounted) + tab links (HTML5 nav) */
+#header-actions .actions {
+	display: inline-flex;
+	gap: 6px;
+	align-items: center;
+}
+a.tab {
+	text-decoration: none;
+	color: inherit;
+}
+button.signout {
+	border-color: var(--accent, #7aa2f7);
+}
+
+/* dialog toolbars: keep buttons on one line ("save current lab" wrapped) */
+dialog form.toolbar,
+#dialog-body form.toolbar,
+.toolbar {
+	flex-wrap: nowrap;
+}
+.toolbar button,
+.toolbar label.upload {
+	white-space: nowrap;
+}

@@ -3,7 +3,7 @@
 // Bundled with esbuild (yarn build) into public/build/.
 
 import { GridStack } from "gridstack";
-import { batch, state } from "@nemanjan00/qrp";
+import { batch, el, mount, state, when } from "@nemanjan00/qrp";
 import profilesDialog from "./profiles.js";
 import "gridstack/dist/gridstack.min.css";
 import "uplot/dist/uPlot.min.css";
@@ -469,7 +469,20 @@ const readStored = () => {
 	}
 };
 
-const fromUrl = () => new URLSearchParams(location.hash.slice(1)).get("tab");
+// HTML5 navigation: tabs are real URLs (/tab/<name>) — deep links, reload,
+// back/forward all work; the server serves the app for those paths.
+// (legacy #tab= links are still read, but never written)
+const fromUrl = () => {
+	const m = /^\/tab\/([^/]+)$/.exec(location.pathname);
+	if (m) {
+		try {
+			return decodeURIComponent(m[1]);
+		} catch (_err) {
+			return null;
+		}
+	}
+	return new URLSearchParams(location.hash.slice(1)).get("tab");
+};
 
 let currentTab = fromUrl() || readStored();
 
@@ -479,36 +492,46 @@ const activeTab = () => {
 	return tabs.indexOf(currentTab) !== -1 ? currentTab : tabs[0];
 };
 
-const setTab = (tab) => {
+const setTab = (tab, opts) => {
 	currentTab = tab;
 	try {
 		localStorage.setItem(TAB_KEY, tab);
 	} catch (_err) {
 		// private mode: per-session only
 	}
-	history.replaceState(null, "", "#tab=" + encodeURIComponent(tab));
+	if (!opts || opts.push !== false) {
+		history.pushState({ tab: tab }, "", "/tab/" + encodeURIComponent(tab));
+	}
 	renderTabs();
 	syncPanes(ctx.state.panes);
 };
 
-window.addEventListener("hashchange", () => {
-	if (fromUrl() && fromUrl() !== currentTab) {
-		setTab(fromUrl());
+// back/forward walks the tab history
+window.addEventListener("popstate", () => {
+	const t = fromUrl();
+	if (t && t !== currentTab) {
+		setTab(t, { push: false });
 	}
 });
 
 const tabButton = (tab) => {
 	const count = ctx.state.panes.filter((p) => (p.tab || "main") === tab).length;
-	const b = document.createElement("button");
-	b.className = "tab" + (tab === activeTab() ? " active" : "");
-	b.title = "double-click to rename";
-	b.textContent = tab;
+	// a real link: middle-click opens the tab in a new tab, pushState keeps
+	// the current one from reloading
+	const a = document.createElement("a");
+	a.className = "tab" + (tab === activeTab() ? " active" : "");
+	a.href = "/tab/" + encodeURIComponent(tab);
+	a.title = "double-click to rename";
+	a.textContent = tab;
+	a.addEventListener("click", (e) => {
+		e.preventDefault();
+		setTab(tab);
+	});
 	const n = document.createElement("span");
 	n.className = "count";
 	n.textContent = count;
-	b.appendChild(n);
-	b.addEventListener("click", () => setTab(tab));
-	b.addEventListener("dblclick", () => {
+	a.appendChild(n);
+	a.addEventListener("dblclick", () => {
 		const name = prompt("Rename tab", tab);
 		if (name && name !== tab) {
 			api("PATCH", "/tabs/" + encodeURIComponent(tab), { name: name }).then(() => setTab(name), (err) => alert(err.message));
@@ -521,13 +544,14 @@ const tabButton = (tab) => {
 		x.textContent = "×";
 		x.addEventListener("click", (e) => {
 			e.stopPropagation();
+			e.preventDefault();
 			if (confirm("Remove tab \"" + tab + "\"?" + (count ? " Its " + count + " pane(s) move to another tab." : ""))) {
 				api("DELETE", "/tabs/" + encodeURIComponent(tab)).then((r) => setTab(r.into), (err) => alert(err.message));
 			}
 		});
-		b.appendChild(x);
+		a.appendChild(x);
 	}
-	return b;
+	return a;
 };
 
 const renderTabs = () => {
@@ -736,16 +760,46 @@ grid.on("change", (_event, items) => {
 	});
 });
 
-// ---- toolbar ------------------------------------------------------------------
+// ---- header actions (qrp) ---------------------------------------------------
 
-document.getElementById("mcp-url").textContent = location.origin + "/mcp";
+// copy that also works on non-secure origins (http://<ip>) where
+// navigator.clipboard does not exist: hidden textarea + execCommand
+const copyText = (text) => {
+	if (navigator.clipboard && navigator.clipboard.writeText) {
+		return navigator.clipboard.writeText(text);
+	}
+	return new Promise((resolve, reject) => {
+		const ta = document.createElement("textarea");
+		ta.value = text;
+		ta.style.position = "fixed";
+		ta.style.opacity = "0";
+		document.body.appendChild(ta);
+		ta.select();
+		try {
+			if (document.execCommand("copy")) {
+				resolve();
+			} else {
+				reject(new Error("copy refused"));
+			}
+		} catch (err) {
+			reject(err);
+		} finally {
+			ta.remove();
+		}
+	});
+};
 
-document.getElementById("lab-menu").addEventListener("click", () => {
+const identity = state({ name: "local" });
+api("GET", "/whoami").then((who) => {
+	identity.name = who.name || "local";
+}, () => null);
+
+const openProfiles = () => {
 	profilesDialog(document.getElementById("lab-dialog"), document.getElementById("lab-dialog-body"), ctx);
-});
+};
 
 // "how do I connect my AI" help, filled with this lab's real address
-document.getElementById("mcp-help").addEventListener("click", () => {
+const openMcpHelp = () => {
 	const url = location.origin + "/mcp";
 	document.getElementById("mcp-claude").textContent = "claude mcp add --transport http mailab " + url;
 	document.getElementById("mcp-json").textContent = JSON.stringify({ mcpServers: { mailab: { type: "http", url: url } } }, null, 2);
@@ -757,24 +811,15 @@ document.getElementById("mcp-help").addEventListener("click", () => {
 		document.getElementById("mcp-auth").hidden = who.name === "local";
 	}, () => null);
 	document.getElementById("mcp-dialog").showModal();
-});
-document.getElementById("mcp-dialog").addEventListener("click", (event) => {
-	const button = event.target.closest("button[data-copy]");
-	if (!button) {
-		return;
-	}
-	navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent).then(() => {
-		button.textContent = "copied";
-		setTimeout(() => {
-			button.textContent = "copy";
-		}, 1200);
-	}, () => null);
-});
+};
 
-document.getElementById("add-pane").addEventListener("click", () => {
+const addPane = () => {
 	const types = Object.keys(ctx.state.paneTypes);
 	const describe = (type) => {
 		const t = ctx.state.paneTypes[type];
+		if (!t) {
+			return "";
+		}
 		return t.description + "\n\nconfig: " + JSON.stringify(t.config, null, 1);
 	};
 	ctx.dialog("Add pane", [
@@ -784,9 +829,9 @@ document.getElementById("add-pane").addEventListener("click", () => {
 	], (values) => {
 		return api("POST", "/panes", { type: values.type, title: values.title || values.type, config: parseJson(values.config), tab: activeTab() });
 	});
-});
+};
 
-document.getElementById("add-device").addEventListener("click", () => {
+const addDevice = () => {
 	api("GET", "/drivers").then((drivers) => {
 		const byName = {};
 		drivers.forEach((d) => {
@@ -794,6 +839,9 @@ document.getElementById("add-device").addEventListener("click", () => {
 		});
 		const describe = (name) => {
 			const d = byName[name];
+			if (!d) {
+				return "";
+			}
 			return d.description + "\n\noptions: " + JSON.stringify(d.options, null, 1) + "\ncommands: " + JSON.stringify(d.commands, null, 1);
 		};
 		ctx.dialog("Add device", [
@@ -803,6 +851,55 @@ document.getElementById("add-device").addEventListener("click", () => {
 		], (values) => {
 			return api("POST", "/devices", { id: values.id, driver: values.driver, options: parseJson(values.options) });
 		});
+	});
+};
+
+const cycleTheme = (event) => {
+	const current = THEMES.indexOf(document.documentElement.getAttribute("data-theme"));
+	const next = THEMES[(current + 1) % THEMES.length];
+	if (event && event.currentTarget) {
+		event.currentTarget.title = "theme: " + next;
+	}
+	applyTheme(next);
+	try {
+		localStorage.setItem("mailab-theme", next);
+	} catch (_err) {
+		// storage unavailable; theme still applies for this session
+	}
+};
+
+mount(document.getElementById("header-actions"), () => el("span", { class: "actions" },
+	el("button", { class: "mcp", title: "How to connect an AI", onclick: openMcpHelp },
+		"MCP ", el("code", {}, location.origin + "/mcp"), " ?"),
+	el("button", { title: "save / load the lab setup", onclick: openProfiles }, "lab"),
+	el("button", { onclick: addDevice }, "+ device"),
+	el("button", { onclick: addPane }, "+ pane"),
+	el("button", { title: "toggle theme", onclick: cycleTheme }, "◐"),
+	when(() => identity.name !== "local", () => {
+		return el("button", {
+			class: "signout",
+			title: "signed in as " + identity.name + " — sign out",
+			onclick: () => {
+				location.href = "/api/auth/logout";
+			}
+		}, "sign out");
+	})));
+
+document.getElementById("mcp-dialog").addEventListener("click", (event) => {
+	const button = event.target.closest("button[data-copy]");
+	if (!button) {
+		return;
+	}
+	copyText(document.getElementById(button.dataset.copy).textContent).then(() => {
+		button.textContent = "copied";
+		setTimeout(() => {
+			button.textContent = "copy";
+		}, 1200);
+	}, (err) => {
+		button.textContent = "⚠ " + err.message;
+		setTimeout(() => {
+			button.textContent = "copy";
+		}, 1500);
 	});
 });
 
@@ -856,7 +953,6 @@ const syncTxBanner = (tx) => {
 	});
 };
 
-const themeButton = document.getElementById("theme");
 const applyTheme = (theme) => {
 	document.documentElement.setAttribute("data-theme", theme);
 	emit("theme", theme);
@@ -868,16 +964,5 @@ try {
 	savedTheme = "dracula";
 }
 applyTheme(THEMES.indexOf(savedTheme) === -1 ? "dracula" : savedTheme);
-themeButton.addEventListener("click", () => {
-	const current = THEMES.indexOf(document.documentElement.getAttribute("data-theme"));
-	const next = THEMES[(current + 1) % THEMES.length];
-	themeButton.title = "theme: " + next;
-	applyTheme(next);
-	try {
-		localStorage.setItem("mailab-theme", next);
-	} catch (_err) {
-		// storage unavailable; theme still applies for this session
-	}
-});
 
 connect();
