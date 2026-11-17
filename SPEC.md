@@ -353,3 +353,4 @@ Next:
 161. nanovna, tinysa
 162. https://www.crowdsupply.com/othernet/morfeus (dual-channel RF signal generator)
 161. reviewer: 2.4 GHz isn't in any REGIONS band, so a bladeRF Wi-Fi TX is refused by default — confirmed INTENDED. 2.4 GHz ISM is unlicensed but a raw SDR there interferes with certified Wi-Fi/BLE, so it stays out of the default allow-list; reach it only via operator-set MAILAB_RF_TX_EXTRA (2400M-2483.5M) or chamber bypass, rationale documented
+163. html5 tab navigation: dashboard tabs behave like browser tabs — Ctrl+Tab / Ctrl+Shift+Tab cycle, Ctrl+1..9 jump, tab strip with keyboard focus, middle-click closes
