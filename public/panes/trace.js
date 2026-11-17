@@ -530,12 +530,14 @@ export default {
 			}
 		});
 
-		// fetch a missing trace's data once; live updates arrive over the
-		// "trace" ws event (they carry the full trace), so no polling — a
-		// missing trace must not 400-spam the console until data exists
+		// fetch a missing trace's data once, and only when the server's state
+		// lists it (a name the lab doesn't know would just 404 — no console
+		// noise for traces that don't exist yet). Live updates arrive over the
+		// "trace" ws event, which carries the full trace.
 		const tried = {};
 		const fetchMissing = () => {
-			names().filter((n) => !ctx.traces[n] && !tried[n]).forEach((n) => {
+			names().filter((n) => !ctx.traces[n] && !tried[n]
+				&& ctx.state.traces.some((t) => t.name === n)).forEach((n) => {
 				tried[n] = true;
 				ctx.fetchTrace(n).catch(() => null);
 			});
