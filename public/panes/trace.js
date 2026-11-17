@@ -62,6 +62,79 @@ export default {
 
 		const names = () => [].concat(pane.config.traces || pane.config.trace || []);
 
+		// manual zoom windows (null = auto). horizontal scroll zooms time,
+		// vertical scroll zooms V; ctrl+scroll drives the scope's timebase,
+		// shift+scroll its V/div (drivers with a settings model, e.g. mho900)
+		const zoomState = { x: null, y: null };
+		let scopeCache = { t: 0, model: null };
+		const scopeModel = () => {
+			if (!pane.config.device) {
+				return Promise.resolve(null);
+			}
+			if (scopeCache.model && Date.now() - scopeCache.t < 3000) {
+				return Promise.resolve(scopeCache.model);
+			}
+			return ctx.api("GET", "/values/" + pane.config.device + "_settings").then((entry) => {
+				scopeCache = { t: Date.now(), model: entry.value };
+				return entry.value;
+			}, () => null);
+		};
+		// scope scales live on a 1-2-5 ladder: step to the adjacent rung
+		const MANTISSAS = [1, 2, 5];
+		const ladderStep = (v, inOut) => {
+			let p = Math.pow(10, Math.floor(Math.log10(v)));
+			const m = v / p;
+			let i = MANTISSAS.findIndex((x) => Math.abs(x - m) < 1e-9);
+			if (i === -1) {
+				// off-ladder value: snap to the nearest rung first
+				return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+			}
+			i += inOut;
+			while (i < 0) {
+				p /= 10;
+				i += 3;
+			}
+			while (i > 2) {
+				p *= 10;
+				i -= 3;
+			}
+			return MANTISSAS[i] * p;
+		};
+		// ctrl wheel -> scope timebase (t/div), shift wheel -> channel V/div;
+		// falls back to plain zoom for drivers without a settings model
+		const scopeWheel = (event, ax, zoomIn) => {
+			scopeModel().then((model) => {
+				if (!model || !plot) {
+					return;
+				}
+				const dev = pane.config.device;
+				if (event.ctrlKey) {
+					const cur = model.timebase && model.timebase.scale;
+					if (!cur) {
+						return;
+					}
+					const next = ladderStep(cur, zoomIn ? -1 : 1);
+					zoomState.x = null;
+					zoomState.y = null;
+					ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { timebase: { scale: next } } }).catch(() => null);
+					return;
+				}
+				if (event.shiftKey) {
+					const label = plot.series.length > 1 ? String(plot.series[1].label || "") : "";
+					const m = /CHAN(\d)/i.exec(label);
+					const n = m ? parseInt(m[1], 10) : 1;
+					const cur = model.ch && model.ch[String(n)] && model.ch[String(n)].scale;
+					if (!cur) {
+						return;
+					}
+					const next = ladderStep(cur, zoomIn ? -1 : 1);
+					zoomState.x = null;
+					zoomState.y = null;
+					ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { ch: { [n]: { scale: next } } } }).catch(() => null);
+				}
+			});
+		};
+
 		const loaded = () => names().map((n) => ctx.traces[n]).filter(Boolean);
 
 		const teardown = () => {
@@ -147,6 +220,7 @@ export default {
 					}]
 				}
 			}, size()), tables.length === 1 ? tables[0] : uPlot.join(tables), plotEl);
+			plotEl.title = "scroll h: time zoom, v: V zoom" + (pane.config.device ? "; ctrl: t/div, shift: V/div (scope)" : "");
 			// shift-click: marker at the cursor's x
 			plot.over.addEventListener("click", (event) => {
 				if (!event.shiftKey) {
@@ -155,6 +229,34 @@ export default {
 				const x = plot.posToVal(plot.cursor.left, "x");
 				saveMarkers((pane.config.markers || []).concat([{ mode: "x", x: x }]));
 			});
+			// wheel: zoom around the cursor; ctrl/shift wheel drives the scope
+			plot.over.addEventListener("wheel", (event) => {
+				if (!plot) {
+					return;
+				}
+				event.preventDefault();
+				const ax = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? "x" : "y";
+				const delta = ax === "x" ? event.deltaX : event.deltaY;
+				const zoomIn = ax === "x" ? delta > 0 : delta < 0;
+				if (event.ctrlKey || event.shiftKey) {
+					scopeWheel(event, ax, zoomIn);
+					return;
+				}
+				const u = plot;
+				const sc = u.scales[ax];
+				if (sc.min === undefined || sc.max === undefined || sc.min === null || sc.max === null) {
+					return;
+				}
+				const rect = u.over.getBoundingClientRect();
+				const frac = ax === "x"
+					? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+					: Math.min(1, Math.max(0, 1 - (event.clientY - rect.top) / rect.height));
+				const pivot = sc.min + frac * (sc.max - sc.min);
+				const f = zoomIn ? 1 / 1.25 : 1.25;
+				const win = { min: pivot - (pivot - sc.min) * f, max: pivot + (sc.max - pivot) * f };
+				zoomState[ax] = win;
+				u.setScale(Object.assign({}, ax === "x" ? { x: win } : { y: win }));
+			}, { passive: false });
 		};
 
 		const render = frameThrottle(() => {
@@ -201,7 +303,17 @@ export default {
 				});
 			});
 			refreshReadings(trs);
-			plot.setData(tables.length === 1 ? tables[0] : uPlot.join(tables));
+			plot.setData(tables.length === 1 ? tables[0] : uPlot.join(tables), !(zoomState.x || zoomState.y));
+			if (zoomState.x || zoomState.y) {
+				const s = {};
+				if (zoomState.x) {
+					s.x = zoomState.x;
+				}
+				if (zoomState.y) {
+					s.y = zoomState.y;
+				}
+				plot.setScale(s);
+			}
 		});
 
 		const fetchMissing = () => {
