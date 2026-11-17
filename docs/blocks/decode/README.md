@@ -4,7 +4,7 @@
 
 **sink** · Digital: bits, framing, BER, UART, protocol decode · [all blocks](../README.md)
 
-> protocol decoder on logic samples (bit k of each input word = channel k; analog/float input is thresholded into channel 0): libsigrokdecode decoder scripts (uart spi i2c can onewire_link spiflash... any installed id, stack for stacked decoders) or builtin numpy uart/spi/i2c/manchester. Annotations -&gt; value &lt;device&gt;_&lt;id&gt; (table of the last rows), event &lt;device&gt;_&lt;id&gt;, log lines per class, blob of decoded data bytes, count channel
+> protocol decoder on logic samples (bit k of each input word = channel k; analog/float input is thresholded into channel 0): libsigrokdecode decoder scripts (uart spi i2c can onewire_link spiflash... any installed id, stack for stacked decoders) or builtin numpy uart/spi/i2c/manchester/8b10b. Annotations -&gt; value &lt;device&gt;_&lt;id&gt; (table of the last rows), event &lt;device&gt;_&lt;id&gt;, log lines per class, blob of decoded data bytes, count channel
 
 Protocol decoder on logic samples: bit k of each input word is channel k (analog input is thresholded into
 channel 0). Runs the real libsigrokdecode decoder scripts (uart, spi, i2c, can, onewire_link, spiflash... any installed
@@ -17,9 +17,9 @@ land in a table value, events, log lines and a blob of data bytes. Feed it from 
 
 | name | default | description |
 |---|---|---|
-| `decoder` | `"uart"` | decoder id (sigrok id or builtin uart\|spi\|i2c\|manchester) |
+| `decoder` | `"uart"` | decoder id (sigrok id or builtin uart\|spi\|i2c\|manchester\|8b10b) |
 | `engine` | `"auto"` | auto (sigrok if installed, else builtin) \| sigrok \| builtin |
-| `options` | `{}` | decoder options, sigrok names, e.g. {baudrate: 9600, parity: 'even'} / {cpol, cpha} / {bitrate, convention} |
+| `options` | `{}` | decoder options, sigrok names, e.g. {baudrate: 9600, parity: 'even'} / {cpol, cpha} / {bitrate, convention} / {bitrate} (8b10b) |
 | `channels` | `{}` | decoder channel -&gt; input bit, e.g. {clk: 0, mosi: 1, cs: 3} (default per decoder) |
 | `stack` | `[]` | stacked decoders, e.g. ['spiflash'] or [{id, options}] |
 | `samplerate` | `0` | Hz; 0 = the input stream rate |

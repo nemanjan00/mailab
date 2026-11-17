@@ -144,6 +144,28 @@ def test_manchester():
     check("manchester builtin", values(anns, "data"), data)
 
 
+def test_8b10b():
+    import eight_ten
+    sps = 16
+    r8 = np.random.default_rng(11)
+    payload = bytes(r8.integers(0, 256, 32, dtype=np.uint8))
+    comma = [(5 << 5) | 28]          # K28.5
+    bits = eight_ten.encode(comma + list(payload) + comma + [0x00], k=[True] + [False] * 32 + [True, False])
+    x = np.array(bits, np.uint8)[np.minimum((np.arange(len(bits) * sps) / sps).astype(int), len(bits) - 1)]
+    anns = run(x, 16e6, "8b10b", chunk=113, engine="builtin", options={"bitrate": 1e6})
+    check("8b10b builtin", values(anns, "data"), payload)
+    commas = [a for a in anns if a["class"] == "comma" and "value" in a]
+    assert [a["value"] for a in commas] == [0xBC, 0xBC], commas
+    kc = [a for a in anns if a["class"] == "k-code"]
+    assert len(kc) == 2 and all(a["text"] == "K28.5" for a in kc), kc
+    assert not [a for a in anns if a["class"] in ("disparity", "invalid")], anns
+    # cut the stream into awkward chunk sizes around the comma (lock mid-chunk)
+    for chunk in (7, 509):
+        anns = run(x, 16e6, "8b10b", chunk=chunk, engine="builtin", options={"bitrate": 1e6})
+        assert values(anns, "data") == payload, (chunk, values(anns, "data").hex())
+    print("ok 8b10b chunking")
+
+
 def test_external():
     # a 8-channel logic capture as raw bytes (e.g. a lab blob from sigrok -O binary)
     raw = (spi_wave(b"ext", b"\x00\x00\x00") & 0xFF).astype(np.uint8).tobytes()
@@ -161,6 +183,7 @@ if __name__ == "__main__":
     test_spi("builtin")
     test_i2c("builtin")
     test_manchester()
+    test_8b10b()
     test_external()
     if P.sigrok_has("uart"):
         test_uart("sigrok")

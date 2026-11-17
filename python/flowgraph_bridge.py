@@ -1283,11 +1283,11 @@ class Decode(Throttled):
     kind = "sink"
     doc = ("protocol decoder on logic samples (bit k of each input word = channel k; analog/float input is thresholded "
            "into channel 0): libsigrokdecode decoder scripts (uart spi i2c can onewire_link spiflash... any installed id, "
-           "stack for stacked decoders) or builtin numpy uart/spi/i2c/manchester. Annotations -> value <device>_<id> "
+           "stack for stacked decoders) or builtin numpy uart/spi/i2c/manchester/8b10b. Annotations -> value <device>_<id> "
            "(table of the last rows), event <device>_<id>, log lines per class, blob of decoded data bytes, count channel")
-    params = {"decoder": ("uart", "decoder id (sigrok id or builtin uart|spi|i2c|manchester)"),
+    params = {"decoder": ("uart", "decoder id (sigrok id or builtin uart|spi|i2c|manchester|8b10b)"),
               "engine": ("auto", "auto (sigrok if installed, else builtin) | sigrok | builtin"),
-              "options": ({}, "decoder options, sigrok names, e.g. {baudrate: 9600, parity: 'even'} / {cpol, cpha} / {bitrate, convention}"),
+              "options": ({}, "decoder options, sigrok names, e.g. {baudrate: 9600, parity: 'even'} / {cpol, cpha} / {bitrate, convention} / {bitrate} (8b10b)"),
               "channels": ({}, "decoder channel -> input bit, e.g. {clk: 0, mosi: 1, cs: 3} (default per decoder)"),
               "stack": ([], "stacked decoders, e.g. ['spiflash'] or [{id, options}]"),
               "samplerate": (0, "Hz; 0 = the input stream rate"), "threshold": (None, "analog threshold (default adaptive)"),

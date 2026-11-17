@@ -26,6 +26,8 @@ import threading
 
 import numpy as np
 
+import eight_ten
+
 SIGROK_DIRS = [os.environ.get("SIGROKDECODE_DIR", ""), "/usr/share/libsigrokdecode/decoders",
                "/usr/local/share/libsigrokdecode/decoders"]
 
@@ -35,6 +37,7 @@ DEFAULT_CHANNELS = {
     "spi": {"clk": 0, "mosi": 1, "miso": 2, "cs": 3},
     "i2c": {"scl": 0, "sda": 1},
     "manchester": {"data": 0},
+    "8b10b": {"data": 0},
 }
 
 # annotation classes whose text is a hex byte (-> "value", blob, byte log)
@@ -456,6 +459,131 @@ class ManchesterBuiltin(Builtin):
 
 
 BUILTIN = {"uart": UartBuiltin, "spi": SpiBuiltin, "i2c": I2cBuiltin, "manchester": ManchesterBuiltin}
+
+
+class EightTenBBuiltin(Builtin):
+    """8b/10b serial stream at a known bitrate: comma-locked bit slicing,
+    running-disparity decode (ngscopeclient/libscopehal style). The K28.x comma
+    is the only place a run of five equal bits occurs, so the slicer locks on a
+    ~5-bit gap between edges, derives the exact bit period from it (gap/5), and
+    resets the running disparity from the comma polarity. After that, edges
+    nudge the assumed bit boundaries and bits are sampled at the middle of each
+    cell. Symbols: 'data' (byte value), 'comma'/'k-code', 'disparity',
+    'invalid'."""
+    name = "8b10b"
+
+    def __init__(self, options, channels, rate):
+        super().__init__(options, channels, rate)
+        self.T0 = self.rate / float(self.o.get("bitrate", 1e6))
+        self.buf = np.zeros(1, dtype=np.uint8)   # raw levels, last sample repeated backwards
+        self.base = -1
+        self.locked = False
+        self.edges = []          # buffered (pos, rising) before lock
+        self.boundary = None     # last confirmed bit boundary (absolute float)
+        self.T = self.T0
+        self.rd = -1
+        self.bits = []           # (bit, ss, es) of the in-progress symbol
+        self.sym_ss = None
+        self.tail_mid = None
+
+    def level_at(self, p):
+        idx = self.base + np.arange(len(self.buf))
+        return float(np.interp(p, idx, self.buf)) >= 0.5
+
+    def emit_bit(self, v, ss, es, out):
+        if not self.bits:
+            self.sym_ss = ss
+        self.bits.append((1 if v else 0, ss, es))
+        out.append(self.ann("bit", "bits", ss, es, [str(int(v))]))
+        if len(self.bits) < 10:
+            return
+        code = 0
+        for k, (b, _, _) in enumerate(self.bits):
+            code |= b << k
+        ss0, es0 = self.sym_ss, self.bits[-1][2]
+        self.bits = []
+        byte, k, self.rd, err = eight_ten.decode(code, self.rd)
+        if err == "invalid":
+            out.append(self.ann("invalid", "errors", ss0, es0, ["%03x not in 8b10b table" % code]))
+            return
+        if err:
+            out.append(self.ann("disparity", "errors", ss0, es0,
+                                ["%s %02x against running disparity" % ("K" if k else "D", byte)]))
+        if k:
+            name = "K%d.%d" % (byte & 0x1F, byte >> 5)
+            out.append(self.ann("k-code", "control", ss0, es0, [name]))
+            if byte == 0xBC:
+                out.append(self.ann("comma", "control", ss0, es0, ["comma"], byte))
+        else:
+            out.append(self.ann("data", "data", ss0, es0, ["%02X" % byte], byte))
+
+    def process(self, words):
+        out = []
+        b = self.ch["data"]
+        self.buf = np.concatenate([self.buf, (words >> b) & 1])
+        edges = [(self.pos + int(i), bool((int(words[i]) >> b) & 1)) for i in _edges(words, self.prev, [b])]
+        if len(words):
+            self.prev = int(words[-1])
+        end = self.pos + len(words)
+        if not self.locked:
+            self.edges += edges
+            edges = []
+            for j, ((p0, r0), (p1, r1)) in enumerate(zip(self.edges, self.edges[1:])):
+                gap = p1 - p0
+                if 4.2 * self.T0 <= gap <= 5.8 * self.T0:
+                    # the 11111/00000 run inside a K28.x comma: lock. The comma
+                    # is 'aa' + run-of-5 + 'ghj' (a = complement of the run),
+                    # so the 7 bits before the boundary are known already:
+                    # seed them, then sampling continues at 'g'.
+                    self.T = gap / 5.0
+                    self.locked = True
+                    self.rd = 1 if r1 else -1   # ones run: rd- comma variant consumed
+                    run, comp = 1 - int(r1), int(r1)
+                    for k in range(7):
+                        ss_k = p0 + (k - 2) * self.T
+                        self.emit_bit(bool(comp if k < 2 else run),
+                                      int(ss_k), int(ss_k + self.T), out)
+                    self.boundary = float(p1)   # bits abcdei done, 3 bits remain
+                    edges = self.edges[j + 1:]  # continue with the edges after it
+                    self.edges = []
+                    break
+            if not self.locked:
+                self.pos = self.base + len(self.buf)
+                return out
+        for n, rising in edges:
+            # emit complete cells strictly before this edge
+            while self.boundary + self.T < n - 0.25 * self.T:
+                self.emit_bit(self.level_at(self.boundary + self.T / 2),
+                              int(self.boundary), int(self.boundary + self.T), out)
+                self.boundary += self.T
+            if n - self.boundary <= 1.25 * self.T:
+                # this edge is the next boundary: emit the partial cell, then snap
+                if n > self.boundary + 0.1:
+                    self.emit_bit(self.level_at((self.boundary + n) / 2),
+                                  int(self.boundary), int(n), out)
+                self.boundary = n
+        # emit trailing cells that are safely inside the buffer
+        while self.boundary + self.T < end - 1:
+            self.emit_bit(self.level_at(self.boundary + self.T / 2),
+                          int(self.boundary), int(self.boundary + self.T), out)
+            self.boundary += self.T
+        trim = int(self.boundary - self.base) - 1
+        if trim > 0:
+            self.buf = self.buf[trim:]
+            self.base += trim
+        self.pos = self.base + len(self.buf)
+        return out
+
+    def flush(self):
+        out = []
+        if self.bits:
+            out.append(self.ann("warning", "warnings", self.sym_ss, self.bits[-1][1],
+                                ["%d trailing bits" % len(self.bits)]))
+            self.bits = []
+        return out
+
+
+BUILTIN["8b10b"] = EightTenBBuiltin
 
 
 # ---- libsigrokdecode decoders, run in-process -----------------------------------
