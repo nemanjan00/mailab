@@ -9,8 +9,21 @@
 
 const WS = require("ws");
 
-const EVENTS = { down: "CONTROL_KEY_DOWN", move: "CONTROL_KEY_MOVE", up: "CONTROL_KEY_UP" };
-const KEYS = { back: "CONTROL_BACK", home: "CONTROL_HOME" };
+// input dialects, learned live: the DM858 speaks CONTROL_KEY_* with a
+// millisecond downDelta, the MHO98 (patched FW) speaks DOM-style
+// onmouse* with downDelta null
+const DIALECTS = {
+	rigol: {
+		events: { down: "CONTROL_KEY_DOWN", move: "CONTROL_KEY_MOVE", up: "CONTROL_KEY_UP" },
+		keys: { back: "CONTROL_BACK", home: "CONTROL_HOME" },
+		downDelta: () => 0
+	},
+	dom: {
+		events: { down: "onmousedown", move: "onmousemove", up: "onmouseup" },
+		keys: { back: "CONTROL_BACK", home: "CONTROL_HOME" },
+		downDelta: () => null
+	}
+};
 
 const create = (options, io) => {
 	if (!options.host) {
@@ -19,8 +32,10 @@ const create = (options, io) => {
 	const settings = {
 		host: options.host,
 		videoPort: Number(options.videoPort) || 9001,
-		controlPort: Number(options.controlPort) || 9002
+		controlPort: Number(options.controlPort) || 9002,
+		dialect: DIALECTS[options.dialect] ? options.dialect : "rigol"
 	};
+	const dialect = DIALECTS[settings.dialect];
 	let ws = null;
 	let opening = null;
 	const stats = { sent: 0 };
@@ -95,26 +110,26 @@ const create = (options, io) => {
 
 	const commands = {
 		touch: (args) => {
-			const type = EVENTS[String(args.state || "down").toLowerCase()];
+			const type = dialect.events[String(args.state || "down").toLowerCase()];
 			if (!type) {
-				throw new Error("state must be one of " + Object.keys(EVENTS).join("|"));
+				throw new Error("state must be one of " + Object.keys(dialect.events).join("|"));
 			}
 			const xy = clampXY(args.x, args.y);
-			return send({ type: type, downDelta: 0, clientX: xy[0], clientY: xy[1] });
+			return send({ type: type, downDelta: dialect.downDelta(), clientX: xy[0], clientY: xy[1] });
 		},
 
 		// a quick tap = down + up at the same spot
 		tap: (args) => {
 			const xy = clampXY(args.x, args.y);
-			return send({ type: EVENTS.down, downDelta: 0, clientX: xy[0], clientY: xy[1] }).then(() => {
-				return send({ type: EVENTS.up, downDelta: 120, clientX: xy[0], clientY: xy[1] });
+			return send({ type: dialect.events.down, downDelta: dialect.downDelta(), clientX: xy[0], clientY: xy[1] }).then(() => {
+				return send({ type: dialect.events.up, downDelta: 120, clientX: xy[0], clientY: xy[1] });
 			});
 		},
 
 		key: (args) => {
-			const type = KEYS[String(args.name || "").toLowerCase()];
+			const type = dialect.keys[String(args.name || "").toLowerCase()];
 			if (!type) {
-				throw new Error("name must be one of " + Object.keys(KEYS).join("|"));
+				throw new Error("name must be one of " + Object.keys(dialect.keys).join("|"));
 			}
 			return send({ type: type });
 		},
@@ -123,14 +138,14 @@ const create = (options, io) => {
 			const from = clampXY(args.from_x, args.from_y);
 			const to = clampXY(args.to_x, args.to_y);
 			const steps = Math.max(1, Math.min(50, Math.round(Number(args.steps) || 8)));
-			return send({ type: EVENTS.down, downDelta: 0, clientX: from[0], clientY: from[1] }).then(() => {
+			return send({ type: dialect.events.down, downDelta: dialect.downDelta(), clientX: from[0], clientY: from[1] }).then(() => {
 				let chain = Promise.resolve();
 				for (let i = 1; i <= steps; i++) {
 					const x = Math.round(from[0] + (to[0] - from[0]) * i / steps);
 					const y = Math.round(from[1] + (to[1] - from[1]) * i / steps);
-					chain = chain.then(() => send({ type: EVENTS.move, downDelta: 16, clientX: x, clientY: y }));
+					chain = chain.then(() => send({ type: dialect.events.move, downDelta: 16, clientX: x, clientY: y }));
 				}
-				return chain.then(() => send({ type: EVENTS.up, downDelta: 60, clientX: to[0], clientY: to[1] }));
+				return chain.then(() => send({ type: dialect.events.up, downDelta: 60, clientX: to[0], clientY: to[1] }));
 			});
 		},
 
@@ -174,7 +189,8 @@ module.exports = {
 	options: {
 		host: "instrument IP (required)",
 		videoPort: "screen-video WebSocket port (default 9001)",
-		controlPort: "input-injection WebSocket port (default 9002)"
+		controlPort: "input-injection WebSocket port (default 9002)",
+		dialect: "rigol (CONTROL_KEY_*, DM858) | dom (onmouse*, MHO98 patched FW)"
 	},
 	commands: {
 		tap: "{x, y} tap the screen (native screen coordinates, DM858: 1024x600)",
