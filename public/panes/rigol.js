@@ -74,7 +74,19 @@ export default {
 			if (!id || status.viewOnly) {
 				return Promise.resolve();
 			}
-			return ctx.api("POST", "/devices/" + id + "/command", { command: command, args: args }).catch(() => null);
+			return ctx.api("POST", "/devices/" + id + "/command", { command: command, args: args }).then((r) => {
+				if (r && r.error) {
+					status.text = "input failed";
+					status.detail = String(r.error);
+					paint();
+				}
+				return r;
+			}, (err) => {
+				status.text = "input failed";
+				status.detail = err.message;
+				paint();
+				return null;
+			});
 		};
 
 		let player = null;
