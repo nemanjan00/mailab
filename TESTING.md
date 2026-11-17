@@ -24,7 +24,7 @@ real-hardware verification procedure is the checklist at the bottom.
 | scpi (generic) | x (2) | via dm858/mho900 presets | — |
 | scpiws (SCPI over WS 9004) | x (5) | x (DM858 — no panel lock) | — |
 | dm858 (DM858E DMM) | x (6) | x (settings model, monitor, screenshots, live pane) | x (UI) ohm/cap/diode switching sweep on hardware |
-| mho900 (MHO98 scope) | x (17) | x (full settings model, AWG loopback, wheel/drag UI, live pane) | x (UI) XY/ROLL modes, logic channels, 2nd AWG channel |
+| mho900 (MHO98 scope) | x (17) | x (FULL: settings sync of ch1-4/timebase/trigger/acquire/AWG1+2, set round-trips read back from the unit, AWG loopback 1 MHz/1 Vpp set -> 1.000 MHz/1.05 Vpp measured, watch trace+screen push, ctrl/shift-wheel drove real t/div + V/div, trigger flags dragged w/ pixel probes, V/div window follow, screenshots, live video pane) | x (UI) | TODO: XY/ROLL timebase, ch3/4 capture, AWG2 output on-air, mask testing |
 | mp305 (ISDT PSU) | x (4 + e2e) | x (lab unit: telemetry, DC control) | charge config/run, PD profiles/select, programs, BLE — never on hardware |
 | mdp (MDP-P906) | x (10) | fake bridge | full UI pane, radio reconnection |
 | morfeus (RF siggen) | x (2 + e2e) | x (freq/mode/current/bias/override + settings pane) | sweep on hardware, LCD backlight (0x85) |
