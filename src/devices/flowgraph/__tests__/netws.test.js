@@ -156,11 +156,13 @@ maybe("ws-server mode: the bridge accepts websocket clients (IQ out, logic data 
 				u8[i] = i & 0x7f;
 			}
 			let got = Buffer.alloc(0);
+			let outWs = null;
 			let inWs = null;
 			return waitListen(sinkPort)
 				.then(() => waitListen(sourcePort))
 				.then(() => connectWs(sinkPort))
 				.then((ws) => {
+					outWs = ws;
 					ws.on("message", (data) => {
 						got = Buffer.concat([got, data]);
 					});
@@ -179,6 +181,9 @@ maybe("ws-server mode: the bridge accepts websocket clients (IQ out, logic data 
 				.then(() => bridge.client.command("stats"))
 				.then((stats) => {
 					kill(bridge);
+					if (outWs) {
+						outWs.close();
+					}
 					if (inWs) {
 						inWs.close();
 					}
@@ -190,6 +195,9 @@ maybe("ws-server mode: the bridge accepts websocket clients (IQ out, logic data 
 					expect(stats.scope.in).toBeGreaterThan(0);
 				}, (err) => {
 					kill(bridge);
+					if (outWs) {
+						outWs.close();
+					}
 					if (inWs) {
 						inWs.close();
 					}
