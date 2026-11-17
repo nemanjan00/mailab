@@ -69,18 +69,73 @@ const emit = (event, payload) => {
 
 // ---- api ----------------------------------------------------------------
 
-// collaboration mode: the server wants a token; keep it in a cookie for api + ws
+// collaboration mode: the server wants a token; keep it in a cookie for api + ws.
+// Modal, not prompt(): when the lab has NO tokens configured a token can't
+// help (the host/origin is untrusted) — say that instead of asking.
 let asked = false;
+const authVeil = (content) => {
+	const veil = document.createElement("div");
+	veil.className = "auth-veil";
+	const card = document.createElement("div");
+	card.className = "auth-card";
+	card.appendChild(content);
+	veil.appendChild(card);
+	document.body.appendChild(veil);
+	return veil;
+};
+const showTokenModal = () => {
+	const box = document.createElement("div");
+	const title = document.createElement("h3");
+	title.textContent = "This lab needs an access token";
+	const input = document.createElement("input");
+	input.type = "password";
+	input.placeholder = "paste the token";
+	input.autocomplete = "off";
+	const go = document.createElement("button");
+	go.textContent = "sign in";
+	const form = document.createElement("form");
+	form.append(input, go);
+	const err = document.createElement("div");
+	err.className = "muted";
+	box.append(title, form, err);
+	const veil = authVeil(box);
+	form.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const token = input.value.trim();
+		if (!token) {
+			return;
+		}
+		// the server swaps it for an HttpOnly cookie and redirects to the clean URL
+		location.href = "/?token=" + encodeURIComponent(token);
+	});
+	return veil;
+};
+const showRefusedModal = (host) => {
+	const box = document.createElement("div");
+	const title = document.createElement("h3");
+	title.textContent = "This host isn't trusted";
+	const msg = document.createElement("p");
+	msg.textContent = "The lab runs without tokens but refuses this host/origin. Open it via its configured address"
+		+ (host ? " (you came in as " + host + ")" : "")
+		+ ", or set MAILAB_TOKENS on the server.";
+	box.append(title, msg);
+	authVeil(box);
+};
 const askToken = () => {
 	if (asked) {
 		return;
 	}
 	asked = true;
-	const token = prompt("This lab needs an access token:");
-	if (token) {
-		// the server swaps it for an HttpOnly cookie and redirects to the clean URL
-		location.href = "/?token=" + encodeURIComponent(token);
-	}
+	fetch("/api/auth/status").then((res) => res.json()).then((st) => {
+		if (st.enabled) {
+			showTokenModal();
+		} else {
+			showRefusedModal(st.host);
+		}
+	}, () => {
+		// status probe failed (older server?): fall back to asking
+		showTokenModal();
+	});
 };
 
 const api = (method, path, body) => {

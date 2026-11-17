@@ -687,3 +687,38 @@ body.has-maximized .grid-stack-item:not(.maximized) { visibility: hidden; }
 .settings-pane table.kv td { padding: 2px 0; word-break: break-all; }
 .settings-pane .devstate { font-size: 11px; }
 .settings-pane.busy .form { opacity: 0.6; }
+
+/* auth: token login / host-refused modal */
+.auth-veil {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.55);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+}
+.auth-card {
+	background: var(--panel, #23272e);
+	border: 1px solid var(--border, #3a3f47);
+	border-radius: 8px;
+	padding: 18px 22px;
+	min-width: 320px;
+	max-width: 420px;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+.auth-card h3 {
+	margin: 0 0 12px;
+	font-size: 15px;
+}
+.auth-card form {
+	display: flex;
+	gap: 8px;
+}
+.auth-card input {
+	flex: 1;
+}
+.auth-card p {
+	font-size: 13px;
+	line-height: 1.5;
+}

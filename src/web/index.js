@@ -642,6 +642,12 @@ const create = (lab, options) => {
 	// MCP calls are checked per tool (read-only tokens get read tools only)
 	app.all("/mcp", auth.middleware(() => true), express.json({ limit: "20mb" }), sessions.handle);
 
+	// unauthenticated auth state: lets the frontend distinguish "tokens are
+	// configured, show the login modal" from "this host/origin isn't trusted"
+	app.get("/api/auth/status", (req, res) => {
+		res.json({ enabled: auth.enabled, host: req.headers.host || "" });
+	});
+
 	// the kvm pane: MJPEG proxy, status, power (people only); GETs are reads
 	const kvm = kvmPane.create(lab, auth);
 	app.use("/api/kvm", auth.middleware(), kvm.router);
