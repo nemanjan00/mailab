@@ -1,0 +1,110 @@
+# Maintainer: Nemanja Nedeljkovic <nemanjan00@gmail.com>
+#
+# Built from a local mailab checkout, not a download:
+#   MAILAB_SRC=/path/to/mailab MAILAB_REF=HEAD makepkg -d
+# The app comes from `git archive $MAILAB_REF`, so uncommitted changes are left
+# out. -d because uhubctl / minipro / the libsigrok fork come from the AUR
+# (os/scripts/build-packages.sh builds them into the same local repo).
+
+pkgbase=mailab
+pkgname=(mailab mailab-kiosk)
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="MCP server + live web UI for a hardware lab the AI operates"
+arch=(x86_64)
+url="https://github.com/nemanjan00/mailab"
+license=(MIT)
+makedepends=(git nodejs yarn)
+options=(!strip !debug)
+source=(mailab.service
+	mailab-setup
+	mailab-setup.service
+	mailab-token
+	mailab.sysusers
+	mailab.tmpfiles
+	70-mailab.rules
+	mailab-kiosk
+	mailab-kiosk.toml
+	greetd-mailab-kiosk.conf
+	chromium-policy.json
+	kiosk.sysusers
+	kiosk.tmpfiles)
+sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP)
+
+: "${MAILAB_SRC:=$startdir/../../..}"
+: "${MAILAB_REF:=HEAD}"
+
+pkgver() {
+	local version
+	version=$(git -C "$MAILAB_SRC" show "$MAILAB_REF:package.json" | node -p 'JSON.parse(require("fs").readFileSync(0)).version')
+	printf "%s.r%s.g%s" "$version" \
+		"$(git -C "$MAILAB_SRC" rev-list --count "$MAILAB_REF")" \
+		"$(git -C "$MAILAB_SRC" rev-parse --short "$MAILAB_REF")"
+}
+
+prepare() {
+	rm -rf app
+	mkdir app
+	git -C "$MAILAB_SRC" archive "$MAILAB_REF" | tar -x -C app
+	# the OS image builder isn't part of the app
+	rm -rf app/os
+}
+
+build() {
+	cd app
+	# --ignore-scripts: no husky hook; serialport loads its bundled prebuilds
+	yarn install --frozen-lockfile --ignore-scripts --non-interactive
+	yarn build
+	yarn install --production --frozen-lockfile --ignore-scripts --non-interactive
+}
+
+package_mailab() {
+	pkgdesc="MCP server + live web UI for a hardware lab the AI operates"
+	depends=(
+		nodejs
+		# python bridges; drivers pip-install the rest into DATA_DIR/python
+		python python-pip python-numpy python-scipy python-pyserial python-pyusb
+		python-hidapi python-opencv python-bleak
+		# DSP and SDRs
+		liquid-dsp soapysdr soapyhackrf soapyrtlsdr soapybladerf
+		hackrf bladerf rtl-sdr
+		# logic analyzers (libsigrok: the AUR SLogic fork provides it)
+		sigrok-cli sigrok-firmware-fx2lafw libsigrokdecode
+		# programmers and security tools
+		flashrom openocd proxmark3 dfu-util minipro uhubctl
+		# media, documents, blobs
+		ffmpeg sox v4l-utils poppler imagemagick binwalk file
+		# serial and USB
+		picocom socat usbutils
+		git
+	)
+	optdepends=('python-glasgow: Glasgow Interface Explorer driver'
+		'jlink-software-and-documentation: SEGGER J-Link driver'
+		'nvidia-utils: GPU readings in sysmon, CUDA denoise')
+
+	install -d "$pkgdir/opt"
+	cp -a app "$pkgdir/opt/mailab"
+
+	install -Dm644 mailab.service "$pkgdir/usr/lib/systemd/system/mailab.service"
+	install -Dm644 mailab-setup.service "$pkgdir/usr/lib/systemd/system/mailab-setup.service"
+	install -Dm755 mailab-setup "$pkgdir/usr/lib/mailab/mailab-setup"
+	install -Dm755 mailab-token "$pkgdir/usr/bin/mailab-token"
+	install -Dm644 mailab.sysusers "$pkgdir/usr/lib/sysusers.d/mailab.conf"
+	install -Dm644 mailab.tmpfiles "$pkgdir/usr/lib/tmpfiles.d/mailab.conf"
+	install -Dm644 70-mailab.rules "$pkgdir/usr/lib/udev/rules.d/70-mailab.rules"
+}
+
+package_mailab-kiosk() {
+	pkgdesc="Fullscreen mailab web UI as the desktop (greetd + cage + Chromium)"
+	depends=(mailab greetd cage chromium curl
+		noto-fonts noto-fonts-emoji ttf-dejavu
+		pipewire pipewire-pulse wireplumber)
+	backup=(etc/greetd/mailab-kiosk.toml)
+
+	install -Dm755 mailab-kiosk "$pkgdir/usr/bin/mailab-kiosk"
+	install -Dm644 mailab-kiosk.toml "$pkgdir/etc/greetd/mailab-kiosk.toml"
+	install -Dm644 greetd-mailab-kiosk.conf "$pkgdir/usr/lib/systemd/system/greetd.service.d/mailab-kiosk.conf"
+	install -Dm644 chromium-policy.json "$pkgdir/etc/chromium/policies/managed/mailab-kiosk.json"
+	install -Dm644 kiosk.sysusers "$pkgdir/usr/lib/sysusers.d/mailab-kiosk.conf"
+	install -Dm644 kiosk.tmpfiles "$pkgdir/usr/lib/tmpfiles.d/mailab-kiosk.conf"
+}

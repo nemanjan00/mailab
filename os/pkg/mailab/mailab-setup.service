@@ -1,0 +1,11 @@
+[Unit]
+Description=mailab: generate access tokens
+ConditionPathExists=!/etc/mailab/mailab.env
+Before=mailab.service greetd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# MAILAB_SETUP_HOST (default 0.0.0.0), written by mailab-install --listen
+EnvironmentFile=-/etc/mailab/setup.conf
+ExecStart=/usr/lib/mailab/mailab-setup

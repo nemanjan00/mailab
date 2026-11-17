@@ -1,0 +1,10 @@
+# greetd config for the mailab kiosk (greetd.service.d/mailab-kiosk.conf
+# points greetd here). The session restarts whenever it exits.
+# Ctrl+Alt+F2 gets a text console (cage -s allows VT switching).
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "cage -s -d -- /usr/bin/mailab-kiosk"
+user = "kiosk"

@@ -1,0 +1,34 @@
+#!/bin/sh
+# The kiosk session (greetd runs it in cage as the kiosk user): wait for the
+# lab server, log in with the kiosk token, keep Chromium fullscreen on it.
+# Overrides go in /etc/mailab/kiosk.conf (MAILAB_KIOSK_URL, MAILAB_KIOSK_FLAGS).
+
+MAILAB_KIOSK_URL=http://127.0.0.1:3000/
+MAILAB_KIOSK_FLAGS=
+if [ -r /etc/mailab/kiosk.conf ]; then
+	# shellcheck source=/dev/null
+	. /etc/mailab/kiosk.conf
+fi
+
+url=$MAILAB_KIOSK_URL
+until curl -s -o /dev/null --max-time 2 "$url"; do
+	sleep 1
+done
+
+# /?token= is a login link: the server swaps it for a cookie and redirects
+token=$(cat /etc/mailab/kiosk.token 2>/dev/null || true)
+login=$url
+if [ -n "$token" ]; then
+	login="${url}?token=$token"
+fi
+
+while :; do
+	# shellcheck disable=SC2086
+	chromium --kiosk --ozone-platform=wayland \
+		--no-first-run --noerrdialogs --disable-session-crashed-bubble \
+		--disable-features=TranslateUI --password-store=basic \
+		--autoplay-policy=no-user-gesture-required \
+		--user-data-dir="$HOME/.local/share/mailab-kiosk" \
+		$MAILAB_KIOSK_FLAGS "$login"
+	sleep 2
+done

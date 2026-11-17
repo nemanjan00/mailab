@@ -1,0 +1,24 @@
+[Unit]
+Description=mailab: AI-operated hardware lab (MCP + web UI)
+Documentation=https://github.com/nemanjan00/mailab
+Wants=network-online.target
+After=network-online.target mailab-setup.service
+Requires=mailab-setup.service
+
+[Service]
+Type=simple
+User=mailab
+Group=mailab
+# serial ports, cameras, audio, raw USB / hidraw / hub port power (70-mailab.rules)
+SupplementaryGroups=uucp video audio plugdev
+Environment=NODE_ENV=production DATA_DIR=/var/lib/mailab HOST=127.0.0.1 PORT=3000
+# HOST, PORT and MAILAB_TOKENS, written by mailab-setup on first boot
+EnvironmentFile=/etc/mailab/mailab.env
+EnvironmentFile=-/etc/mailab/local.env
+WorkingDirectory=/opt/mailab
+ExecStart=/usr/bin/node src
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

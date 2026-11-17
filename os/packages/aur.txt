@@ -1,0 +1,6 @@
+# AUR packages built into the local [mailab] repo (os/scripts/build-packages.sh).
+# Same picks as the shack host (~/lab/shack-ansible).
+libsigrok-nemanjan00-git
+libsigrokdecode-nemanjan00-git
+minipro-git
+uhubctl

@@ -1,0 +1,10 @@
+{
+	"AudioCaptureAllowedUrls": ["http://127.0.0.1:3000", "http://localhost:3000"],
+	"VideoCaptureAllowedUrls": ["http://127.0.0.1:3000", "http://localhost:3000"],
+	"BrowserSignin": 0,
+	"DefaultBrowserSettingEnabled": false,
+	"MetricsReportingEnabled": false,
+	"PasswordManagerEnabled": false,
+	"PromotionalTabsEnabled": false,
+	"TranslateEnabled": false
+}

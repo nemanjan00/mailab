@@ -1,0 +1,6 @@
+[1mmailab live[0m: the lab UI runs on tty1 (Ctrl+Alt+F1). You are on a root console.
+
+  mailab-install         install this to a disk (asks first; --help for unattended)
+  mailab-token           MCP connect command and login link for this lab
+  iwctl                  Wi-Fi (station wlan0 connect <ssid>); wired just works
+

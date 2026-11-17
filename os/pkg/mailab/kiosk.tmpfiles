@@ -1,0 +1,2 @@
+d /var/lib/kiosk 0700 kiosk kiosk -
+z /etc/mailab/kiosk.token 0640 root kiosk -

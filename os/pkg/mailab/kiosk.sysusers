@@ -1,0 +1,4 @@
+u kiosk - "mailab kiosk" /var/lib/kiosk /bin/sh
+m kiosk video
+m kiosk input
+m kiosk audio

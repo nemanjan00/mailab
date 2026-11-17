@@ -1,0 +1,23 @@
+# Installed system (mailab-install pacstraps these plus kernel and microcode).
+base
+base-devel
+linux-cachyos
+linux-firmware
+cachyos-keyring
+cachyos-mirrorlist
+cachyos-settings
+networkmanager
+openssh
+avahi
+nss-mdns
+sudo
+nano
+vim
+htop
+man-db
+efibootmgr
+# the lab; list the forks explicitly so they win over stock libsigrok
+libsigrok-nemanjan00-git
+libsigrokdecode-nemanjan00-git
+mailab
+mailab-kiosk

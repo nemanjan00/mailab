@@ -1,0 +1,2 @@
+d /var/lib/mailab 0750 mailab mailab -
+d /etc/mailab 0755 root root -

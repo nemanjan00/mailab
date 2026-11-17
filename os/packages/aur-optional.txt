@@ -1,0 +1,4 @@
+# Built with ./build.sh --with-optional. Heavy (glasgow pulls yosys/nextpnr
+# and several AUR python deps) or proprietary.
+python-glasgow-git
+jlink-software-and-documentation

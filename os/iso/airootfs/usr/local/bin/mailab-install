@@ -1,0 +1,222 @@
+#!/bin/bash
+# Install mailab CachyOS from the live ISO to a disk (UEFI, systemd-boot).
+# The disk is wiped: GPT, 1 GiB ESP at /boot, ext4 root. Needs network for
+# the CachyOS / Arch mirrors; mailab and its AUR builds come from the ISO.
+#
+#   mailab-install                               interactive
+#   mailab-install --disk /dev/nvme0n1 --yes     unattended
+#
+# Options:
+#   --disk DEV            target disk (asked when missing)
+#   --hostname NAME       default mailab
+#   --timezone ZONE       default UTC (e.g. Europe/Belgrade)
+#   --keymap MAP          console keymap, default us
+#   --user NAME           admin user with sudo (default: none, root only)
+#   --password PW         password for root and --user (asked when missing;
+#                         with --yes and no password, root stays locked)
+#   --ssh-key FILE        authorized_keys for root and --user
+#   --listen lan|local    lab server on all interfaces (tokens) or loopback
+#                         only (default lan)
+#   --no-kiosk            no fullscreen UI, just the server
+#   --yes                 don't ask; wipe --disk
+set -euo pipefail
+
+disk=
+hostname=mailab
+timezone=UTC
+keymap=us
+user=
+password=
+ssh_key=
+listen=lan
+kiosk=1
+yes=0
+mnt=/mnt
+
+usage() {
+	sed -n '2,/^set -euo/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'
+	exit "${1:-0}"
+}
+
+die() {
+	echo "mailab-install: $*" >&2
+	exit 1
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--disk) disk=$2; shift ;;
+		--hostname) hostname=$2; shift ;;
+		--timezone) timezone=$2; shift ;;
+		--keymap) keymap=$2; shift ;;
+		--user) user=$2; shift ;;
+		--password) password=$2; shift ;;
+		--ssh-key) ssh_key=$2; shift ;;
+		--listen) listen=$2; shift ;;
+		--no-kiosk) kiosk=0 ;;
+		--yes) yes=1 ;;
+		-h | --help) usage ;;
+		*) echo "unknown option: $1" >&2; usage 1 ;;
+	esac
+	shift
+done
+
+[ "$(id -u)" = 0 ] || die "run as root"
+[ -d /sys/firmware/efi ] || die "boot the ISO in UEFI mode (BIOS installs aren't supported)"
+case "$listen" in lan | local) ;; *) die "--listen is lan or local" ;; esac
+[ -e "/usr/share/zoneinfo/$timezone" ] || die "unknown timezone: $timezone"
+[[ "$hostname" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,62}$ ]] || die "bad hostname: $hostname"
+if [ -n "$user" ] && ! [[ "$user" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+	die "bad user name: $user"
+fi
+if [ -n "$ssh_key" ] && [ ! -r "$ssh_key" ]; then
+	die "can't read $ssh_key"
+fi
+
+# the live medium itself is never a target
+live=$(lsblk -no PKNAME "$(findmnt -no SOURCE /run/archiso/bootmnt 2> /dev/null)" 2> /dev/null || true)
+
+if [ -z "$disk" ]; then
+	[ "$yes" = 0 ] || die "--yes needs --disk"
+	echo "Disks:"
+	lsblk -dpno NAME,SIZE,MODEL,TYPE | awk '$NF == "disk"' | grep -v "^/dev/${live:-NONE} " || true
+	read -rp "Install to (e.g. /dev/nvme0n1): " disk
+fi
+[ -b "$disk" ] || die "not a block device: $disk"
+[ "$(lsblk -dno TYPE "$disk")" = disk ] || die "$disk is not a whole disk"
+[ "$(basename "$disk")" != "$live" ] || die "$disk is the live medium"
+
+if [ "$yes" = 0 ]; then
+	lsblk "$disk"
+	read -rp "Everything on $disk will be erased. Type the disk name to continue: " answer
+	[ "$answer" = "$disk" ] || die "aborted"
+fi
+
+if [ -z "$password" ] && [ "$yes" = 0 ]; then
+	while :; do
+		read -rsp "Password for root${user:+ and $user}: " password; echo
+		read -rsp "Again: " again; echo
+		[ "$password" = "$again" ] && [ -n "$password" ] && break
+		echo "didn't match (or empty), again"
+	done
+fi
+
+echo ">> partitioning $disk"
+umount -R "$mnt" 2> /dev/null || true
+wipefs -af "$disk"
+sgdisk -Z "$disk"
+sgdisk -n1:0:+1G -t1:ef00 -c1:EFI -n2:0:0 -t2:8304 -c2:mailab "$disk"
+partprobe "$disk"
+udevadm settle
+mapfile -t parts < <(lsblk -lnpo NAME,TYPE "$disk" | awk '$2 == "part" {print $1}')
+[ ${#parts[@]} -eq 2 ] || die "expected 2 partitions on $disk, got ${#parts[@]}"
+esp=${parts[0]}
+root=${parts[1]}
+
+mkfs.fat -F 32 -n EFI "$esp"
+mkfs.ext4 -F -L mailab "$root"
+mount "$root" "$mnt"
+mount --mkdir -o umask=0077 "$esp" "$mnt/boot"
+
+ucode=
+if grep -q GenuineIntel /proc/cpuinfo; then
+	ucode=intel-ucode
+elif grep -q AuthenticAMD /proc/cpuinfo; then
+	ucode=amd-ucode
+fi
+
+mapfile -t packages < <(grep -v -e '^#' -e '^$' /usr/share/mailab-os/target.txt)
+if [ "$kiosk" = 0 ]; then
+	mapfile -t packages < <(printf '%s\n' "${packages[@]}" | grep -vx mailab-kiosk)
+fi
+
+# before pacstrap: mkinitcpio's sd-vconsole hook reads it
+mkdir -p "$mnt/etc"
+echo "KEYMAP=$keymap" > "$mnt/etc/vconsole.conf"
+
+echo ">> installing packages"
+# no -K: the live keyring (Arch + CachyOS, populated by pacman-init) is copied in
+pacstrap "$mnt" ${ucode:+"$ucode"} "${packages[@]}"
+genfstab -U "$mnt" >> "$mnt/etc/fstab"
+
+# same repos as the live system, including the mailab repo for later reinstalls
+cp /etc/pacman.conf "$mnt/etc/pacman.conf"
+cp -r /opt/mailab-repo "$mnt/opt/mailab-repo"
+
+echo ">> configuring"
+echo "$hostname" > "$mnt/etc/hostname"
+cat > "$mnt/etc/hosts" << END
+127.0.0.1 localhost
+::1 localhost
+127.0.1.1 $hostname.localdomain $hostname
+END
+echo "LANG=en_US.UTF-8" > "$mnt/etc/locale.conf"
+sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' "$mnt/etc/locale.gen"
+ln -sf "/usr/share/zoneinfo/$timezone" "$mnt/etc/localtime"
+# <hostname>.local over mDNS
+sed -i 's/^hosts: mymachines /&mdns_minimal [NOTFOUND=return] /' "$mnt/etc/nsswitch.conf"
+
+mkdir -p "$mnt/etc/mailab"
+if [ "$listen" = local ]; then
+	echo "MAILAB_SETUP_HOST=127.0.0.1" > "$mnt/etc/mailab/setup.conf"
+fi
+
+services=(NetworkManager sshd avahi-daemon systemd-timesyncd mailab)
+if [ "$kiosk" = 1 ]; then
+	services+=(greetd)
+fi
+
+arch-chroot "$mnt" locale-gen
+arch-chroot "$mnt" hwclock --systohc
+arch-chroot "$mnt" systemctl enable "${services[@]}"
+if [ "$kiosk" = 1 ]; then
+	arch-chroot "$mnt" systemctl set-default graphical.target
+fi
+if [ -n "$user" ]; then
+	arch-chroot "$mnt" useradd -m -G wheel,uucp,video,audio,plugdev "$user"
+fi
+if [ -n "$user" ]; then
+	echo '%wheel ALL=(ALL:ALL) ALL' > "$mnt/etc/sudoers.d/10-wheel"
+	chmod 440 "$mnt/etc/sudoers.d/10-wheel"
+fi
+
+if [ -n "$password" ]; then
+	for name in root $user; do
+		printf '%s:%s\n' "$name" "$password" | arch-chroot "$mnt" chpasswd
+	done
+else
+	echo "!! no password set: root is locked${ssh_key:+ (ssh key only)}"
+fi
+
+if [ -n "$ssh_key" ]; then
+	for home in /root ${user:+/home/$user}; do
+		install -d -m 700 "$mnt$home/.ssh"
+		install -m 600 "$ssh_key" "$mnt$home/.ssh/authorized_keys"
+	done
+	if [ -n "$user" ]; then
+		arch-chroot "$mnt" chown -R "$user:$user" "/home/$user/.ssh"
+	fi
+fi
+
+echo ">> bootloader"
+arch-chroot "$mnt" bootctl install
+root_uuid=$(blkid -s UUID -o value "$root")
+cat > "$mnt/boot/loader/loader.conf" << END
+default mailab.conf
+timeout 2
+editor no
+END
+{
+	echo "title   mailab (CachyOS)"
+	echo "linux   /vmlinuz-linux-cachyos"
+	if [ -n "$ucode" ]; then
+		echo "initrd  /$ucode.img"
+	fi
+	echo "initrd  /initramfs-linux-cachyos.img"
+	echo "options root=UUID=$root_uuid rw quiet"
+} > "$mnt/boot/loader/entries/mailab.conf"
+
+sync
+umount -R "$mnt"
+echo
+echo ">> done. Reboot, then on the new system: mailab-token (as root) prints the MCP command."

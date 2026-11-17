@@ -1,0 +1,9 @@
+# Added to archiso's releng package list (its `linux` becomes linux-cachyos).
+cachyos-keyring
+cachyos-mirrorlist
+avahi
+nss-mdns
+libsigrok-nemanjan00-git
+libsigrokdecode-nemanjan00-git
+mailab
+mailab-kiosk

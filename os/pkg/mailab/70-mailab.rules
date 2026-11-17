@@ -1,0 +1,8 @@
+# mailab runs as an unprivileged user in plugdev: give it the lab's USB gear.
+# This box is a dedicated instrument host, so every USB device is fair game.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", GROUP="plugdev", MODE="0660"
+# hub port power for uhubctl (usb_power tool)
+SUBSYSTEM=="usb", DRIVER=="hub|usb", \
+	RUN+="/bin/sh -c \"chown -f root:plugdev $sys$devpath/*port*/disable || true\"", \
+	RUN+="/bin/sh -c \"chmod -f 660 $sys$devpath/*port*/disable || true\""

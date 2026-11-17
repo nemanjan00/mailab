@@ -1,0 +1,2 @@
+g plugdev -
+u mailab - "mailab lab server" /var/lib/mailab /usr/bin/nologin

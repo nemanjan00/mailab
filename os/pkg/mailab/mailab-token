@@ -1,0 +1,34 @@
+#!/bin/sh
+# Print how to connect to this lab: MCP commands for AI tokens, login links
+# for human ones.
+set -eu
+
+env=/etc/mailab/mailab.env
+if [ ! -r "$env" ]; then
+	echo "mailab-token: can't read $env (run as root)" >&2
+	exit 1
+fi
+
+tokens=$(sed -n 's/^MAILAB_TOKENS=//p' "$env")
+host=$(sed -n 's/^HOST=//p' "$env")
+port=$(sed -n 's/^PORT=//p' "$env")
+port=${port:-3000}
+
+case "$host" in
+	0.0.0.0 | "::" | "")
+		addr=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+		addr=${addr:-$(cat /etc/hostname)}
+		;;
+	*)
+		addr=$host
+		;;
+esac
+
+echo "$tokens" | tr ',' '\n' | while IFS=: read -r name token role; do
+	[ -n "$token" ] || continue
+	if [ "$role" = "human" ]; then
+		echo "$name (human): http://$addr:$port/?token=$token"
+	else
+		echo "$name (${role:-rw}): claude mcp add --transport http mailab http://$addr:$port/mcp --header \"Authorization: Bearer $token\""
+	fi
+done
