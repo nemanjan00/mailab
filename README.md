@@ -8,7 +8,7 @@ plus a live web UI where you watch, steer and collaborate with it.
 
 ## What's in it
 
-**Instruments** (28 drivers; any instrument can run as several instances):
+**Instruments** (47 drivers; any instrument can run as several instances):
 - **Power and meters:** Miniware MDP-P906, ISDT MP305, Rigol DM858E and
   MHO900 over SCPI.
 - **Logic and RF:** sigrok logic analyzers (Sipeed SLogic), KC9531B power
@@ -19,8 +19,10 @@ plus a live web UI where you watch, steer and collaborate with it.
   (findus), flashrom and XGecu (minipro) programmers.
 - **Consoles:** USB-UART adapters (ttyUSB / ttyACM, Tigard, CP210x, CH340)
   with a colored web terminal, and line-based serial gadgets.
-- **Screens and cameras:** webcams / V4L2, VNC remote desktops, the browser's
-  own mic and camera.
+- **Screens and cameras:** webcams / V4L2, VNC remote desktops, RIGOL Web
+  Control instruments (DM858, MHO98/MHO900: live screen + front-panel touch
+  injection over the instrument's own Web Control sockets), the browser's own
+  mic and camera.
 - **Everything else:** a system monitor (CPU, memory, temperatures, GPU), a
   replay device for recorded sessions, and any program that speaks JSON lines.
 
@@ -56,7 +58,7 @@ the AI wire up live:
 - **Block docs:** [docs/blocks](docs/blocks/README.md) has a page per block: parameters, inputs/outputs, a runnable example with a screenshot and the prompt / MCP calls that build it.
 
 **Views**: configurable panes that you and the AI share, organized in
-dashboard tabs (rename, reorder, `#tab=` links), collapsible to their title
+dashboard tabs (rename, reorder, real `/tab/<name>` URLs with back/forward), collapsible to their title
 bar or maximized to the window:
 - **Plots:** live charts, traces with spectrum markers and readings, waterfall,
   constellation, eye diagram, glitch scatter and findus-style parameter map.
@@ -76,8 +78,11 @@ bar or maximized to the window:
 - **Tables** everywhere sort by value (engineering notation aware), filter and
   export CSV / JSON; numeric setpoints open a tablet keypad with unit buttons.
 - **Remote desktops:** a `vnc` device + pane (noVNC) for legacy GUIs in
-  emulators and VMs (e.g. a Windows 3.1 dealer programmer): you drive it in the
-  pane, the AI uses screenshot / type / key / click / wait_change.
+  emulators and VMs (e.g. a Windows 3.11 dealer programmer): you drive it in the
+  pane, the AI uses screenshot / type / key / click / wait_change. RIGOL Web
+  Control instruments get the same treatment natively: a `rigol` device + pane
+  with the live screen and front-panel touch injection (the DM858/MHO98's own
+  H.264 player; the AI has tap/touch/swipe/key commands).
 
 **AI tools**: lab overview, device control, data reads, math and the
 graphing calculator, Kaitai parsing, UI control, chat, and `batch`, which
