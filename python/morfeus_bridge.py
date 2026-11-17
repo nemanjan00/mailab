@@ -142,6 +142,7 @@ def main():
         raw_mode = get(transport, PARAMS["mode"])
         mode = Mode(raw_mode).name.lower() if raw_mode in [m.value for m in Mode] else "unknown(%d)" % raw_mode
         freq_hz = get(transport, PARAMS["freq"])
+        lab.sample("freq", freq_hz / 1e6, unit="MHz")
         return {"freq_hz": freq_hz, "mode": mode, "current": current, "bias": bias}
 
     @bridge.command("freq", "{hz?} read or set the LO/output frequency in Hz (30M..6G)")
