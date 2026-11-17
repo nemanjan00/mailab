@@ -25,6 +25,7 @@ const DRIVERS = [
 	require("./bmp"),
 	require("./jlink"),
 	require("./buspirate"),
+	require("./glasgow"),
 	require("./jtagulator"),
 	require("./proxmark3"),
 	require("./picoglitcher"),
