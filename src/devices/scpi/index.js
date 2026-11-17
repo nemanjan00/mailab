@@ -77,7 +77,8 @@ const create = (options, io, preset) => {
 
 	return {
 		start: () => {
-			return scpi.open(options)
+			// options._open: test seam replacing scpi.open (returns client promise)
+			return (options._open || scpi.open)(options)
 				.then((opened) => {
 					client = opened;
 					extra = (p.commands && p.commands(client, io, options)) || {};

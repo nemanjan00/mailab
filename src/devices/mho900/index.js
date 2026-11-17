@@ -19,11 +19,14 @@ const parsePreamble = (reply) => {
 
 module.exports = scpiDriver.preset({
 	name: "mho900",
-	description: "Rigol MHO900 oscilloscope (SCPI): capture -> trace, measure, screenshot",
+	description: "Rigol MHO900 oscilloscope (SCPI): capture -> trace, measure, screenshot, siggen",
 	commandDocs: {
 		capture: "{sources: [\"CHAN1\", \"CHAN2\"], name} screen waveform -> trace (x = seconds)",
 		measure: "{item: VPP|VMAX|VMIN|VAVG|VRMS|FREQ|PER|RTIM|FTIM|PDUT, source: CHAN1}",
 		screenshot: "PNG of the screen (shown in image pane \"<device>_screen\" and returned)",
+		siggen: "{source: 1|2, func?, freq?, amp?, offset?, state?} AWG control; sets what's given, queries the rest back",
+		siggen_on: "{source} enable AWG output",
+		siggen_off: "{source} disable AWG output",
 		run: "", stop: "", single: "", autoscale: ""
 	},
 	commands: (client, io) => {
@@ -91,6 +94,78 @@ module.exports = scpiDriver.preset({
 			measure: (args) => {
 				return client.query(":MEASure:ITEM? " + args.item + "," + (args.source || "CHAN1")).then((reply) => {
 					return { item: args.item, source: args.source || "CHAN1", value: Number(reply) };
+				});
+			},
+			// AWG (2 source channels). Rigol :SOURce<n> syntax; the exact func
+			// enum names and whether the unit accepts :SOURce at all are
+			// unverified on hardware (LAN SCPI doesn't answer yet) [HW].
+			siggen: (args) => {
+				const src = args.source === 2 ? 2 : 1;
+				const root = ":SOURce" + src;
+				const chain = Promise.resolve();
+				const set = (c) => {
+					return client.write(c);
+				};
+				const funcs = ["SINusoid", "SQUare", "RAMP", "PULSe", "NOISe", "DC", "ARB"];
+				let p = chain;
+				if (args.func) {
+					const f = funcs.find((x) => {
+						return x.toUpperCase().startsWith(String(args.func).toUpperCase());
+					});
+					if (!f) {
+						return Promise.reject(new Error("func must be one of " + funcs.join("|")));
+					}
+					p = p.then(() => {
+						return set(root + ":FUNCtion " + f);
+					});
+				}
+				if (args.freq != null) {
+					p = p.then(() => {
+						return set(root + ":FREQuency " + Number(args.freq));
+					});
+				}
+				if (args.amp != null) {
+					p = p.then(() => {
+						return set(root + ":VOLTage " + Number(args.amp));
+					});
+				}
+				if (args.offset != null) {
+					p = p.then(() => {
+						return set(root + ":VOLTage:OFFSet " + Number(args.offset));
+					});
+				}
+				if (args.state != null) {
+					p = p.then(() => {
+						return set(root + ":OUTPut " + (args.state ? "ON" : "OFF"));
+					});
+				}
+				return p.then(() => {
+					return Promise.all([
+						client.query(root + ":FUNCtion?"),
+						client.query(root + ":FREQuency?"),
+						client.query(root + ":VOLTage?"),
+						client.query(root + ":VOLTage:OFFSet?"),
+						client.query(root + ":OUTPut?")
+					]);
+				}).then((r) => {
+					return {
+						source: src,
+						func: r[0],
+						freq: Number(r[1]),
+						amp: Number(r[2]),
+						offset: Number(r[3]),
+						on: Number(r[4]) === 1 || r[4].startsWith("ON")
+					};
+				});
+			},
+			siggen_on: (args) => {
+				return client.write(":SOURce" + (args.source === 2 ? 2 : 1) + ":OUTPut ON").then(() => {
+					return { ok: true };
+				});
+			},
+			siggen_off: (args) => {
+				return client.write(":SOURce" + (args.source === 2 ? 2 : 1) + ":OUTPut OFF").then(() => {
+					return { ok: true };
 				});
 			},
 			screenshot: () => {
