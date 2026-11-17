@@ -112,7 +112,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | Scope: triggered display + max/min hold + averaging | ✅ | flowgraph `scope` sink: trigger rising/falling/none, level, auto/normal, pretrigger; traces live/max/min/avg; complex input → real/imag/mag |
 | Scope measurements: Vpp, Vmax, Vmin, RMS, mean, frequency, period, duty | ✅ | per capture (frequency via mid-level crossings with hysteresis); selected ones → channels `<dev>_<id>_<m>`; strip under the trace plot. Verified: 10 kHz/30 % square, 1234 Hz sine |
 | libvolk | ✅ (superseded) | done the "small C helper first" step, VOLK itself not needed: modem demod vectorized in numpy (liquid per-sample ctypes loop replaced by nearest-point table search, ~50x: 19.7 ms → 0.40 ms per 20k symbols) and carrier recovery moved to an on-demand compiled C PLL via ctypes (python/native_dsp.py, ~65x: 52.6 ms → 0.81 ms; numpy fallback when no cc). No BER regression (test_modem all green, bench chain BER identical at 3.3e-02). Bench: python/bench_dsp.py |
-| Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |
+| Optional WebGPU rendering | ✅ | waterfall + constellation panes use WebGPU when available (r32float ring texture w/ LUT in shader for waterfalls, ping-pong density accumulation w/ decay for constellations); any init failure or missing adapter falls back to Canvas2D. Shared colormap/slicing in src/utils/webgpu. Verified in headless Chrome: feature-detect + Canvas2D fallback (no WebGPU adapter on this host — navigator.gpu false in Chrome 154); hardware verification of the GPU path pending a WebGPU-capable browser |
 
 ## 4. Instruments
 
