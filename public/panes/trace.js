@@ -117,8 +117,10 @@ export default {
 			}
 		};
 
-		// local zoom around the cursor, on either axis
-		const zoomAt = (ax, zoomIn, event) => {
+		// local zoom around the cursor, on either axis; f is the window factor
+		// (<1 zooms in) so callers can match exact steps (the scope's 1-2-5
+		// ladder, e.g. 2x) instead of a smooth guess
+		const zoomAt = (ax, zoomIn, event, f) => {
 			const u = plot;
 			const sc = u.scales[ax];
 			if (sc.min === undefined || sc.max === undefined || sc.min === null || sc.max === null) {
@@ -129,16 +131,16 @@ export default {
 				? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
 				: Math.min(1, Math.max(0, 1 - (event.clientY - rect.top) / rect.height));
 			const pivot = sc.min + frac * (sc.max - sc.min);
-			const f = zoomIn ? 1 / 1.25 : 1.25;
-			const win = { min: pivot - (pivot - sc.min) * f, max: pivot + (sc.max - pivot) * f };
+			const k = f || (zoomIn ? 1 / 1.25 : 1.25);
+			const win = { min: pivot - (pivot - sc.min) * k, max: pivot + (sc.max - pivot) * k };
 			zoomState[ax] = win;
 			u.setScale(ax, win);
 		};
 		// after a modifier scroll the local zoom is an ESTIMATE of the new
 		// acquisition; it expires once the scope catches up (or after 2.5 s)
 		let scopeFitTimer = null;
-		const scopeEstimate = (ax, zoomIn, event) => {
-			zoomAt(ax, zoomIn, event);
+		const scopeEstimate = (ax, zoomIn, event, ratio) => {
+			zoomAt(ax, zoomIn, event, ratio);
 			clearTimeout(scopeFitTimer);
 			scopeFitTimer = setTimeout(() => {
 				zoomState.x = null;
@@ -156,13 +158,18 @@ export default {
 					return;
 				}
 				const dev = pane.config.device;
-				scopeEstimate(ax, zoomIn, event);
+				const step = (cur, next) => {
+					// the estimate zooms by the exact ladder ratio so frontend and
+					// scope land on the same values
+					scopeEstimate(ax, zoomIn, event, zoomIn ? cur / next : next / cur);
+				};
 				if (ax === "x") {
 					const cur = model.timebase && model.timebase.scale;
 					if (!cur) {
 						return;
 					}
 					const next = ladderStep(cur, zoomIn ? -1 : 1);
+					step(cur, next);
 					ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { timebase: { scale: next } } }).catch(() => null);
 					return;
 				}
@@ -174,6 +181,7 @@ export default {
 					return;
 				}
 				const next = ladderStep(cur, zoomIn ? -1 : 1);
+				step(cur, next);
 				ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { ch: { [n]: { scale: next } } } }).catch(() => null);
 			});
 		};
@@ -205,8 +213,8 @@ export default {
 			const flag = (x, y, dir, color, label) => {
 				// scope-style marker: a square on the plot edge with a filled
 				// triangle pointer at the trigger value
-				const s = 9;
-				const t = 6;
+				const s = 14;
+				const t = 9;
 				c.fillStyle = color;
 				c.beginPath();
 				if (dir === "left") {
@@ -222,7 +230,7 @@ export default {
 				c.fill();
 				c.fillRect(x - s / 2, y - s / 2, s, s);
 				c.fillStyle = "#fff";
-				c.font = "bold 8px sans-serif";
+				c.font = "bold 10px sans-serif";
 				c.textAlign = "center";
 				c.textBaseline = "middle";
 				c.fillText(label, x, y + 0.5);
@@ -241,7 +249,9 @@ export default {
 					c.lineTo(u.bbox.left + u.bbox.width, y);
 					c.stroke();
 					c.setLineDash([]);
-					flag(u.bbox.left + u.bbox.width + 12, y, "left", "#e0534f", "T");
+					// the flag sits on the plot edge, half inside it, so the grab
+					// area stays inside the overlay that receives pointer events
+					flag(u.bbox.left + u.bbox.width - 8, y, "left", "#e0534f", "T");
 				}
 			}
 			if (typeof offset === "number") {
@@ -254,7 +264,7 @@ export default {
 					c.lineTo(x, u.bbox.top + u.bbox.height);
 					c.stroke();
 					c.setLineDash([]);
-					flag(x, u.bbox.top + u.bbox.height + 14, "up", "#e0a34f", "trig");
+					flag(x, u.bbox.top + u.bbox.height - 8, "up", "#e0a34f", "trig");
 				}
 			}
 			c.restore();
@@ -388,8 +398,10 @@ export default {
 				}
 				zoomAt(ax, zoomIn, event);
 			}, { passive: false });
-			// trigger marker dragging: grab near a line, drag, release to commit
-			plot.over.addEventListener("mousedown", (event) => {
+			// trigger marker dragging: grab near a line, drag, release to commit.
+			// listeners live on the plot root (covers the flags on the edges)
+			const grab = plot.root || plot.over;
+			grab.addEventListener("mousedown", (event) => {
 				const g = triggerGeom();
 				if (!g || event.button !== 0) {
 					return;
@@ -397,9 +409,9 @@ export default {
 				const rect = plot.over.getBoundingClientRect();
 				const mx = event.clientX - rect.left;
 				const my = event.clientY - rect.top;
-				if (typeof g.level === "number" && Math.abs(overY(g.level) - my) < 7) {
+				if (typeof g.level === "number" && Math.abs(overY(g.level) - my) < 8) {
 					trigDrag = { kind: "level", value: g.level };
-				} else if (typeof g.offset === "number" && Math.abs(overX(g.offset) - mx) < 7) {
+				} else if (typeof g.offset === "number" && Math.abs(overX(g.offset) - mx) < 8) {
 					trigDrag = { kind: "offset", value: g.offset };
 				}
 				if (trigDrag) {
@@ -408,7 +420,7 @@ export default {
 					event.stopPropagation();
 				}
 			});
-			plot.over.addEventListener("mousemove", (event) => {
+			grab.addEventListener("mousemove", (event) => {
 				const rect = plot.over.getBoundingClientRect();
 				const mx = event.clientX - rect.left;
 				const my = event.clientY - rect.top;
@@ -423,9 +435,9 @@ export default {
 					return;
 				}
 				let cursor = "";
-				if (typeof g.level === "number" && Math.abs(overY(g.level) - my) < 7) {
+				if (typeof g.level === "number" && Math.abs(overY(g.level) - my) < 8) {
 					cursor = "ns-resize";
-				} else if (typeof g.offset === "number" && Math.abs(overX(g.offset) - mx) < 7) {
+				} else if (typeof g.offset === "number" && Math.abs(overX(g.offset) - mx) < 8) {
 					cursor = "ew-resize";
 				}
 				if (plot.over.style.cursor !== cursor) {
@@ -443,8 +455,8 @@ export default {
 				const args = drag.kind === "level" ? { trigger: { level: drag.value } } : { timebase: { offset: drag.value } };
 				ctx.api("POST", "/devices/" + pane.config.device + "/command", { command: "set", args: args }).catch(() => null);
 			};
-			plot.over.addEventListener("mouseup", trigRelease);
-			plot.over.addEventListener("mouseleave", trigRelease);
+			grab.addEventListener("mouseup", trigRelease);
+			grab.addEventListener("mouseleave", trigRelease);
 			// follow the scope's V/div window, and fetch the model for markers
 			scopeModel().then((model) => {
 				applyScopeRanges(model);
