@@ -32,7 +32,10 @@ module.exports = scpiDriver.preset({
 	description: "Rigol MHO900 oscilloscope: settings model (channels/timebase/trigger/acquire/AWG) synced with the unit, intent-level set, auto push of trace + screen on every trigger, capture/measure/snapshot",
 	options: {
 		autoSyncMs: "settings re-sync period in ms (default 30000; 0 = only sync on start and on change)",
-		autoSync: "false disables the settings sync entirely (cache stays empty until `sync`)"
+		autoSync: "false disables the settings sync entirely (cache stays empty until `sync`)",
+		watchOnStart: "start `watch` (trace + screen push on every trigger) when the device starts",
+		watchMs: "watch poll period (default 1000)",
+		watchScreen: "include the screen image in the watch push (default true)"
 	},
 	commandDocs: {
 		settings: "{} the synced settings model (value <device>_settings); syncs first if never synced",
@@ -123,6 +126,13 @@ module.exports = scpiDriver.preset({
 			}
 			return Promise.resolve();
 		};
+
+		// watchOnStart: keep pushing trace + screen on every trigger across
+		// restarts (a trace pane is useless without data flowing)
+		if (options.watchOnStart) {
+			const res = logic.watch({ on: true, intervalMs: options.watchMs || 1000, screen: options.watchScreen !== false }, pushToUi);
+			io.log("watch on (" + res.intervalMs + " ms poll" + (res.screen ? ", trace + screen" : ", trace") + ", watchOnStart)", "info");
+		}
 
 		const simple = (command) => {
 			return () => {
