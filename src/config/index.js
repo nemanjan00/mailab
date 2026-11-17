@@ -52,7 +52,13 @@ const DEFAULTS = {
 	MAILAB_UNSAFE: "",
 	// independent opt-out on top of the bypass: also lift the PSU
 	// hardware-damage caps (max V/I). A typo can fry a board with this on.
-	MAILAB_UNSAFE_PSU: ""
+	MAILAB_UNSAFE_PSU: "",
+	// person-configured extra TX bands on top of the region table
+	// ("144M-146M, 2.4G-2.45G"), e.g. a licensed amateur allocation
+	MAILAB_RF_TX_EXTRA: "",
+	// shared RF TX policy caps (src/txpolicy): TX gain and per-TX time limit
+	MAILAB_RF_TX_MAX_GAIN: "40",
+	MAILAB_RF_TX_MAX_SECONDS: "120"
 };
 
 // a DATA_DIR with control characters (e.g. ANSI colour codes from a

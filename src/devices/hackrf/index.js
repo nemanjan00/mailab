@@ -1,8 +1,14 @@
 // HackRF One wideband spectrum via hackrf_sweep -> trace "spectrum".
 // hackrf_sweep lines: date, time, hz_low, hz_high, bin_width, samples, dB...
+// TX path: `transmit {blob|path, freqHz, rate, gain, seconds, format}` streams IQ
+// through hackrf_transfer (repeat mode). The shared TX policy (src/txpolicy)
+// gates band / gain / duration and tracks a TX session before this runs.
 
 const spawn = require("child_process").spawn;
 const readline = require("readline");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const DEFAULTS = { startMhz: 1, stopMhz: 6000, binWidth: 1000000, lna: 16, vga: 20 };
 
@@ -87,13 +93,114 @@ const create = (options, io) => {
 		});
 	};
 
+	let txProc = null;
+	let txTimer = null;
+	let txFile = null;
+
+	const toCs8 = (bytes, format) => {
+		if (format === "cs8") {
+			return Buffer.from(bytes);
+		}
+		const f32 = new Float32Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 4));
+		const out = Buffer.alloc(f32.length);
+		for (let i = 0; i < f32.length; i++) {
+			const v = Math.max(-1, Math.min(1, f32[i])) * 127;
+			out[i] = v < 0 ? Math.ceil(v) : Math.floor(v);
+		}
+		return out;
+	};
+
+	const killTx = (reason) => {
+		if (txTimer) {
+			clearTimeout(txTimer);
+			txTimer = null;
+		}
+		if (!txProc) {
+			return Promise.resolve({ stopped: false });
+		}
+		const old = txProc;
+		txProc = null;
+		return new Promise((resolve) => {
+			old.once("exit", (code) => {
+				resolve({ stopped: true, reason: reason, exit: code });
+			});
+			old.kill();
+		}).then((result) => {
+			io.log("TX ended: " + (reason || "stopped") + " (exit " + result.exit + ")", "tx");
+			return result;
+		});
+	};
+
+	const transmit = (args) => {
+		const freqHz = Number(args.freqHz);
+		if (!Number.isFinite(freqHz) || freqHz <= 0) {
+			return Promise.reject(new Error("freqHz is required (Hz)"));
+		}
+		const gain = Number(args.gain || 20);
+		const rate = Number(args.rate || 2000000);
+		const format = args.format || "cf32";
+		const seconds = Number(args.seconds || 0);
+		return killTx("new transmit").then(() => {
+			return args.blob ? Promise.resolve(io.getBlob(String(args.blob))) : fs.promises.readFile(String(args.path));
+		}).then((raw) => {
+			const iq = toCs8(raw, format);
+			if (!iq.length) {
+				throw new Error("empty IQ payload");
+			}
+			txFile = path.join(os.tmpdir(), "mailab-hackrf-tx-" + Date.now() + ".cs8");
+			return fs.promises.writeFile(txFile, iq);
+		}).then(() => {
+			const txArgs = [
+				"-t", txFile,
+				"-f", String(Math.round(freqHz)),
+				"-x", String(Math.round(gain)),
+				"-s", String(Math.round(rate)),
+				"-R"
+			];
+			if (settings.serial) {
+				txArgs.push("-d", String(settings.serial));
+			}
+			io.log("hackrf_transfer " + txArgs.join(" "), "tx");
+			txProc = spawn("hackrf_transfer", txArgs);
+			readline.createInterface({ input: txProc.stdout }).on("line", (line) => {
+				io.log(line, "tx");
+			});
+			readline.createInterface({ input: txProc.stderr }).on("line", (line) => {
+				io.log(line, "stderr");
+			});
+			txProc.on("exit", (code) => {
+				if (txTimer) {
+					clearTimeout(txTimer);
+					txTimer = null;
+				}
+				txProc = null;
+				if (txFile) {
+					fs.promises.unlink(txFile).catch(() => {});
+					txFile = null;
+				}
+				io.log("hackrf_transfer exited " + code, "tx");
+			});
+			if (seconds > 0) {
+				txTimer = setTimeout(() => {
+					killTx("time cap " + seconds + " s").catch(() => {});
+				}, seconds * 1000);
+				txTimer.unref();
+			}
+			return { started: true, freqHz: freqHz, gain: gain, rate: rate, seconds: seconds, format: format };
+		});
+	};
+
 	return {
 		start: () => {
 			launch();
 			return Promise.resolve();
 		},
 
-		stop: kill,
+		stop: () => {
+			return killTx("device stop").then(() => {
+				return kill();
+			});
+		},
 
 		command: (name, args) => {
 			if (name === "configure") {
@@ -102,6 +209,12 @@ const create = (options, io) => {
 					launch();
 					return settings;
 				});
+			}
+			if (name === "transmit") {
+				return transmit(args || {});
+			}
+			if (name === "transmit_stop") {
+				return killTx("transmit_stop");
 			}
 			return Promise.reject(new Error("unknown command: " + name));
 		}
@@ -120,7 +233,9 @@ module.exports = {
 		vga: "VGA gain 0-62 step 2 (default 20)"
 	},
 	commands: {
-		configure: "{startMhz, stopMhz, binWidth, lna, vga} restarts the sweep"
+		configure: "{startMhz, stopMhz, binWidth, lna, vga} restarts the sweep",
+		transmit: "{blob (IQ blob) | path (file on the server), freqHz, rate (default 2e6), gain (0-47 dB, default 20), seconds (0 = until transmit_stop), format cf32|cs8 (default cf32)} TX: streams the IQ through hackrf_transfer -R; gated by the shared TX policy (band / gain cap / approval / auto-stop)",
+		transmit_stop: "stop the running transmit"
 	},
 	create: create
 };

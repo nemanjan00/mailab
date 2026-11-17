@@ -12,6 +12,7 @@
 // range a broadband siggen (e.g. Morfeus, 23.5 MHz-6 GHz) can reach.
 
 const bypass = require("../bypass");
+const units = require("../units");
 
 const MHZ = 1e6;
 
@@ -49,13 +50,56 @@ const bands = (region) => {
 };
 
 /**
- * Is hz inside one of the region's allowed bands?
+ * Parse a comma-separated "lo-hi, lo-hi" range list with engineering suffixes
+ * (k/M/G) into [lo, hi] Hz pairs. Malformed ranges are skipped, not fatal.
+ * @param {string} text
+ * @returns {number[][]}
+ */
+const parseRanges = (text) => {
+	const out = [];
+	String(text || "").split(",").forEach((part) => {
+		const m = part.trim().match(/^(.+?)\s*-\s*(.+)$/);
+		if (!m) {
+			return;
+		}
+		try {
+			const lo = units.parse(m[1]);
+			const hi = units.parse(m[2]);
+			if (lo > 0 && hi >= lo) {
+				out.push([lo, hi]);
+			}
+		} catch (_err) {
+			// ignore a malformed range rather than refusing every TX
+		}
+	});
+	return out;
+};
+
+/**
+ * Person-configured extra TX bands (MAILAB_RF_TX_EXTRA), e.g.
+ * "144M-146M, 2400M-2483.5M": comma-separated lo-hi ranges with engineering
+ * suffixes. These are added to the region's licence-free bands, so a licensed
+ * amateur or lab allocation a person is actually allowed to use can be opened
+ * up without widening the table for everyone. Like the region, this is read
+ * from the fixed process env, never from device options, so an AI configuring
+ * a device can't widen the bands.
+ * @param {{get: function(string): string}} config the lab config module
+ * @returns {number[][]} [lo, hi] Hz pairs (empty when unset / unparseable)
+ */
+const extras = (config) => {
+	return parseRanges(config.get("MAILAB_RF_TX_EXTRA"));
+};
+
+/**
+ * Is hz inside one of the region's allowed bands (plus any extras)?
  * @param {number} hz
  * @param {string} region
+ * @param {number[][]} [extra] extras(config) bands
  * @returns {boolean}
  */
-const inBand = (hz, region) => {
-	return bands(region).some((b) => {
+const inBand = (hz, region, extra) => {
+	const all = bands(region).concat(extra || []);
+	return all.some((b) => {
 		return hz >= b[0] && hz <= b[1];
 	});
 };
@@ -86,14 +130,17 @@ const check = (hz, env) => {
 	if (e.chamber) {
 		return { ok: true, reason: "chamber/bypass mode: band check disabled" };
 	}
-	if (inBand(hz, e.region)) {
+	if (inBand(hz, e.region, e.extras)) {
 		return { ok: true, reason: "in band" };
 	}
 	return {
 		ok: false,
 		reason: (hz / MHZ) + " MHz is outside the allowed " + (e.region || "none")
-			+ " transmit bands (" + describeBands(e.region) + "). "
-			+ "Set MAILAB_RF_CHAMBER=1 (shielded chamber) or MAILAB_UNSAFE=1 to bypass."
+			+ " transmit bands (" + describeBands(e.region)
+			+ (e.extras && e.extras.length ? "; extras: " + e.extras.map((b) => {
+				return (b[0] / MHZ) + "-" + (b[1] / MHZ) + " MHz";
+			}).join(", ") : "")
+			+ "). Set MAILAB_RF_CHAMBER=1 (shielded chamber) or MAILAB_UNSAFE=1 to bypass."
 	};
 };
 
@@ -107,12 +154,15 @@ const check = (hz, env) => {
 const fromConfig = (config) => {
 	return {
 		region: config.get("MAILAB_RF_REGION") || "none",
-		chamber: bypass.active()
+		chamber: bypass.active(),
+		extras: extras(config)
 	};
 };
 
 module.exports = {
 	bands: bands,
+	extras: extras,
+	parseRanges: parseRanges,
 	inBand: inBand,
 	describe: describeBands,
 	check: check,

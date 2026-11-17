@@ -16,6 +16,7 @@ const devices = require("../devices");
 const math = require("../math");
 const plotModule = require("../plot");
 const safetyModule = require("../safety");
+const txpolicy = require("../txpolicy");
 const classifyModule = require("../classify");
 const trendsModule = require("../trends");
 const recordingsModule = require("../recordings");
@@ -174,6 +175,8 @@ const create = (options) => {
 		});
 	};
 
+	let txSessions = {};
+	let txSessionCounter = 0;
 	let stopSafety = null;
 	let stopTrends = null;
 	let stopRecordings = null;
@@ -682,12 +685,136 @@ const create = (options) => {
 			});
 		},
 
-		commandDevice: (id, name, args) => {
+		commandDevice: (id, name, args, opts) => {
 			const inst = lab.getDevice(id);
 			if (!inst.instance || inst.state === "error" || inst.state === "stopped") {
 				return Promise.reject(new Error("device " + id + " is " + inst.state + (inst.detail ? ": " + inst.detail : "")));
 			}
-			return inst.instance.command(name, args || {});
+			const o = opts || {};
+			const intent = txpolicy.plan(inst, name, args || {});
+			if (!intent) {
+				return inst.instance.command(name, args || {});
+			}
+			return lab.gateTx(inst, intent, o).then(() => {
+				return inst.instance.command(name, args || {});
+			});
+		},
+
+		// ---- RF TX policy (src/txpolicy) --------------------------------
+		// One shared gate for every TX path: band allow-list (region +
+		// MAILAB_RF_TX_EXTRA, chamber bypass lifts), gain/time caps, a person's
+		// approval (unless the caller already asked, or the bypass auto-grants),
+		// then a TX session with an auto-stop timer, live in lab.state().tx and
+		// killable from the UI / tx_kill / POST /api/tx/kill.
+		gateTx: (inst, intent, opts) => {
+			const o = opts || {};
+			const who = o.who || "device";
+			const band = txpolicy.checkBand(intent);
+			if (!band.ok) {
+				lab.recordActivity({ who: who, tool: "command", args: inst.id + "." + intent.kind + " " + intent.what, ok: false, summary: "TX refused: " + band.reason });
+				return Promise.reject(new Error("TX refused: " + band.reason));
+			}
+			const cap = txpolicy.caps();
+			if (intent.gainDb !== null && intent.gainDb !== undefined && intent.gainDb > cap.maxGainDb) {
+				const msg = "TX gain " + intent.gainDb + " dB is above the MAILAB_RF_TX_MAX_GAIN cap of " + cap.maxGainDb + " dB";
+				lab.recordActivity({ who: who, tool: "command", args: inst.id + "." + intent.kind, ok: false, summary: msg });
+				return Promise.reject(new Error(msg));
+			}
+			const when = txpolicy.clampSeconds(intent.seconds);
+			const ask = () => {
+				if (o.approved) {
+					return Promise.resolve(null);
+				}
+				return lab.safety.requestApproval({
+					who: who,
+					device: inst.id,
+					driver: inst.driver,
+					command: "tx",
+					args: { freqHz: intent.freqHz, gainDb: intent.gainDb, seconds: when.seconds, kind: intent.kind },
+					reason: intent.what + (when.seconds ? " for up to " + when.seconds + " s" : "") + (txpolicy.bypassActive() ? " (band check disabled: chamber/bypass)" : "")
+				});
+			};
+			return ask().then(() => {
+				return lab.startTxSession(inst, intent, when.seconds, who);
+			});
+		},
+
+		startTxSession: (inst, intent, seconds, who) => {
+			const id = "tx" + (++txSessionCounter);
+			const session = {
+				id: id,
+				device: inst.id,
+				driver: inst.driver,
+				kind: intent.kind,
+				freqHz: intent.freqHz,
+				gainDb: intent.gainDb,
+				startedBy: who,
+				t: Date.now(),
+				endsAt: seconds ? Date.now() + seconds * 1000 : null
+			};
+			if (seconds) {
+				session.timer = setTimeout(() => {
+					lab.stopTxSession(id, "auto-stop after " + seconds + " s cap");
+				}, seconds * 1000);
+				session.timer.unref();
+			}
+			txSessions[id] = session;
+			lab.recordActivity({ who: who, tool: "tx", args: intent.what, ok: true, summary: "TX session " + id + (seconds ? " (auto-stop " + seconds + " s)" : "") });
+			lab.notify({ type: "tx", session: lab.describeTxSession(session) });
+			changed();
+			return session;
+		},
+
+		describeTxSession: (session) => {
+			return {
+				id: session.id,
+				device: session.device,
+				driver: session.driver,
+				kind: session.kind,
+				freqHz: session.freqHz,
+				gainDb: session.gainDb,
+				startedBy: session.startedBy,
+				t: session.t,
+				endsAt: session.endsAt
+			};
+		},
+
+		txSessions: () => {
+			return Object.keys(txSessions).sort().map((id) => {
+				return lab.describeTxSession(txSessions[id]);
+			});
+		},
+
+		stopTxSession: (id, reason) => {
+			if (id === null || id === undefined) {
+				// kill switch with no target: stop everything on air
+				return Promise.all(lab.txSessions().map((session) => {
+					return lab.stopTxSession(session.id, reason);
+				})).then((results) => {
+					return { stopped: true, stoppedAll: results.length, results: results };
+				});
+			}
+			const session = txSessions[id];
+			if (!session) {
+				return Promise.reject(new Error("no TX session " + id));
+			}
+			delete txSessions[id];
+			if (session.timer) {
+				clearTimeout(session.timer);
+			}
+			const stopCommand = session.driver === "flowgraph"
+				? lab.commandDevice(session.device, "run", { on: false }, { approved: true })
+				: session.driver === "rfcat"
+					? lab.commandDevice(session.device, "idle", {}, { approved: true })
+					: lab.commandDevice(session.device, "transmit_stop", {}, { approved: true });
+			return stopCommand.catch((err) => {
+				return { stopped: false, error: err.message };
+			}).then((result) => {
+				lab.recordActivity({ who: "kill-switch", tool: "tx", args: session.device + " " + session.kind, ok: true, summary: "TX session " + id + " stopped: " + (reason || "killed") });
+				lab.notify({ type: "tx", session: lab.describeTxSession(session), stopped: true, reason: reason || "killed" });
+				changed();
+				return Object.assign({ stopped: true, id: id }, result && result.stopped === false ? { error: result.error } : {});
+			});
 		},
 
 		getDevice: (id) => {
@@ -811,7 +938,8 @@ const create = (options) => {
 				panes: panes.list(),
 				tabs: panes.tabs(),
 				paneTypes: panesModule.TYPES,
-				bypass: lab.safety.bypassInfo()
+				bypass: lab.safety.bypassInfo(),
+				tx: lab.txSessions()
 			};
 		},
 

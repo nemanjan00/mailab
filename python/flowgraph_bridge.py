@@ -31,6 +31,41 @@ import protocol_decode as pdec
 TICK = 0.02
 
 
+# ---- TX band gate (soapy_sink) ------------------------------------------------
+# The final allow-list (lab region + MAILAB_RF_TX_EXTRA, already intersected
+# with device options) arrives as --tx-bands-final; --chamber (set by the lab
+# driver under MAILAB_RF_CHAMBER / MAILAB_UNSAFE) skips the check. This is the
+# second line of defense - the lab's shared TX policy (src/txpolicy) is the first.
+TX_BANDS = []
+TX_CHAMBER = False
+
+
+def _parse_bands(text):
+    bands = []
+    for part in str(text).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        cut = part.index("-", 1)
+        lo, hi = lab.parse_number(part[:cut], "tx band"), lab.parse_number(part[cut + 1:], "tx band")
+        if lo >= hi:
+            raise ValueError("tx band %r: lo must be below hi" % part)
+        bands.append((lo, hi))
+    return bands
+
+
+def _tx_bands_check(freq_hz, half_bw):
+    if TX_CHAMBER:
+        return
+    lo, hi = freq_hz - half_bw, freq_hz + half_bw
+    for blo, bhi in TX_BANDS:
+        if blo <= lo and hi <= bhi:
+            return
+    raise ValueError("TX refused: %.6f MHz (+-%.1f kHz) is outside the allowed bands (%s)"
+                     % (freq_hz / 1e6, half_bw / 1e3,
+                        ", ".join("%.3f-%.3f MHz" % (b[0] / 1e6, b[1] / 1e6) for b in TX_BANDS) or "none"))
+
+
 # ---- block library ------------------------------------------------------------
 
 class Block:
@@ -248,6 +283,38 @@ class SoapySource(Block):
         if sr.ret <= 0:
             return None
         return self.buf[:sr.ret].copy(), float(self.p["rate"])
+
+    def close(self):
+        self.sdr.deactivateStream(self.stream)
+        self.sdr.closeStream(self.stream)
+
+
+class SoapySink(Block):
+    inputs = "complex IQ at `rate` (baseband around `freq`)"
+    outputs = ""
+    kind = "sink"
+    doc = ("SoapySDR transmitter (bladeRF, HackRF, ...). Gated twice: the lab refuses to start a graph "
+           "with a soapy_sink outside the TX policy (band allow-list, gain/time caps, approval, auto-stop), "
+           "and the bridge re-checks the band here unless --chamber was passed")
+    params = {"args": ("", "e.g. driver=bladerf"), "freq": (100e6, "center frequency Hz"),
+              "rate": (2e6, "sample rate"), "gain": (30.0, "TX gain dB (overall, driver distributes it)")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        import SoapySDR
+        from SoapySDR import SOAPY_SDR_TX, SOAPY_SDR_CF32
+        _tx_bands_check(float(self.p["freq"]), float(self.p["rate"]) / 2.0)
+        self.sdr = SoapySDR.Device(self.p["args"])
+        self.sdr.setSampleRate(SOAPY_SDR_TX, 0, float(self.p["rate"]))
+        self.sdr.setFrequency(SOAPY_SDR_TX, 0, float(self.p["freq"]))
+        self.sdr.setGain(SOAPY_SDR_TX, 0, float(self.p["gain"]))
+        self.stream = self.sdr.setupStream(SOAPY_SDR_TX, SOAPY_SDR_CF32)
+        self.sdr.activateStream(self.stream)
+
+    def work(self, x, rate):
+        x = np.ascontiguousarray(x, dtype=np.complex64)
+        self.sdr.writeStream(self.stream, [x], len(x), timeoutUs=int(TICK * 1e6))
+        return None
 
     def close(self):
         self.sdr.deactivateStream(self.stream)
@@ -1428,6 +1495,7 @@ BLOCKS = {
     "shift": Shift, "resample": Resample, "lowpass": Lowpass, "agc": Agc, "fm_demod": FmDemod, "am_demod": AmDemod,
     "symbol_sync": SymbolSync, "carrier_recovery": CarrierRecovery, "demod": Demod, "mag": Mag, "decimate": Decimate,
     "python": Python,
+    "soapy_sink": SoapySink,
     "spectrum": Spectrum, "constellation": Constellation, "eye": Eye, "scope": Scope, "measure": Measure,
     "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
@@ -1736,7 +1804,13 @@ def publish_stats():
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--graph", default="", help="initial graph JSON")
+parser.add_argument("--chamber", action="store_true",
+                    help="RF chamber mode: skip the soapy_sink TX band check")
+parser.add_argument("--tx-bands-final", default="",
+                    help="final allowed TX band list \"lo-hi, lo-hi\" Hz for soapy_sink")
 opts = parser.parse_args()
+TX_CHAMBER = bool(opts.chamber)
+TX_BANDS = _parse_bands(opts.tx_bands_final) if opts.tx_bands_final else []
 if opts.graph:
     try:
         graph.load(json.loads(opts.graph))

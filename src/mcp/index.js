@@ -214,13 +214,22 @@ const create = (lab, context) => {
 		args: json.optional()
 	}, (a) => {
 		const args = a.args || {};
+		const who = actor();
 		const device = lab.getDevice(a.id);
 		const rule = lab.safety.needsApproval(a.id, device.driver, a.command, args);
 		if (!rule) {
-			return lab.commandDevice(a.id, a.command, args);
+			return lab.commandDevice(a.id, a.command, args, { who: who });
 		}
-		return lab.safety.requestApproval({ who: actor(), device: a.id, command: a.command, args: args, reason: rule.reason || "approval required" })
-			.then(() => lab.commandDevice(a.id, a.command, args));
+		return lab.safety.requestApproval({ who: who, device: a.id, command: a.command, args: args, reason: rule.reason || "approval required" })
+			.then(() => lab.commandDevice(a.id, a.command, args, { who: who, approved: true }));
+	});
+
+	tool("tx_status", "Active RF transmit sessions (device, frequency, gain, started by, auto-stop deadline); the same list drives the lab's TX banner and kill switch", {}, () => {
+		return { tx: lab.txSessions() };
+	});
+
+	tool("tx_kill", "Kill switch: stop one active RF transmit session (or all of them). Never needs approval.", { id: z.string().optional() }, (a) => {
+		return lab.stopTxSession(a.id || null, "kill switch");
 	});
 
 	tool("safety_overview", "Safety rules (server-enforced), the approval policy, pending approvals and recent rule firings", {}, () => {

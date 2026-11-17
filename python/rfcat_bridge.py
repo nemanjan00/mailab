@@ -621,7 +621,7 @@ class RfcatDevice:
             "manchester": bool(d.getEnableMdmManchester()),
             "preamble": preamble_bytes(d.getMdmNumPreamble()),
             "region": self.region,
-            "txBands": format_bands(self.bands),
+            "txBands": format_bands(self.bands or []),
             "registers": registers,
         }
 
@@ -685,7 +685,8 @@ class RfcatDevice:
         repeat, delay = tx_plan(args)
         freq = self.d.getFreq()[0]
         half = occupied_half_bw(self.modulation_name(), self.d.getMdmDRate(), self.d.getMdmDeviatn())
-        check_tx(freq, half, self.bands)
+        if self.bands is not None:
+            check_tx(freq, half, self.bands)
         for i in range(repeat):
             if i and delay:
                 time.sleep(delay / 1000.0)
@@ -742,7 +743,7 @@ def build(dev, opts):
             "part": part, "chip": PART_NAMES.get(part, "unknown"),
             "build": build_info.decode("utf8", "replace").strip("\x00 ") if isinstance(build_info, bytes) else build_info,
             "serial": serial.hex() if isinstance(serial, bytes) else serial,
-            "freq": d.getFreq()[0], "region": dev.region, "txBands": format_bands(dev.bands),
+            "freq": d.getFreq()[0], "region": dev.region, "txBands": format_bands(dev.bands or []),
             "fake": isinstance(d, FakeRfCat),
         }
 
@@ -904,17 +905,24 @@ def main():
     parser.add_argument("--serial", default=None, help="USB serial (several dongles)")
     parser.add_argument("--region", default="eu", help="TX allow-list region: %s" % ", ".join(sorted(REGIONS)))
     parser.add_argument("--tx-bands", default=None, help="narrower allow-list: lo-hi,lo-hi (Hz, k/M suffixes)")
+    parser.add_argument("--tx-bands-final", default=None, help="complete allow-list (Hz, k/M suffixes); region containment is NOT re-checked - the lab passes its region + MAILAB_RF_TX_EXTRA merged")
+    parser.add_argument("--chamber", action="store_true", help="isolated RF chamber: no TX band check (lab set MAILAB_RF_CHAMBER/MAILAB_UNSAFE)")
     for key in CONFIG_KEYS:
         flag = "--" + "".join("-" + c.lower() if c.isupper() else c for c in key)
         parser.add_argument(flag, dest=key, default=None)
     opts = parser.parse_args()
 
-    bands = allowed_bands(opts.region, opts.tx_bands)
+    if opts.chamber:
+        bands = None
+    elif opts.tx_bands_final:
+        bands = parse_bands(opts.tx_bands_final)
+    else:
+        bands = allowed_bands(opts.region, opts.tx_bands)
     dongle, timeouts = open_dongle(opts.index, opts.serial)
-    dev = RfcatDevice(dongle, timeouts, bands, str(opts.region).lower())
+    dev = RfcatDevice(dongle, timeouts, bands, "chamber" if opts.chamber else str(opts.region).lower())
     dev.startup = {k: getattr(opts, k) for k in CONFIG_KEYS if getattr(opts, k) is not None}
     dev.apply(dev.startup)
-    lab.log("RfCat ready: %.6f MHz, TX bands (%s): %s" % (dongle.getFreq()[0] / 1e6, dev.region, format_bands(bands) or "none"))
+    lab.log("RfCat ready: %.6f MHz, TX bands (%s): %s" % (dongle.getFreq()[0] / 1e6, dev.region, format_bands(bands or []) or "none"))
     lab.status("running")
     bridge = build(dev, opts)
     try:

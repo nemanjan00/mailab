@@ -122,6 +122,43 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
 	border-bottom: 2px solid #ff5252;
 }
 
+/* live RF transmit sessions (see syncTxBanner in app.js) */
+.tx-banner {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	align-items: center;
+	padding: 6px 14px;
+	font-weight: bold;
+	color: #fff;
+	background: #b00020;
+	border-bottom: 2px solid #ff8a80;
+}
+.tx-banner::before {
+	content: "📡 TX ON AIR";
+}
+.tx-session {
+	display: inline-flex;
+	gap: 6px;
+	align-items: center;
+	font-weight: normal;
+}
+.tx-kill {
+	padding: 1px 8px;
+	font-weight: bold;
+	color: #fff;
+	background: #7f0000;
+	border: 1px solid #ff8a80;
+	border-radius: 4px;
+	cursor: pointer;
+}
+.tx-kill:hover {
+	background: #ff1744;
+}
+
 .bar {
 	position: sticky;
 	top: 0;

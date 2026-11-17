@@ -12,6 +12,9 @@
 // bridge as `audio_in` commands, one in flight per stream.
 
 const processDriver = require("../process");
+const bypass = require("../../utils/bypass");
+const config = require("../../config");
+const rfbands = require("../../utils/rfbands");
 
 // commands whose {blob} argument is replaced by the blob's bytes (base64 data)
 const BLOB_COMMANDS = ["decode", "feed"];
@@ -19,6 +22,27 @@ const BLOB_COMMANDS = ["decode", "feed"];
 // to the bridge; beyond this the oldest is dropped (a slow graph can't back up the lab)
 const AUDIO_QUEUE = 4;
 const AUDIO_DROP_LOG_EVERY = 100;
+
+// the graph auto-runs once loaded (bridge default), so a persisted soapy_sink
+// would start transmitting on device start, before any per-TX approval at the
+// lab gate - refuse unless the RF-chamber bypass is on (graphs stay stopped).
+const graphHasTx = (graph) => {
+	return Boolean(graph && graph.blocks && graph.blocks.some((b) => b && b.type === "soapy_sink"));
+};
+
+const txFlags = () => {
+	if (bypass.active()) {
+		return ["--chamber"];
+	}
+	const region = config.get("MAILAB_RF_REGION");
+	const merged = rfbands.bands(region).concat(rfbands.extras(config));
+	if (!merged.length) {
+		return [];
+	}
+	return ["--tx-bands-final", merged.map((b) => {
+		return Math.round(b[0]) + "-" + Math.round(b[1]);
+	}).join(",")];
+};
 
 const preset = processDriver.pythonPreset({
 	// pip packages, installed into the mailab-managed venv on first use
@@ -49,10 +73,7 @@ const preset = processDriver.pythonPreset({
 		audio_in: "{stream, rate, channels, data} (internal) a lab audio chunk for audio_in blocks; the device forwards subscribed streams itself"
 	},
 	args: (options) => {
-		if (!options.graph) {
-			return [];
-		}
-		return ["--graph", JSON.stringify(options.graph)];
+		return txFlags().concat(options.graph ? ["--graph", JSON.stringify(options.graph)] : []);
 	}
 });
 
@@ -147,12 +168,17 @@ module.exports = Object.assign({}, preset, {
 		let unsubscribe = null;
 		const feeder = audioFeeder(() => audioStreams(graph), (args) => inner.command("audio_in", args), io.log);
 		return Object.assign({}, inner, {
-			start: () => inner.start().then((result) => {
-				if (io.onAudio) {
-					unsubscribe = io.onAudio(feeder.push);
+			start: () => {
+				if (graphHasTx(graph) && !bypass.active()) {
+					return Promise.reject(new Error("graph contains a soapy_sink (TX): the graph auto-runs on start, so the per-TX approval gate would be skipped. Remove the sink from the persisted graph and add it with set_graph when you want to transmit (run {on:true} then asks for approval), or set MAILAB_RF_CHAMBER/MAILAB_UNSAFE in an isolated chamber"));
 				}
-				return result;
-			}),
+				return inner.start().then((result) => {
+					if (io.onAudio) {
+						unsubscribe = io.onAudio(feeder.push);
+					}
+					return result;
+				});
+			},
 			stop: () => {
 				if (unsubscribe) {
 					unsubscribe();

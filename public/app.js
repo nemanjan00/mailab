@@ -240,6 +240,7 @@ const connect = () => {
 				});
 			});
 			syncBypassBanner(msg.state.bypass);
+			syncTxBanner(msg.state.tx);
 			renderTabs();
 			syncPanes(msg.state.panes);
 			emit("state", msg.state);
@@ -758,6 +759,13 @@ bypassBanner.className = "bypass-banner";
 bypassBanner.hidden = true;
 document.body.prepend(bypassBanner);
 
+// live RF transmit sessions: the kill switch (server-side auto-stop also applies,
+// the banner is just the fast, obvious way to cut a transmission)
+const txBanner = document.createElement("div");
+txBanner.className = "tx-banner";
+txBanner.hidden = true;
+document.body.prepend(txBanner);
+
 const syncBypassBanner = (bypass) => {
 	const on = Boolean(bypass && bypass.active);
 	bypassBanner.hidden = !on;
@@ -765,6 +773,31 @@ const syncBypassBanner = (bypass) => {
 	if (on) {
 		bypassBanner.textContent = (bypass.text || "⚠ SAFETY BYPASSED — chamber mode") + " — every action is still logged";
 	}
+};
+
+const syncTxBanner = (tx) => {
+	const sessions = Array.isArray(tx) ? tx : [];
+	txBanner.hidden = sessions.length === 0;
+	document.body.classList.toggle("has-tx-banner", sessions.length > 0);
+	txBanner.replaceChildren();
+	sessions.forEach((s) => {
+		const row = document.createElement("span");
+		row.className = "tx-session";
+		const mhz = (s.freqHz / 1e6).toFixed(3);
+		const left = Math.max(0, Math.round((s.endsAt - Date.now()) / 1000));
+		row.append(mhz + " MHz, gain " + s.gainDb + " dB, " + s.device + " (" + (s.kind || "tx") + ", by " + (s.startedBy || "?") + ", " + (s.endsAt ? left + "s left" : "until stopped") + " ");
+		const kill = document.createElement("button");
+		kill.className = "tx-kill";
+		kill.textContent = "✕ kill";
+		kill.title = "stop this transmission now";
+		kill.addEventListener("click", () => {
+			kill.disabled = true;
+			fetch("/api/tx/kill", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: s.id }) })
+				.catch((err) => window.alert("kill failed: " + err.message));
+		});
+		row.append(kill);
+		txBanner.append(row);
+	});
 };
 
 const themeButton = document.getElementById("theme");

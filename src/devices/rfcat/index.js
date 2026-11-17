@@ -7,6 +7,8 @@
 
 const processDriver = require("../process");
 const config = require("../../config");
+const rfbands = require("../../utils/rfbands");
+const bypass = require("../../utils/bypass");
 
 // commands whose {blob} argument (a lab blob name) becomes base64 `data`
 const BLOB_COMMANDS = ["tx", "replay"];
@@ -19,8 +21,44 @@ const OPTION_KEYS = ["index", "serial", "txBands", "freq", "modulation", "drate"
 	"syncWord", "syncMode", "pktLen", "variable", "crc", "manchester", "preamble"];
 
 // the region is the lab's (where the bench is), not a device option the AI
-// could set when adding the device; txBands can only narrow it
-const startArgs = (options) => processDriver.toFlags(options, OPTION_KEYS).concat(["--region", config.get("MAILAB_RF_REGION")]);
+// could set when adding the device; the complete allow-list (region bands +
+// MAILAB_RF_TX_EXTRA, narrowed by the device's txBands option) is passed as
+// --tx-bands-final so the bridge never re-widens it; a chamber bypass lifts
+// the check entirely
+const intersect = (a, b) => {
+	const out = [];
+	a.forEach((ra) => {
+		b.forEach((rb) => {
+			const lo = Math.max(ra[0], rb[0]);
+			const hi = Math.min(ra[1], rb[1]);
+			if (lo < hi) {
+				out.push([lo, hi]);
+			}
+		});
+	});
+	return out;
+};
+
+const startArgs = (options) => {
+	const flags = processDriver.toFlags(options, OPTION_KEYS);
+	if (bypass.active()) {
+		return flags.concat(["--chamber"]);
+	}
+	const region = config.get("MAILAB_RF_REGION");
+	let merged = rfbands.bands(region).concat(rfbands.extras(config));
+	const narrow = rfbands.parseRanges(options.txBands);
+	if (narrow.length) {
+		merged = intersect(merged, narrow);
+	}
+	if (!merged.length) {
+		// nothing allowed: plain region ("none" refuses everything on-air)
+		return flags.concat(["--region", region]);
+	}
+	const final = merged.map((b) => {
+		return Math.round(b[0]) + "-" + Math.round(b[1]);
+	}).join(",");
+	return flags.concat(["--region", region, "--tx-bands-final", final]);
+};
 
 const preset = processDriver.pythonPreset({
 	// pip packages (rfcat's own deps pinned too), installed into the mailab-managed venv on first use

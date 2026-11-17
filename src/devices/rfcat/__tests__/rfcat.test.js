@@ -200,7 +200,8 @@ maybe("rfcat through the lab (fake dongle)", () => {
 			const args = rfcat._startArgs({ region: "us", freq: 915e6, txBands: "433.9M-433.95M" });
 			expect(args.filter((a) => a === "--region").length).toBe(1);
 			expect(args[args.indexOf("--region") + 1]).toBe("eu");
-			expect(args).toContain("--tx-bands");
+			expect(args).toContain("--tx-bands-final");
+			expect(args[args.indexOf("--tx-bands-final") + 1]).toBe("433900000-433950000");
 		} finally {
 			if (old === undefined) {
 				delete process.env.MAILAB_RF_REGION;
@@ -210,15 +211,16 @@ maybe("rfcat through the lab (fake dongle)", () => {
 		}
 	});
 
-	test("TX outside the region's bands is refused by the bridge", () => {
+	test("TX outside the region's bands is refused by the lab TX policy", () => {
 		return command("config", { freq: 915e6 }).then(() => {
-			return expect(command("tx", { hex: "00" })).rejects.toThrow(/TX refused: 915\.000000 MHz/);
+			return expect(command("tx", { hex: "00" })).rejects.toThrow(/TX refused: 915 MHz is outside the allowed eu transmit bands/);
 		}).then(() => command("config", { freq: 433.92e6 }));
 	}, 20000);
 
 	test("listen streams packets and rssi; idle stops it", () => {
 		return command("listen", { on: "on" }).then(() => {
-			return command("tx", { text: "ping" });
+			const tx = command("tx", { text: "ping" });
+			return decideNext(true).then(() => tx);
 		}).then(() => wait(800)).then(() => {
 			const scope = lab.scopeFor(["rf_rssi"], { latest: true });
 			expect(typeof scope.rf_rssi).toBe("number");

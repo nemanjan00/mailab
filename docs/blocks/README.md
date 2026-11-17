@@ -16,6 +16,7 @@ Where samples come from: test signals, files, SDRs, lab audio.
 - [`audio_file`](audio_file/README.md): plays an audio file (WAV/FLAC/MP3/..., via ffmpeg) as real samples
 - [`soapy`](soapy/README.md): live IQ from a SoapySDR receiver (RTL-SDR, HackRF, bladeRF...)
 - [`audio_in`](audio_in/README.md): a lab audio stream (browser mic, another graph) into the graph
+- [`soapy_sink`](soapy_sink/README.md): IQ out to a SoapySDR transmitter (bladeRF, HackRF, LimeSDR...)
 - [`ofdm_mod`](ofdm_mod/README.md): 802.11a/g-style OFDM transmitter: 64-pt IFFT, 48 data + 4 pilot subcarriers, STF/LTF preamble
 
 ## Channel and impairments

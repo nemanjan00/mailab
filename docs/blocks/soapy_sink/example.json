@@ -1,0 +1,16 @@
+{
+  "description": "A QPSK test carrier transmitted at 433.92 MHz through a SoapySDR TX device, 2 MS/s at gain 30: the TX spectrum.",
+  "prompt": "Transmit this QPSK signal at 433.92 MHz through the bladeRF.",
+  "needs": "a SoapySDR device with a TX path and its module (python SoapySDR bindings), plus lab TX policy approval (the freq must be inside the region bands or MAILAB_RF_TX_EXTRA).",
+  "substitute": {"note": "no TX-capable SDR is attached to the docs machine, so `tx` is a `net_sink` blasting the same IQ to 127.0.0.1:$PORT (UDP, cf32) - watch it with `nc -u -l` or another graph's net_source.", "blocks": {"tx": {"type": "net_sink", "params": {"mode": "udp", "host": "127.0.0.1", "port": "$PORT", "format": "cf32"}}}},
+  "blocks": [
+    {"id": "src", "type": "modulated", "params": {"scheme": "qpsk", "rate": 2000000.0, "sps": 8, "snr_db": 40}},
+    {"id": "spec", "type": "spectrum", "params": {"fft": 2048, "traces": ["avg"], "center": 433920000.0}},
+    {"id": "tx", "type": "soapy_sink", "params": {"args": "driver=bladerf", "freq": 433920000.0, "rate": 2000000.0, "gain": 30}}
+  ],
+  "links": [["src", "spec"], ["src", "tx"]],
+  "panes": [
+    {"type": "trace", "title": "TX spectrum", "config": {"traces": ["fg_spec"]}},
+    {"type": "flowgraph", "title": "Graph", "config": {"device": "fg"}}
+  ]
+}

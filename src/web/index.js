@@ -220,6 +220,11 @@ const api = (lab) => {
 		const decision = req.body.approve === true ? "approved" : "denied";
 		return lab.safety.decide(req.params.id, decision, (req.who && req.who.name) || "local");
 	}));
+	// TX kill switch: stop one transmit session (or all). Never needs approval,
+	// but it's a write, so read-only tokens can't use it.
+	router.post("/tx/kill", route((req) => {
+		return lab.stopTxSession((req.body && req.body.id) || null, "kill switch");
+	}));
 	router.get("/trends/:channel", route((req) => lab.trends.read(req.params.channel, {
 		from: Number(req.query.from) || undefined, to: Number(req.query.to) || undefined, points: Number(req.query.points) || undefined
 	})));

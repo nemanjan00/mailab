@@ -43,6 +43,7 @@ const DEFAULT_POLICY = [
 	{ driver: "rfcat", command: "tx", reason: "transmits on a sub-GHz radio (RfCat)" },
 	{ driver: "rfcat", command: "replay", reason: "retransmits a captured packet (RfCat)" },
 	{ driver: "rfcat", command: "power", reason: "changes the RfCat TX power" },
+	{ driver: "hackrf", command: "transmit", reason: "transmits wideband RF (HackRF)" },
 	{ driver: "cynthion", command: "emulate", reason: "connects an emulated USB device (Facedancer) to the target host; may load the facedancer gateware" },
 	{ driver: "cynthion", command: "gateware", reason: "reconfigures the Cynthion FPGA (facedancer also rewrites the SoC firmware flash region; custom bitstreams run as given)" },
 	{ driver: "cynthion", command: "flash", reason: "overwrites the Cynthion's configuration flash" },
@@ -148,7 +149,7 @@ const create = (lab, saved) => {
 		let run = Promise.resolve();
 		if (r.action && r.action.device && r.action.command) {
 			actionText = r.action.device + "." + r.action.command + " " + JSON.stringify(r.action.args || {});
-			run = lab.commandDevice(r.action.device, r.action.command, r.action.args || {});
+			run = lab.commandDevice(r.action.device, r.action.command, r.action.args || {}, { who: "safety", approved: true });
 		}
 		lab.recordActivity({ who: "safety", tool: "rule " + (r.name || r.id), args: r.when + " → " + actionText, ok: true });
 		lab.notify({ type: "rule", rule: r.name || r.id, when: r.when, value: value, action: actionText });
@@ -396,10 +397,10 @@ const create = (lab, saved) => {
 				run: (device, command, args) => {
 					const rule = ruleFor({ device: device, command: command, args: args });
 					if (!rule || approved[device + "." + command]) {
-						return lab.commandDevice(device, command, args || {});
+						return lab.commandDevice(device, command, args || {}, { who: who, approved: true });
 					}
 					return safety.requestApproval({ who: who, device: device, command: command, args: args || {}, reason: rule.reason || "approval required" })
-						.then(() => lab.commandDevice(device, command, args || {}));
+						.then(() => lab.commandDevice(device, command, args || {}, { who: who, approved: true }));
 				}
 			};
 		},
