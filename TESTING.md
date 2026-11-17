@@ -162,6 +162,99 @@ tested. Each pane needs a manual/CDP pass per change:
 | lab state / channels / profiles / recordings / batch / sweep / trends / journal / math / classify / blobs(+edit) / board / netgraph / kaitai / vision | x | — |
 | web (REST + WS push) | x (30) | — |
 
+## Today's no-hardware session (2026-11-19)
+
+Full-suite stability: `npx jest` **3× consecutive, 109 suites / 721 tests
+green every run** — zero flakes. Known cosmetic: the jest force-exit
+warning ("worker failed to exit gracefully") comes from suites holding
+kernel PTY/socket handles and unref'd reconnect timers (socat pairs in
+esb/buspirate/nanovna tests); no failures observed across the 3 runs.
+
+Live on a scratch server (`PORT=3962 DATA_DIR=/tmp/mailab-mho900`, no
+hardware at all — synthetic sources only):
+
+- **sigrok demo device**: `capture` → trace `demo_demo`; `capture_blob` →
+  `demo_logic` 4096 bytes @100 kHz. (`decode` is BLOCKED by a distro bug:
+  this sigrok-cli 0.7.2 crashes with a g_variant assertion on ANY `-P`
+  option; the driver appends guidance to that error.)
+- **camera via lavfi** (`infray`, `input: "testsrc=size=320x240:rate=5"`)
+  streamed frames; **vision ran real OpenCV** on them (gray + Otsu
+  threshold, threshold=126, white_fraction 0.51, 1.4 ms, annotated
+  output image).
+- **flowgraph**: the `video_decode` example graph (signal → python PAL
+  synth → video_decode) ran live — decoded frames to image `fg1_vid` +
+  channel `fg1_vid_frames`.
+- **replay**: recorded `sys_*` for 2 s, played back 1476 records at 50×
+  through the API.
+- **shell**: pty session ran (`echo hi-$((1+2))` expanded in the pty).
+- **QEMU VNC**: fresh QEMU on :5977 (None auth) — `vnc` device connected
+  (`QEMU 640x480`), `screenshot` → `vncq_screen` PNG.
+- **usb tree**: `/api/usb` lists controllers + buses.
+- **DSP suites** (python, all green): test_ofdm, test_modem (BLE),
+  test_jitter, test_sync, test_decode (usb sigrok stack), test_eight_ten,
+  test_audio_dsp.
+- **UI sweep (CDP)**: all **35 pane types** rendered one-by-one on the
+  populated server — one screenshot each, **zero uncaught
+  exceptions/console errors**.
+
+Trap for future testing: the `infray` lavfi seam takes the SOURCE string
+(`input: "testsrc=…"`), not `input:"lavfi"` + `device:…` — a bad config
+surfaces as ffmpeg "Filter not found". And on a server started with
+`MAILAB_MANAGE_PYTHON=0` the vision venv never gets created (cv2 missing);
+let the server manage python (default) for vision tests.
+
+## Tomorrow's hardware session — ordered checklist
+
+Devices expected on the bench/lab, in run order, each with what to prove
+and the quirks to watch. Scratch server per device; flip HW.md/SPEC rows
+as each passes.
+
+1. **MHO98 scope (10.69.1.89:5555)** — `mho900`: XY + ROLL timebase set +
+   readback; CH2/3/4 on + watch push; AWG2 independent output; mask
+   testing. Quirks: one TCP SCPI session, NO interleaved queries (the
+   driver serializes); unknown headers TIME OUT (10 s) instead of erroring.
+2. **DM858 DMM (10.69.2.52)** — `dm858`: function sweep DCI/ACI/ohm2w/
+   ohm4w/cap/diode/cont/temp with the settings pane per mode; NPLC per
+   function. Quirks: use the **9004 WebSocket** transport (5025 locks the
+   front panel); freq/period NULL lives at SENSe:<f>:NULL not under
+   VOLTage; SENSe nodes exist only for the ACTIVE function.
+3. **MP305B PSU (lab host, USB-HID)** — `mp305`: output on **under load**
+   (CV/CC transition), PD profile edit + select + output, a real battery
+   charge, program write/run/stop, energy reset. Quirks: pymp305 0.6.3
+   bridge installs into the managed venv on first use; limits enforced
+   client-side — check a limit rejection live.
+4. **Morfeus (bench, USB hidraw)** — `morfeus`: sweep over RF (watch on a
+   receiver), LCD backlight (param 0x85), 5–6 GHz band. Quirks: the
+   10c4:eac9 "EFM8UB1 Bootloader" id IS app mode; freq override =
+   undocumented param 0x87; replies echo cmd+param (retry on stale).
+5. **Feather nRF52840 ESB (lab host, /dev/ttyACM0)** — `esb`: firmware
+   confirmed; next is two-node on-air: second node ACK/reply path, listen
+   window counts, stats. Quirks: BBIO entry by 0x00 spam until "BBIO1";
+   keep writes short (line protocol).
+6. **Proxmark3 (bench, iceman FW)** — `proxmark3`: lf/hf card ops with a
+   real card, clone, sniff. Quirks: PM3_CLIENT env or ~/pm5-og build; LF
+   antenna tune before HF ops.
+7. **KC901K / KC908V analyzer** — `kc901` (DeepAce framing): sweeps →
+   spectrum traces, config echo. Quirks: framing 0xFE/0xFF + sum
+   checksum; command table is best-effort — verify against the unit's
+   reply before trusting writes.
+8. **NanoVNA / tinySA** — `nanovna`/`tinysa`: sweeps, markers, save/load
+   calibration. Quirks: NanoVNA shell protocol is `command` + `ch>`
+   prompt; capture needs `capture` then raw bytes (driver handles);
+   tinySA ultra variants have extra commands.
+9. **Bus Pirate (if BPIO2 present)** — `buspirate`: I2C/SPI/UART sub-mode
+   entry banners, ADC/freq channels, bulk echo, PWM. Quirks: binary
+   entry needs the terminal menu in HiZ; "BBIO1" is 5 bytes; bulk max
+   128 bytes/transfer.
+10. **InfiRay P2 Pro** — `infray`: real UVC frames + vendor radiometric
+    controls via v4l2. Quirks: needs the camera itself; check
+    `/dev/video*` enumeration on the lab host first.
+11. **Sigrok SLogic / Glasgow / CatSniffer / ThunderScope / ChipWhisperer
+    Husky** if they appear: each driver is fake-tested; run its `SPEC.md`
+    row. Quirks: sigrok-cli decode crash (see above) — capture path only
+    until sigrok-cli is fixed; Glasgow/CatSniffer/ThunderScope/Husky are
+    entirely untested on hardware.
+
 ## Testing TODO (in priority order)
 
 - [ ] **mp305 feature sweep on the lab unit**: charge config + charging on/off, PD profile edit + PDO select + PD output, program write/run/stop, energy reset, remote hold — commands exist, none hardware-run
