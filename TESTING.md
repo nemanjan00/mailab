@@ -1,109 +1,130 @@
-# Testing mailab
+# Testing
 
-How the suite works, what each layer is tested with, and the checklist for
-verifying a driver on real hardware.
+Feature-by-feature test status and the testing TODO. Legend:
 
-## Running
+- **[x]** fake/unit tests exist and run in CI (count in parens)
+- **live** verified on real hardware — details in [HW.md](HW.md)
+- **UI** exercised in a real browser (headless Chrome/CDP or by hand)
+- **TODO** what still needs testing
 
-```sh
-yarn test          # full suite (husky also runs it on every push)
-npx jest src/devices/dm858    # one area
-npx jest -t "siggen"          # by test name
-```
+CI runs 109 suites / 721 tests on every push (husky). A green suite proves
+protocol logic, validation and safety gating against fakes — never the
+physical device. How to run the suite and the fake-injection seams:
+`npx jest [path]`, `options._open` / `dev._onData` seams, `MAILAB_*_FAKE=1`
+python bridges, socat PTY pairs, `options.exe` stubs. The repeatable
+real-hardware verification procedure is the checklist at the bottom.
 
-Current: **109 suites / 721 tests**, all green on master. Pushes are blocked
-until the suite passes (lint-staged runs eslint, then jest).
+## Instruments (drivers)
 
-## What the tests prove — and what they don't
-
-CI has **no instruments attached**. Every test runs against a fake, an
-emulator, or this PC's own system, so a green suite proves the driver's
-protocol logic, argument validation, error handling and safety gating — it
-says nothing about the physical device. What each style covers:
-
-| Style | Where | What it proves | Examples |
+| Driver | Fake tests | Live | TODO |
 |---|---|---|---|
-| Fake transport | `src/services/*`, driver `_open`/`_onData` seams | wire protocol encode/decode, serialized sessions, reconnect | `scpiws` (fake WS meter), `deepace` (framing + checksum), mho900 siggen (fake SCPI client) |
-| socat PTY pair | serial drivers' `__tests__` | line/binary protocols over a real tty, reconnect, exclusivity | esb (11), buspirate (6), nanovna (4), rigol input (7) |
-| Fake python bridge | `MAILAB_*_FAKE=1` swaps the hardware object | the bridge drives its API correctly; strict setpoints | mp305 (4 + e2e), chipwhisperer (2 + e2e), morfeus (2 + e2e) |
-| Real tool, dummy target | tool-based drivers | CLI surface, output parsing | flashrom (dummy programmer, 8), minipro (emulated chip) |
-| Live, this PC | sysmon, capture, usb tree, headless-Chrome media | the thing under test is the PC itself | sysmon (7), capture (16) |
-| UI logic (node) | public/ has no unit tests | panes are verified manually or via CDP scripts; only pure helpers in `src/utils` are unit-tested | qrp views, plots |
+| sim | x (core) | x | — |
+| serial / uart | x (3) | this PC's adapters | — |
+| process / python bridges | x (lab core) | x (mp305, morfeus, chipwhisperer e2e w/ fakes) | — |
+| scpi (generic) | x (2) | via dm858/mho900 presets | — |
+| scpiws (SCPI over WS 9004) | x (5) | x (DM858 — no panel lock) | — |
+| dm858 (DM858E DMM) | x (6) | x (settings model, monitor, screenshots, live pane) | x (UI) ohm/cap/diode switching sweep on hardware |
+| mho900 (MHO98 scope) | x (17) | x (full settings model, AWG loopback, wheel/drag UI, live pane) | x (UI) XY/ROLL modes, logic channels, 2nd AWG channel |
+| mp305 (ISDT PSU) | x (4 + e2e) | x (lab unit: telemetry, DC control) | charge config/run, PD profiles/select, programs, BLE — never on hardware |
+| mdp (MDP-P906) | x (10) | fake bridge | full UI pane, radio reconnection |
+| morfeus (RF siggen) | x (2 + e2e) | x (freq/mode/current/bias/override + settings pane) | sweep on hardware, LCD backlight (0x85) |
+| esb (nRF52840) | x (11) | x (bridge firmware on Feather) | RX/ACK on-air with a second node |
+| rigol (Web Control screen+input) | x (7) | x (DM858 + MHO98 video & touch) | swipe gestures on hardware, keys (back/home) meaning per device |
+| kc9531b (power meter) | x | fake | everything on hardware |
+| kc901 (DeepAce analyzer) | x (6) | no device | everything on hardware |
+| tinysa / litevna / nanovna | x (4 + litevna) | no device | sweeps, markers, calibration on hardware |
+| hackrf / soapy / rtl_power | x (6) | rtl sticks partially | TX gating live, bladeRF, more SDRs |
+| rfcat | x (12) | no device | TX/RX, specan, RSSI on hardware |
+| civ (Icom) | fake | no device | everything on hardware |
+| openocd | x (10) | x (flashing targets on the bench) | more targets |
+| bmp / jlink | x (6 each) | no device | everything on hardware |
+| jtagulator | x (4) | no device | IDCODE scan, UART discovery on hardware |
+| buspirate | x (6) | no device | BBIO/I2C/SPI modes, ADC, PWM on hardware |
+| glasgow | x (5) | no device | applet runs on hardware |
+| catsniffer | x (3) | no device | flash (cc2538-bsl), sniffle bridge, pcap path on hardware |
+| thunderscope | x (3) | no device | waveform capture on hardware |
+| chipwhisperer | x (2 + e2e) | no device | capture on a Husky, glitching |
+| infray (P2 Pro thermal) | x (3) | no device | vendor controls via UVC on hardware |
+| proxmark3/5 | x | partially (client driving) | card operations |
+| picoglitcher | x | no device | glitch campaigns |
+| cynthion | x (9) | no device | facedancer emulation, gateware flash |
+| nanokvm | x (16) | no device | live KVM session, ATX, ISO mount |
+| vnc | x (7) | x (QEMU VNC target) | auth variants (VNC password) on hardware |
+| sigrok | x (1) | no device | SLogic capture on hardware |
+| camera / browser / capture | x | x (this PC + headless Chrome) | — |
+| harogic | fake | no device | everything on hardware |
+| replay | x | recordings only | — |
+| sysmon | x (7) | x (this PC) | — |
+| flashrom | x (8, dummy) | no device | real chip r/w |
+| minipro | x (6, emulated) | no device | real chip r/w |
+| shell | x (9) | x (local shells) | — |
+| flowgraph | x (6 + ofdm/dsp suites) | x (beacon-to-iq demo) | long-run stability of live flowgraphs |
 
-The authoritative list of what has been **verified on real lab hardware**
-(MHO98 scope, DM858 DMM, MP305B PSU, Othernet Morfeus, nRF52840 ESB bridge,
-Proxmark5 lightly) with what exactly was checked is [HW.md](HW.md). SPEC.md
-rows carry ✅ live-verified vs 🟡 implemented/[HW] pending.
+## Services
 
-## Per-area inventory
+| Service | Fake tests | Live | TODO |
+|---|---|---|---|
+| scpi / scpiws / deepace | x | scpiws live | deepace on a KC901 |
+| rfb (VNC client) | x (9) | QEMU | VNC-auth server |
+| fccid / datasheets / http / pdf / media | x | x (real fetches) | — |
+| pyenv (managed venv) | x (9) | x (first-use installs) | — |
+| usb / udev | x (3) | x (this PC) | — |
 
-Approximate static counts (jest's own count is the authoritative one):
+## UI (panes)
 
-- **Drivers (36 suites)**: bmp 6, buspirate 6, camera 1, catsniffer 3,
-  chipwhisperer 2, cynthion 9, dm858 6, esb 11, flashrom 8, flowgraph 6,
-  glasgow 5, infray 3, jlink 6, jtagulator 4, kc901 6, mdp 10, mho900 17,
-  minipro 6, morfeus 2, mp305 4, nanokvm 16, nanovna 4, openocd 10, rfcat 12,
-  rigol 7, rtl_power 6, shell 9, sigrok 1, sysmon 7, thunderscope 3, uart 3,
-  vnc 7
-- **Services (10 suites)**: datasheets 6, deepace 6, fccid 14, http 8,
-  media 6, pdf 2, pyenv 9, rfb 9, scpi 2, scpiws 5, usb 3
-- **Core (30 suites)**: auth 9, batch 4, blobs 15, board 7, channels 3,
-  classify 3, journal 9, kaitai 4, lab 7, math 9, mcp 2, netgraph 4, panes 5,
-  profiles 6, recordings 4, safety 13, sweep 7, trends 4, txpolicy 12, vision
-  16, web 30 (incl. kvm 6, vnc 8)
-- **Pure utils (27 suites)**: affine, args, block-docs (catalog freshness),
-  bypass, bytes, bytesearch, checksum, cryptojs, des, hidkeys, html, keypad,
-  keysym, lineparse, mutex, netguard, offsetexpr, patch, pcm, placeholders,
-  png, table 23, timebase 13, units 7
+No unit tests for browser code by design; pure helpers in src/utils are
+tested. Each pane needs a manual/CDP pass per change:
 
-## Test seams
+| Pane | Status | TODO |
+|---|---|---|
+| chart / value / trace / waterfall | exercised daily on the bench dashboard | wheel-zoom + trigger-drag regression pass per release |
+| settings (schema editor) | x (dm858, mho900, morfeus live) | per-driver schema validation |
+| rigol (instrument screen) | x (both instruments live) | — |
+| image (auto-refresh) | x | — |
+| log / devices / activity / channels | exercised daily | — |
+| hex / blob / kaitai / board / graph / netgraph | fake fixtures | — |
+| flowgraph / audio / capture / chat / vision / kvm / vnc | partially | CDP pass each |
+| auth modal / tabs / header | x (nav, logout, copy) | — |
 
-| Seam | Use |
-|---|---|
-| `options._open` | replace `scpi.open` with a scripted client (mho900, dm858) |
-| `dev._onData` | feed bytes like the port would (nanovna) |
-| `MAILAB_MORFEUS_FAKE=1`, `MAILAB_CHIPWHISPERER_FAKE=1`, `MAILAB_MP305_FAKE=1` | swap the hardware object inside python bridges |
-| socat PTY pairs | serial protocols without hardware |
-| `options.exe` | point CLI drivers at a stub binary (jlink, glasgow, morfeus-tool) |
-| `CHROME_TEST_*`, headless Chrome via CDP | UI verification screenshots (see below) |
+## Core systems
 
-## Verifying a driver on real hardware
+| System | Fake tests | TODO |
+|---|---|---|
+| safety policy + approvals | x (13) | — |
+| txpolicy / rfbands / bypass | x (12 / 5) | — |
+| auth (tokens, ro/rw) | x (9) | — |
+| MCP tools / sessions | x (2) | live MCP client matrix (pi, claude) |
+| lab state / channels / profiles / recordings / batch / sweep / trends / journal / math / classify / blobs(+edit) / board / netgraph / kaitai / vision | x | — |
+| web (REST + WS push) | x (30) | — |
 
-When a device is reachable, run this checklist (what "live-verified" means in
-HW.md/SPEC.md). Do it against a **scratch server** so the main lab's state is
-untouched:
+## Testing TODO (in priority order)
 
-```sh
-PORT=3962 DATA_DIR=/tmp/mailab-test MAILAB_MANAGE_PYTHON=0 node src/index.js
-```
+- [ ] **mp305 feature sweep on the lab unit**: charge config + charging on/off, PD profile edit + PDO select + PD output, program write/run/stop, energy reset, remote hold — commands exist, none hardware-run
+- [ ] **rigol**: swipe a slider on the scope's real touch UI; back/home keys; MHO98 input while its own control.html is open (seat arbitration)
+- [ ] **dm858**: function sweep (DCI/ACI/ohm2w/ohm4w/cap/diode/cont/temp) — sync model per function incl. NULL nodes; UI screenshot per mode
+- [ ] **mho900**: XY + ROLL timebase modes, CH2/3/4 capture in watch, AWG2 (independent second source), mask testing
+- [ ] **morfeus**: sweep on hardware (watch the RF), LCD backlight (0x85) confirm
+- [ ] **esb**: two-node on-air test (Feather ↔ another ESB node), ACK/reply path
+- [ ] **Every 🟡/[HW] row in SPEC.md**: run the hardware checklist below, flip to ✅
+- [ ] **Browser panes**: CDP regression pass (console errors, one screenshot per pane type) before each release
+- [ ] **MCP live matrix**: connect pi + claude-desktop to a token-enabled instance, exercise read/write gating
+- [ ] **mp305 BLE transport**: never run anywhere — needs a BLE-capable host
 
-- [ ] **Enumerate**: `lsusb` / `ip` scan; identify VID:PID or IP:port. Note
-      surprises (e.g. Morfeus enumerates as `10c4:eac9 EFM8UB1 Bootloader`
-      even in app mode — that IS its app mode; a DM858 on 5025 locks the
-      front panel, its WS channel 9004 does not).
-- [ ] **Add**: POST /api/devices `{id, driver, options}` — state `running`,
-      no detail error. Device console pane shows the handshake.
-- [ ] **Identity**: `idn` / `info` — model, serial, firmware; sanity vs. label.
-- [ ] **Telemetry**: readings land in channels with units; plausible values.
-- [ ] **Control round-trip**: change a setting via `set`/commands, read it
-      back, and confirm **on the instrument's own display** that it changed
-      (SCPI readbacks have lied before; the LCD hasn't).
-- [ ] **Safety behavior**: gated actions (TX, output on, flash writes) create
-      an approval request; read-only tokens can't approve.
-- [ ] **UI**: open the dashboard, add the panes (settings / console / value /
-      screen), click through; hard-refresh; check the browser console is
-      clean (headless Chrome + CDP screenshots work well for this).
-- [ ] **Edge behavior**: replug mid-session (reconnect), power the device
-      off/on, flood with commands (serialization), two clients fighting a
-      single-seat channel.
-- [ ] **Document**: mark the row ✅ in HW.md and SPEC.md with what exactly was
-      verified; note quirks future-you will need (SCPI dialects, handshakes,
-      lockouts, single-seat ports).
+## Real-hardware verification checklist
 
-## Known-not-covered
+What "live-verified" means in HW.md/SPEC.md. Run against a scratch server
+(`PORT=3962 DATA_DIR=/tmp/mailab-test MAILAB_MANAGE_PYTHON=0 node src/index.js`):
 
-- Browser panes (public/) have no unit tests — pure helpers only; UI is
-  verified via headless Chrome CDP scripts manually.
-- BLE transports (mp305 `transport: "ble"`) never run anywhere.
-- Anything marked 🟡/[HW] in SPEC.md is fake-tested only until the checklist
-  above is run against the real unit.
+- [ ] Enumerate the device (lsusb / IP scan); note surprises (Morfeus' app
+      mode looks like an EFM8 bootloader; the DM858's 5025 locks the panel
+      but 9004 doesn't)
+- [ ] Add the driver with stable identity (`match` or host); state `running`
+- [ ] `idn`/`info` matches the label
+- [ ] Telemetry lands in channels with units
+- [ ] Control round-trip: set → readback → **confirmed on the instrument's
+      own display** (readbacks have lied; the LCD hasn't)
+- [ ] Safety: gated actions create approval requests; ro tokens can't approve
+- [ ] UI: panes render, hard-refresh, clean browser console
+- [ ] Edges: replug mid-session, power-cycle, command flood, two clients on
+      a single-seat channel
+- [ ] Document: flip the HW.md/SPEC rows, note quirks for future-you
