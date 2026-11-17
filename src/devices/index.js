@@ -16,6 +16,7 @@ const DRIVERS = [
 	require("./civ"),
 	require("./tinysa"),
 	require("./litevna"),
+	require("./nanovna"),
 	require("./hackrf"),
 	require("./soapy"),
 	require("./rfcat"),
