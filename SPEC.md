@@ -111,7 +111,7 @@ Status: ✅ done · 🟡 partial · ⬜ not started
 | TCP/UDP IQ streaming in/out | ✅ | flowgraph `net_source` / `net_sink`: raw cf32/cs16/cu8 over TCP server/client or UDP, non-blocking; loopback verified (TCP cs16, UDP cu8) |
 | Scope: triggered display + max/min hold + averaging | ✅ | flowgraph `scope` sink: trigger rising/falling/none, level, auto/normal, pretrigger; traces live/max/min/avg; complex input → real/imag/mag |
 | Scope measurements: Vpp, Vmax, Vmin, RMS, mean, frequency, period, duty | ✅ | per capture (frequency via mid-level crossings with hysteresis); selected ones → channels `<dev>_<id>_<m>`; strip under the trace plot. Verified: 10 kHz/30 % square, 1234 Hz sine |
-| libvolk | ⬜ | Not yet: the hot spots are per-symbol Python loops (carrier recovery, modem demod), and VOLK through ctypes wouldn't help. Move those loops into liquid/numpy/a small C helper first, then use VOLK kernels there |
+| libvolk | ✅ (superseded) | done the "small C helper first" step, VOLK itself not needed: modem demod vectorized in numpy (liquid per-sample ctypes loop replaced by nearest-point table search, ~50x: 19.7 ms → 0.40 ms per 20k symbols) and carrier recovery moved to an on-demand compiled C PLL via ctypes (python/native_dsp.py, ~65x: 52.6 ms → 0.81 ms; numpy fallback when no cc). No BER regression (test_modem all green, bench chain BER identical at 3.3e-02). Bench: python/bench_dsp.py |
 | Optional WebGPU rendering | ⬜ | progressive enhancement for density/persistence views (RTSA-style), big constellations and fast waterfalls; Canvas2D stays the fallback |
 
 ## 4. Instruments

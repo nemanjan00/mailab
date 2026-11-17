@@ -317,18 +317,33 @@ class Modem(_Handle):
             _modem_modulate(self._q, s, ctypes.byref(point))
             table.append(complex(point.re, point.im))
         self.table = np.array(table, dtype=np.complex64)
+        # cached views for the vectorized demodulator below
+        self._t2 = self.table.real ** 2 + self.table.imag ** 2
 
     def modulate(self, symbols):
         return self.table[np.asarray(symbols) % len(self.table)]
 
     def demodulate(self, x):
-        """-> (symbol indices, rms EVM in dB)"""
-        out = np.empty(len(x), dtype=np.uint32)
-        sym = _u(0)
-        evm = []
-        for i, v in enumerate(x):
-            _modem_demodulate(self._q, _Complex(float(v.real), float(v.imag)), ctypes.byref(sym))
-            out[i] = sym.value
-            evm.append(_modem_evm(self._q))
-        evm_rms = float(np.sqrt(np.mean(np.square(evm)))) if evm else 0.0
-        return out, 20 * np.log10(evm_rms + 1e-12)
+        """-> (symbol indices, rms EVM in dB)
+
+        Nearest constellation point, vectorized over the chunk (same
+        decisions as liquid's per-sample modem_demodulate; EVM is the rms
+        distance to the decided point, normalized by the constellation rms)."""
+        y = np.ascontiguousarray(x, dtype=np.complex64).reshape(-1)
+        if not len(y):
+            return np.zeros(0, dtype=np.uint32), 0.0
+        t, t2 = self.table, self._t2
+        out = np.empty(len(y), dtype=np.uint32)
+        esq = 0.0
+        step = max(1, (1 << 22) // max(1, len(t)))  # bound the N x M scratch
+        for j in range(0, len(y), step):
+            b = y[j:j + step]
+            # |y - t|^2 = |y|^2 + |t|^2 - 2 Re(y conj(t))
+            d = (b.real[:, None] ** 2 + b.imag[:, None] ** 2) + t2[None, :] \
+                - 2.0 * (b.real[:, None] * t.real[None, :] + b.imag[:, None] * t.imag[None, :])
+            idx = np.argmin(d, axis=1)
+            out[j:j + step] = idx
+            e = b - t[idx]
+            esq += float(np.vdot(e, e).real)
+        evm = np.sqrt(esq / len(y) / (float(np.mean(t2)) + 1e-30))
+        return out, float(20 * np.log10(evm + 1e-12))

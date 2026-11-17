@@ -12,6 +12,7 @@ and per-block stats are published as lab values "<device>_graph" / "_stats".
 import argparse
 import base64
 import collections
+import ctypes
 import hashlib
 import json
 import os
@@ -28,6 +29,7 @@ import audio_blocks
 import liquid_dsp as dsp
 import mailab_bridge as lab
 import modem
+import native_dsp
 import ofdm
 import protocol_decode as pdec
 
@@ -483,19 +485,34 @@ class CarrierRecovery(Block):
         self.modem = dsp.Modem(self.p["scheme"])
         self.phase = 0.0
         self.freq = 0.0
+        self._tbl = np.ascontiguousarray(self.modem.table, dtype=np.complex64)
 
     def work(self, x, rate):
         bw = float(self.p["bandwidth"])
         alpha, beta = bw, bw * bw / 4
-        table = self.modem.table
+        x = np.ascontiguousarray(x, dtype=np.complex64).reshape(-1)
         out = np.empty(len(x), dtype=np.complex64)
+        lib = native_dsp.lib()
+        if lib is not None and len(x):
+            # compiled helper: the PLL is sequential per symbol, so it can't
+            # be numpy-vectorized; same loop filter as the fallback below
+            ph = ctypes.c_double(self.phase)
+            fr = ctypes.c_double(self.freq)
+            lib.dd_pll(x.ctypes.data, out.ctypes.data, len(x),
+                       self._tbl.ctypes.data, len(self._tbl),
+                       alpha, beta, ctypes.byref(ph), ctypes.byref(fr))
+            self.phase, self.freq = ph.value, fr.value
+            return out, rate
+        table = self.modem.table
+        phase, freq = self.phase, self.freq
         for i, v in enumerate(x):
-            y = v * np.exp(-1j * self.phase)
+            y = v * np.exp(-1j * phase)
             ref = table[np.argmin(np.abs(table - y))]
             err = np.angle(y * np.conj(ref))
-            self.freq += beta * err
-            self.phase += self.freq + alpha * err
+            freq += beta * err
+            phase += freq + alpha * err
             out[i] = y
+        self.phase, self.freq = float(phase), float(freq)
         return out, rate
 
 
