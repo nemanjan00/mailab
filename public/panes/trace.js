@@ -66,6 +66,7 @@ export default {
 		// vertical scroll zooms V; ctrl+scroll drives the scope's timebase,
 		// shift+scroll its V/div (drivers with a settings model, e.g. mho900)
 		const zoomState = { x: null, y: null };
+		let wheelBurst = { t: 0, ax: null }; // trackpad diagonal/split-gesture suppression
 		let scopeCache = { t: 0, model: null };
 		const scopeModel = () => {
 			if (!pane.config.device) {
@@ -146,36 +147,34 @@ export default {
 			}, 2500);
 		};
 
-		// ctrl wheel -> scope timebase (t/div), shift wheel -> channel V/div;
-		// falls back to plain zoom for drivers without a settings model
+		// ctrl wheel -> scope parameter on the gesture's axis: horizontal
+		// scroll steps the timebase (t/div), vertical the channel V/div; the
+		// local zoom estimate shows the result before the acquisition lands
 		const scopeWheel = (event, ax, zoomIn) => {
 			scopeModel().then((model) => {
 				if (!model || !plot) {
 					return;
 				}
 				const dev = pane.config.device;
-				if (event.ctrlKey) {
+				scopeEstimate(ax, zoomIn, event);
+				if (ax === "x") {
 					const cur = model.timebase && model.timebase.scale;
 					if (!cur) {
 						return;
 					}
 					const next = ladderStep(cur, zoomIn ? -1 : 1);
-					scopeEstimate(ax, zoomIn, event);
 					ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { timebase: { scale: next } } }).catch(() => null);
 					return;
 				}
-				if (event.shiftKey) {
-					const label = plot.series.length > 1 ? String(plot.series[1].label || "") : "";
-					const m = /CHAN(\d)/i.exec(label);
-					const n = m ? parseInt(m[1], 10) : 1;
-					const cur = model.ch && model.ch[String(n)] && model.ch[String(n)].scale;
-					if (!cur) {
-						return;
-					}
-					const next = ladderStep(cur, zoomIn ? -1 : 1);
-					scopeEstimate(ax, zoomIn, event);
-					ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { ch: { [n]: { scale: next } } } }).catch(() => null);
+				const label = plot.series.length > 1 ? String(plot.series[1].label || "") : "";
+				const m = /CHAN(\d)/i.exec(label);
+				const n = m ? parseInt(m[1], 10) : 1;
+				const cur = model.ch && model.ch[String(n)] && model.ch[String(n)].scale;
+				if (!cur) {
+					return;
 				}
+				const next = ladderStep(cur, zoomIn ? -1 : 1);
+				ctx.api("POST", "/devices/" + dev + "/command", { command: "set", args: { ch: { [n]: { scale: next } } } }).catch(() => null);
 			});
 		};
 
@@ -203,6 +202,33 @@ export default {
 			const level = trigDrag && trigDrag.kind === "level" ? trigDrag.value : g.level;
 			const offset = trigDrag && trigDrag.kind === "offset" ? trigDrag.value : g.offset;
 			const c = u.ctx;
+			const flag = (x, y, dir, color, label) => {
+				// scope-style marker: a square on the plot edge with a filled
+				// triangle pointer at the trigger value
+				const s = 9;
+				const t = 6;
+				c.fillStyle = color;
+				c.beginPath();
+				if (dir === "left") {
+					c.moveTo(x, y);
+					c.lineTo(x + t, y - t / 2);
+					c.lineTo(x + t, y + t / 2);
+				} else {
+					c.moveTo(x, y);
+					c.lineTo(x - t / 2, y + t);
+					c.lineTo(x + t / 2, y + t);
+				}
+				c.closePath();
+				c.fill();
+				c.fillRect(x - s / 2, y - s / 2, s, s);
+				c.fillStyle = "#fff";
+				c.font = "bold 8px sans-serif";
+				c.textAlign = "center";
+				c.textBaseline = "middle";
+				c.fillText(label, x, y + 0.5);
+				c.textAlign = "left";
+				c.textBaseline = "alphabetic";
+			};
 			c.save();
 			c.font = "10px sans-serif";
 			if (typeof level === "number") {
@@ -215,8 +241,7 @@ export default {
 					c.lineTo(u.bbox.left + u.bbox.width, y);
 					c.stroke();
 					c.setLineDash([]);
-					c.fillStyle = "#e0534f";
-					c.fillText("T", u.bbox.left + 3, y - 3);
+					flag(u.bbox.left + u.bbox.width + 12, y, "left", "#e0534f", "T");
 				}
 			}
 			if (typeof offset === "number") {
@@ -229,12 +254,17 @@ export default {
 					c.lineTo(x, u.bbox.top + u.bbox.height);
 					c.stroke();
 					c.setLineDash([]);
-					c.fillStyle = "#e0a34f";
-					c.fillText("trig", x + 3, u.bbox.top + 10);
+					flag(x, u.bbox.top + u.bbox.height + 14, "up", "#e0a34f", "trig");
 				}
 			}
 			c.restore();
 		};
+		// coordinate helpers: uPlot's valToPos(..., true) is canvas-relative;
+		// the overlay element's origin sits bbox.left/top inside the canvas
+		const overX = (v) => plot.valToPos(v, "x", true) - plot.bbox.left;
+		const overY = (v) => plot.valToPos(v, "y", true) - plot.bbox.top;
+		const fromOverX = (px) => plot.posToVal(px + plot.bbox.left, "x");
+		const fromOverY = (px) => plot.posToVal(px + plot.bbox.top, "y");
 
 		const teardown = () => {
 			trigDrag = null;
@@ -323,7 +353,7 @@ export default {
 				}
 			}, size()), tables.length === 1 ? tables[0] : uPlot.join(tables), plotEl);
 			window.__tracePlot = plot; // debug/verification handle
-			plotEl.title = "scroll h: time zoom, v: V zoom" + (pane.config.device ? "; ctrl: t/div, shift: V/div (scope)" : "");
+			plotEl.title = "scroll: zoom (h=time, v=V)" + (pane.config.device ? "; ctrl+scroll: drive the scope" : "");
 			// shift-click: marker at the cursor's x
 			plot.over.addEventListener("click", (event) => {
 				if (!event.shiftKey) {
@@ -341,7 +371,18 @@ export default {
 				const ax = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? "x" : "y";
 				const delta = ax === "x" ? event.deltaX : event.deltaY;
 				const zoomIn = ax === "x" ? delta > 0 : delta < 0;
-				if (event.ctrlKey || event.shiftKey) {
+				// trackpads report diagonal deltas and some split one gesture
+				// into an X and a Y event: keep the first axis of a burst and
+				// drop the other-axis echo
+				const now = Date.now();
+				if (now - wheelBurst.t < 100 && wheelBurst.ax && wheelBurst.ax !== ax) {
+					return;
+				}
+				wheelBurst = { t: now, ax: ax };
+				// ctrl = drive the scope (axis picks the parameter: h -> timebase,
+				// v -> V/div) with a local zoom estimate; browsers encode
+				// shift+wheel as HORIZONTAL scroll, so shift is ignored here
+				if (event.ctrlKey) {
 					scopeWheel(event, ax, zoomIn);
 					return;
 				}
@@ -356,9 +397,9 @@ export default {
 				const rect = plot.over.getBoundingClientRect();
 				const mx = event.clientX - rect.left;
 				const my = event.clientY - rect.top;
-				if (typeof g.level === "number" && Math.abs(plot.valToPos(g.level, "y", true) - my) < 7) {
+				if (typeof g.level === "number" && Math.abs(overY(g.level) - my) < 7) {
 					trigDrag = { kind: "level", value: g.level };
-				} else if (typeof g.offset === "number" && Math.abs(plot.valToPos(g.offset, "x", true) - mx) < 7) {
+				} else if (typeof g.offset === "number" && Math.abs(overX(g.offset) - mx) < 7) {
 					trigDrag = { kind: "offset", value: g.offset };
 				}
 				if (trigDrag) {
@@ -372,9 +413,7 @@ export default {
 				const mx = event.clientX - rect.left;
 				const my = event.clientY - rect.top;
 				if (trigDrag) {
-					trigDrag.value = trigDrag.kind === "level"
-						? plot.posToVal(my, "y")
-						: plot.posToVal(mx, "x");
+					trigDrag.value = trigDrag.kind === "level" ? fromOverY(my) : fromOverX(mx);
 					plot.redraw();
 					return;
 				}
@@ -384,9 +423,9 @@ export default {
 					return;
 				}
 				let cursor = "";
-				if (typeof g.level === "number" && Math.abs(plot.valToPos(g.level, "y", true) - my) < 7) {
+				if (typeof g.level === "number" && Math.abs(overY(g.level) - my) < 7) {
 					cursor = "ns-resize";
-				} else if (typeof g.offset === "number" && Math.abs(plot.valToPos(g.offset, "x", true) - mx) < 7) {
+				} else if (typeof g.offset === "number" && Math.abs(overX(g.offset) - mx) < 7) {
 					cursor = "ew-resize";
 				}
 				if (plot.over.style.cursor !== cursor) {
