@@ -75,7 +75,7 @@ instrument; quirks live here because future-you will need them.
   screenshots, serialized queries, reconnect-after-drop.
 
 ### Also verified
-- `rigol` pane/driver on BOTH instruments (above); `vnc` against QEMU;
+- `rigol` pane/driver on BOTH instruments (above); `vnc` against QEMU's RFB server with None AND VNC-password auth (screenshot through the des auth path);
   sysmon/capture/usb on this PC; flashrom/minipro against dummy targets;
   mp305/morfeus/chipwhisperer bridges against in-file simulations.
 
@@ -110,11 +110,11 @@ instrument; quirks live here because future-you will need them.
 | thunderscope | x (3) | no device | waveform capture on hardware |
 | chipwhisperer | x (2 + e2e) | no device | capture on a Husky, glitching |
 | infray (P2 Pro thermal) | x (3) | no device | vendor controls via UVC on hardware |
-| proxmark3/5 | x | partially (client driving) | card operations |
+| proxmark3/5 | x | partially — a Proxmark3 (iceman FW) was attached on the bench: client version/device info drivable; card operations not run (no card) | lf/hf card ops, clone, sniff |
 | picoglitcher | x | no device | glitch campaigns |
 | cynthion | x (9) | no device | facedancer emulation, gateware flash |
 | nanokvm | x (16) | no device | live KVM session, ATX, ISO mount |
-| vnc | x (7) | x (QEMU VNC target) | auth variants (VNC password) on hardware |
+| vnc | x (7) | x (QEMU's real RFB server: None auth AND VNC password auth — the des path — screenshot verified through both) | — |
 | sigrok | x (1) | no device | SLogic capture on hardware |
 | camera / browser / capture | x | x (this PC + headless Chrome) | — |
 | harogic | fake | no device | everything on hardware |
