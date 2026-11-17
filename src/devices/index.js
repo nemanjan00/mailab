@@ -19,6 +19,7 @@ const DRIVERS = [
 	require("./hackrf"),
 	require("./soapy"),
 	require("./rfcat"),
+	require("./esb"),
 	require("./proxmark3"),
 	require("./picoglitcher"),
 	require("./flowgraph"),
