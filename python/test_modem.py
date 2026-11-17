@@ -104,6 +104,41 @@ def test_uart():
     print("ok uart")
 
 
+def test_uart_over_fsk_idle():
+    # the uart-over-fsk demo duty cycle: a 24 ms frame every 3 s of idle mark,
+    # demodulated in the bridge's 20 ms chunks. The slicer threshold must
+    # survive the long idle runs (they used to drag it onto the mark level,
+    # turning idle into 0s and the decoded text into garbage).
+    msg = b"hello from mAIlab! "
+    frame = M.uart_encode(msg, 8, "none", 1)
+    baud, sps, snr = 9600, 8, 16
+    chunk_bits = baud // 50  # 20 ms ticks, like the flowgraph bridge
+    mod = M.CpfskModulator("gfsk", sps)
+    disc = M.Discriminator(sps, mod.h)
+    gard = M.Gardner(sps)
+    sl = M.LevelSlicer(2)
+    dec = M.UartDecoder(1.0, 8, "none", 1)
+    got = []
+    for rep in range(3):
+        bits = np.concatenate([frame, np.ones(chunk_bits * 150, dtype=np.uint8)])
+        for i in range(0, len(bits), chunk_bits):
+            rx = awgn(mod.process(bits[i:i + chunk_bits]), snr)
+            for byte, error in dec.process(sl.process(gard.process(disc.process(rx)))):
+                if not error:
+                    got.append(byte)
+    assert bytes(got[-len(msg):]) == msg, bytes(got[-40:])
+    print("ok uart fsk idle")
+
+
+def test_level_slicer_constant_first_chunk():
+	# an all-identical first chunk (startup during an idle run) must not crash
+	sl = modem.LevelSlicer(2)
+	out = sl.process(np.full(64, 1.0))
+	assert out.shape == (64,)
+	assert np.all(out == out[0])
+	assert sl.lo is not None and sl.hi is not None
+
+
 def test_lowpass_gain():
     # unity passband gain whatever the cutoff (liquid's Kaiser design alone has ~1 / (2 cutoff))
     for cutoff in (0.02, 0.1, 0.3):
@@ -120,3 +155,4 @@ if __name__ == "__main__":
     test_ook()
     test_sync()
     test_uart()
+    test_uart_over_fsk_idle()

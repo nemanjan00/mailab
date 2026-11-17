@@ -242,20 +242,38 @@ class Gardner:
 
 class LevelSlicer:
     """Real symbols -> bits: 2 levels (threshold at the running mid point) or
-    4 levels (4FSK gray)."""
+    4 levels (4FSK gray). The mid point adapts only on chunks where both
+    levels actually appear: a long idle run (all mark, or all space) keeps the
+    last threshold, so idle keeps reading as 1s instead of the threshold
+    collapsing onto the idle level and turning the whole line into 0s."""
 
     def __init__(self, levels=2):
         self.levels = levels
         self.lo = None
         self.hi = None
 
+    def _update(self, y):
+        lo, hi = np.percentile(y, 5), np.percentile(y, 95)
+        if hi > lo:
+            self.lo, self.hi = lo, hi
+
     def process(self, y):
         y = np.asarray(y, dtype=np.float64)
         if not len(y):
             return np.zeros(0, dtype=np.uint8)
-        lo, hi = np.percentile(y, 5), np.percentile(y, 95)
-        self.lo = lo if self.lo is None else 0.9 * self.lo + 0.1 * lo
-        self.hi = hi if self.hi is None else 0.9 * self.hi + 0.1 * hi
+        if self.lo is None:
+            self._update(y)
+            if self.lo is None:
+                # all-identical first chunk (e.g. startup during an idle run):
+                # bracket the constant so the mid lands on it
+                c = float(y[0])
+                self.lo, self.hi = c - 1.0, c + 1.0
+        else:
+            mid = (self.lo + self.hi) / 2
+            below = np.mean(y < mid) > 0.05
+            above = np.mean(y > mid) > 0.05
+            if below and above:
+                self._update(y)
         mid = (self.lo + self.hi) / 2
         if self.levels == 2:
             return (y > mid).astype(np.uint8)
