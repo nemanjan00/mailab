@@ -173,7 +173,9 @@ const api = (lab) => {
 		return blobEdit.change(lab, { a: req.params.a, b: req.params.b, from: queryNumber(req.query.from), dir: req.query.dir });
 	}));
 	router.post("/kaitai", route((req) => {
-		return kaitai.parse(req.body.ksy, lab.getBlob(req.body.blob).data);
+		return kaitai.resolve(req.body).then((spec) => {
+			return kaitai.parse(spec, lab.getBlob(req.body.blob).data);
+		});
 	}));
 	router.get("/chat", route((req) => {
 		return lab.getChat({ since: req.query.since === undefined ? undefined : Number(req.query.since), last: Number(req.query.last) || 200 });

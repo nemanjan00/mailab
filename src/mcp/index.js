@@ -534,12 +534,17 @@ const create = (lab, context) => {
 		to: z.string()
 	}, (a) => blobEdit.slice(lab, a, "ai"));
 
-	tool("kaitai_parse", "Parse a blob with a Kaitai Struct .ksy (YAML text): returns the field tree and each field's byte range", {
+	tool("kaitai_parse", "Parse a blob with a Kaitai Struct .ksy (YAML text) or a .proto schema (converted via protokai, multi-file imports supported): returns the field tree and each field's byte range", {
 		blob: z.string(),
-		ksy: z.string().describe(".ksy YAML source"),
+		ksy: z.string().optional().describe(".ksy YAML source"),
+		proto: z.string().optional().describe("main .proto schema text (alternative to ksy)"),
+		protoFiles: z.record(z.string(), z.string()).optional().describe("imported .proto sources, \"name.proto\" -> text"),
+		protoType: z.string().optional().describe("message to use as the root (default: first top-level message)"),
 		ranges: z.boolean().optional().describe("include byte ranges (default true)")
 	}, (a) => {
-		return kaitai.parse(a.ksy, lab.getBlob(a.blob).data).then((result) => {
+		return kaitai.resolve(a).then((spec) => {
+			return kaitai.parse(spec, lab.getBlob(a.blob).data);
+		}).then((result) => {
 			if (a.ranges === false) {
 				delete result.ranges;
 			}

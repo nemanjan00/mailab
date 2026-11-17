@@ -20,6 +20,9 @@ const DEFAULTS = {
 	PM3_CLIENT: [path.join(os.homedir(), "pm5-og", "client", "proxmark3"), path.join(os.homedir(), "proxmark3", "client", "proxmark3")]
 		.find((file) => fs.existsSync(file)) || "proxmark3",
 	CIV_PATH: path.join(os.homedir(), "ci-v"),
+	// protokai checkout (github.com/nemanjan00/protokai) used to convert
+	// .proto schemas to .ksy for kaitai_parse / the kaitai pane
+	PROTOKAI_PATH: path.join(os.homedir(), "protokai"),
 	// "name:token[:rw|ro],..." enables auth for collaboration (empty = open)
 	MAILAB_TOKENS: "",
 	// accept a non-loopback HOST without tokens (trusted networks only)

@@ -58,10 +58,23 @@ export default {
 		};
 
 		const load = () => {
-			if (!pane.config.blob || !pane.config.ksy) {
-				treeEl.innerHTML = "<span class=\"muted\">set config.blob (a lab blob) and config.ksy (.ksy YAML)</span>";
+			const hasSpec = pane.config.ksy || pane.config.proto;
+			if (!pane.config.blob || !hasSpec) {
+				treeEl.innerHTML = "<span class=\"muted\">set config.blob (a lab blob) and config.ksy (.ksy YAML) or config.proto (.proto schema, config.protoFiles for imports, config.protoType for the root message)</span>";
 				hexEl.innerHTML = "";
 				return;
+			}
+			const spec = { blob: pane.config.blob };
+			if (pane.config.proto) {
+				spec.proto = pane.config.proto;
+				if (pane.config.protoFiles) {
+					spec.protoFiles = pane.config.protoFiles;
+				}
+				if (pane.config.protoType) {
+					spec.protoType = pane.config.protoType;
+				}
+			} else {
+				spec.ksy = pane.config.ksy;
 			}
 			fetch("/api/blobs/" + encodeURIComponent(pane.config.blob))
 				.then((res) => {
@@ -72,7 +85,7 @@ export default {
 				})
 				.then((buf) => {
 					bytes = new Uint8Array(buf);
-					return ctx.api("POST", "/kaitai", { blob: pane.config.blob, ksy: pane.config.ksy });
+					return ctx.api("POST", "/kaitai", spec);
 				})
 				.then((res) => {
 					result = res;
