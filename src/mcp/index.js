@@ -16,6 +16,7 @@ const research = {
 	datasheets: require("../services/datasheets")
 };
 const vision = require("../vision");
+const timebase = require("../utils/timebase");
 
 const MAX_POINTS = 500;
 const DEFAULT_RENDER_PAGES = 3;
@@ -360,6 +361,24 @@ const create = (lab, context) => {
 	}, (a) => {
 		lab.setValue(a.name, a.value, "ai");
 		return { name: a.name };
+	});
+
+	tool("timebase_align", "Align two instruments on one timebase from sync-pulse marks (sync_mark block values: {index, t, rate}). Returns the sample-grid offset and stated stamp tolerance; common-mode tick error cancels when both edges land in the same flowgraph tick.", {
+		a: z.string(),
+		b: z.string()
+	}, (a) => {
+		const read = (name) => {
+			const v = lab.getValue(name).value; // throws "unknown value: <name>" when missing
+			return Array.isArray(v) ? v[v.length - 1] : v;
+		};
+		const ma = timebase.assertMark(read(a.a), a.a);
+		const mb = timebase.assertMark(read(a.b), a.b);
+		return {
+			a: ma,
+			b: mb,
+			offsetSeconds: timebase.offsetSeconds(ma, mb),
+			toleranceSeconds: timebase.TICK_TOLERANCE_S
+		};
 	});
 
 	tool("blob_write", "Store binary data as a blob (from base64 or hex), e.g. to parse with kaitai_parse or show in a kaitai pane", {

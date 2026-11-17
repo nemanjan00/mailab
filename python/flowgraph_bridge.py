@@ -833,6 +833,52 @@ class PacketDecode(Block):
         return None
 
 
+class SyncMark(Block):
+    inputs = "real or complex samples"
+    outputs = "value <device>_<id>_mark ({index, t, rate}), channel <device>_<id>_count"
+    kind = "sink"
+    doc = "stamp sync pulses (level crossings) with global sample index + host time so separate instruments align to one timebase (read the marks with the timebase_align tool); value <device>_<id>_mark, count channel"
+    params = {"level": (0.5, "trigger level (real part is used for complex samples)"),
+              "edge": ("rising", "edge direction: rising or falling"),
+              "min_gap_s": (0.05, "minimum seconds between stamped pulses")}
+
+    def __init__(self, bid, params):
+        super().__init__(bid, params)
+        self.n = 0
+        self.count = 0
+        self.last = None
+        self.prev = None
+        self.level = float(self.p["level"])
+        self.rising = str(self.p["edge"]).lower() != "falling"
+
+    def work(self, x, rate):
+        y = np.real(x) if np.iscomplexobj(x) else np.asarray(x, dtype=float)
+        n = len(y)
+        level = self.level
+        if self.rising:
+            local = np.nonzero((y[:-1] < level) & (y[1:] >= level))[0] + 1
+        else:
+            local = np.nonzero((y[:-1] > level) & (y[1:] <= level))[0] + 1
+        if self.prev is not None and n:
+            if (self.rising and self.prev < level <= y[0]) or (not self.rising and self.prev > level >= y[0]):
+                local = np.concatenate([[0], local])
+        if n:
+            self.prev = float(y[-1])
+        gap = max(1, int(float(self.p["min_gap_s"]) * rate))
+        now = time.time()
+        for i in local:
+            g = self.n + int(i)
+            if self.last is not None and g - self.last < gap:
+                continue
+            self.last = g
+            self.count += 1
+            # edge time: chunk covers [now - n/rate, now]
+            lab.value(self.id + "_mark", {"index": g, "t": now - (n - int(i)) / rate, "rate": rate})
+            lab.sample(self.id + "_count", self.count, "")
+        self.n += n
+        return None
+
+
 class Framer(Block):
     inputs = "bits (0/1)"
     outputs = "value <device>_<id> (frames: n, t, hex, ascii), blob <device>_<id> (payloads), channel <device>_<id>_count"
@@ -1767,6 +1813,7 @@ BLOCKS = {
     "audio": Audio, "wav": Wav, "net_source": NetSource, "net_sink": NetSink,
     "bits": BitSource, "mod": Modulate, "analog_mod": AnalogMod, "channel": Channel, "discriminator": Discriminator,
     "clock_recovery": ClockRecovery, "slicer": Slicer, "ber": Ber, "framer": Framer, "bitview": BitView,
+    "sync_mark": SyncMark,
     "baud_est": BaudEst, "packet_decode": PacketDecode,
     "matched_filter": MatchedFilterBlock, "level_trigger": LevelTrigger, "uart_tx": UartTx, "uart_rx": UartRx,
     "decode": Decode,

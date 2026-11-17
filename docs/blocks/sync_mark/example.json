@@ -1,0 +1,12 @@
+{
+  "description": "A 10 kHz reference tone stands in for a sync pulse train: sync_mark stamps every rising zero-crossing with its sample index and host time, shown as a JSON value.",
+  "prompt": "Stamp sync pulses for timebase alignment.",
+  "blocks": [
+    {"id": "ref", "type": "signal", "params": {"rate": 100e3, "freq": 10e3, "amp": 1.0, "noise": 0.001}},
+    {"id": "sync", "type": "sync_mark", "params": {"level": 0.0, "edge": "rising", "min_gap_s": 0.00005}}
+  ],
+  "links": [["ref", "sync"]],
+  "panes": [
+    {"type": "value", "title": "Sync mark", "config": {"channel": "fg_sync_mark", "label": "latest mark (index, t, rate)"}}
+  ]
+}
