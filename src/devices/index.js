@@ -22,6 +22,7 @@ const DRIVERS = [
 	require("./esb"),
 	require("./kc901"),
 	require("./openocd"),
+	require("./jtagulator"),
 	require("./proxmark3"),
 	require("./picoglitcher"),
 	require("./flowgraph"),

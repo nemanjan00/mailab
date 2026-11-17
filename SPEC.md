@@ -145,7 +145,7 @@ Per-instrument details and verification status are in [HW.md](HW.md).
 | DeepAce KC901K / KC908V | 🟡 | generic framed driver (src/services/deepace + src/devices/kc901): 0xFE/0xFF frames with sum16 checksum, request/trace_f32 commands, f32 sweeps -> spectrum trace. Vendor command codes unpublished; wire protocol unverified on hardware [HW]. KC908V needs the vendor FTD3XX backend [HW] |
 | ThunderScope | ⬜ | open-source 4-ch 1 GS/s PCIe/Thunderbolt scope; TS.NET SCPI + waveform data socket (as used by ngscopeclient) → traces, scope measurements, triggers |
 | NanoKVM / NanoKVM+ (Sipeed) | ⬜ in progress (agent) | IP-KVM as an instrument via its HTTP/WebSocket API: HDMI screen (MJPEG/H.264 → `<id>_screen` images at N fps, snapshot to the AI, vision watches), USB keyboard/mouse (type text, key combos, absolute click/move/drag — same command set as the `vnc` device so the AI drives either the same way), wait-for-screen-change, ATX power/reset/long-press (approval-gated), virtual media / mounted ISO, status (LEDs, resolution); a `kvm` pane (live screen + keyboard/mouse for people) |
-| JTAGulator | ⬜ | serial CLI: JTAG/SWD/UART pin discovery (IDCODE/BYPASS scans) → results as values |
+| JTAGulator | 🟡 | serial menu driver (src/devices/jtagulator): transcript `menu` + voltage/JTAG/IDCODE/UART scan wrappers; menu letters best-effort [HW] |
 | J-Link | ⬜ | JLinkExe / pylink: connect, read/write memory, flash, halt/run, RTT → log |
 | OpenOCD | ✅ | driver over the telnet port (src/devices/openocd): targets, regs, mem read → blobs, writes, flash erase/program, spawn with free-form adapter args (e.g. Tigard port B) |
 | Black Magic Probe | ⬜ | gdb remote over its serial port (`monitor swdp_scan`, attach, load, mem dump) + its UART |
