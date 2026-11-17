@@ -33,7 +33,7 @@ const createMeter = (sync) => {
 	const syncAll = () => {
 		// function first, then the nodes that function supports
 		return sync.query(settings.funcQuery.query).then((reply) => {
-			settings.setPath(model, settings.funcQuery.path, settings.normalizeFunc(reply));
+			settings.setPath(model, settings.funcQuery.path, settings.funcQuery.parse(reply));
 			const func = model.measure.func;
 			return runPlan(settings.syncQueries(func).concat(settings.commonSync()));
 		}).then(() => {

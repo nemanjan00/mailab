@@ -68,7 +68,7 @@ describe("dm858 settings model", () => {
 		const fake = makeFake();
 		const dev = makeDriver(fake);
 		return dev.start().then(() => dev.command("sync", {})).then((model) => {
-			expect(model.measure.func).toBe("VOLTage:DC");
+			expect(model.measure.func).toBe("DCV"); // model stores the UI label
 			expect(model.measure.range).toBe(2);
 			expect(model.measure.auto).toBe(true);
 			expect(model.measure.nplc).toBe("20");
@@ -133,7 +133,7 @@ describe("dm858 settings model", () => {
 		const dev = makeDriver(fake);
 		return dev.start().then(() => dev.command("measure", {})).then((r) => {
 			expect(r.value).toBeCloseTo(1.2345, 4);
-			expect(r.func).toBe("VOLTage:DC");
+			expect(r.func).toBe("DCV");
 			expect(r.unit).toBe("V");
 		});
 	});
