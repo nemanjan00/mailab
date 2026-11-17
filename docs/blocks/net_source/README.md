@@ -4,7 +4,7 @@
 
 **source** · Network · [all blocks](../README.md)
 
-> IQ in over TCP/UDP (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams; or logic samples (u8/u16/u32/bits) for decode
+> IQ in over TCP/UDP/WebSocket (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams; or logic samples (u8/u16/u32/bits) for decode
 
 Raw samples in over TCP (server or client) or UDP: interleaved IQ as cf32, cs16 or cu8 (GNU Radio's TCP/UDP
 sinks, SDR++ network sink, `rtl_sdr -` piped through `nc`), or logic words (u8/u16/u32, packed `bits`) for `decode`.
@@ -15,7 +15,7 @@ another mailab graph's `net_sink`.
 
 | name | default | description |
 |---|---|---|
-| `mode` | `"tcp-server"` | tcp-server\|tcp-client\|udp |
+| `mode` | `"tcp-server"` | tcp-server\|tcp-client\|udp\|ws-server\|ws-client |
 | `host` | `"127.0.0.1"` | bind (server/udp in) or remote host |
 | `port` | `5600` | TCP/UDP port (listen port for tcp-server / udp in, remote port otherwise) |
 | `format` | `"cf32"` | cf32\|cs16\|cu8 interleaved I/Q, or logic: u8\|u16\|u32 words per sample, bits (packed, MSB first) |

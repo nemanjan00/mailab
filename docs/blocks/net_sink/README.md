@@ -4,7 +4,7 @@
 
 **sink** · Network · [all blocks](../README.md)
 
-> IQ out over TCP/UDP (raw interleaved cf32/cs16/cu8)
+> IQ out over TCP/UDP/WebSocket (raw interleaved cf32/cs16/cu8, one binary message per chunk)
 
 Sends the stream out over TCP (server: one client at a time; client) or UDP as raw interleaved cf32, cs16 or
 cu8 IQ, or logic words. Feed GNU Radio, SDR++, inspectrum/`nc > file` recorders, a transmitter on another machine, or
@@ -14,7 +14,7 @@ another mailab graph's `net_source`. UDP datagrams are 8 KB; a TCP peer that dis
 
 | name | default | description |
 |---|---|---|
-| `mode` | `"tcp-server"` | tcp-server\|tcp-client\|udp |
+| `mode` | `"tcp-server"` | tcp-server\|tcp-client\|udp\|ws-server\|ws-client |
 | `host` | `"127.0.0.1"` | bind (server/udp in) or remote host |
 | `port` | `5600` | TCP/UDP port (listen port for tcp-server / udp in, remote port otherwise) |
 | `format` | `"cf32"` | cf32\|cs16\|cu8 interleaved I/Q, or logic: u8\|u16\|u32 words per sample, bits (packed, MSB first) |
@@ -22,7 +22,7 @@ another mailab graph's `net_source`. UDP datagrams are 8 KB; a TCP peer that dis
 ## Inputs and outputs
 
 - **Input:** complex IQ, or logic words for the u8/u16/u32/bits formats
-- **Output:** raw bytes over TCP/UDP
+- **Output:** raw bytes over TCP/UDP/WebSocket
 
 ## Example
 

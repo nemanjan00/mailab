@@ -12,9 +12,11 @@ and per-block stats are published as lab values "<device>_graph" / "_stats".
 import argparse
 import base64
 import collections
+import hashlib
 import json
 import os
 import socket
+import struct
 import subprocess
 import time
 import wave
@@ -1451,6 +1453,114 @@ class Wav(Block):
 
 # network IQ ---------------------------------------------------------------
 
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+
+def _ws_read_http_head(conn):
+    """read one HTTP message (handshake request/response); returns (head, extra)."""
+    data = b""
+    conn.settimeout(2.0)
+    while b"\r\n\r\n" not in data:
+        chunk = conn.recv(4096)
+        if not chunk:
+            raise ConnectionError("ws handshake: connection closed")
+        data += chunk
+        if len(data) > 65536:
+            raise ConnectionError("ws handshake: header too large")
+    head, _, extra = data.partition(b"\r\n\r\n")
+    conn.setblocking(False)
+    return head.decode("latin1"), extra
+
+
+def _ws_handshake_server(conn):
+    head, extra = _ws_read_http_head(conn)
+    key = None
+    for line in head.split("\r\n")[1:]:
+        name, _, value = line.partition(":")
+        if name.strip().lower() == "sec-websocket-key":
+            key = value.strip()
+    if not key:
+        raise ConnectionError("ws handshake: no Sec-WebSocket-Key")
+    accept = base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
+    conn.sendall(("HTTP/1.1 101 Switching Protocols\r\n"
+                  "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+                  "Sec-WebSocket-Accept: " + accept + "\r\n\r\n").encode())
+    return extra
+
+
+def _ws_handshake_client(conn, host, port):
+    key = base64.b64encode(os.urandom(16)).decode()
+    conn.sendall(("GET / HTTP/1.1\r\nHost: %s:%d\r\nUpgrade: websocket\r\n"
+                  "Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\n"
+                  "Sec-WebSocket-Version: 13\r\n\r\n" % (host, port, key)).encode())
+    head, extra = _ws_read_http_head(conn)
+    if " 101 " not in head.split("\r\n", 1)[0]:
+        raise ConnectionError("ws handshake: " + head.split("\r\n", 1)[0])
+    return extra
+
+
+def _ws_frame(payload, masked, opcode=0x2):
+    """one websocket frame (FIN set); payload is bytes."""
+    head = bytes([0x80 | opcode])
+    n = len(payload)
+    maskbit = 0x80 if masked else 0
+    if n < 126:
+        head += bytes([maskbit | n])
+    elif n < (1 << 16):
+        head += bytes([maskbit | 126]) + struct.pack(">H", n)
+    else:
+        head += bytes([maskbit | 127]) + struct.pack(">Q", n)
+    if not masked:
+        return head + payload
+    key = os.urandom(4)
+    return head + key + bytes(payload[i] ^ key[i % 4] for i in range(n))
+
+
+def _ws_parse(buf):
+    """parse complete frames from buf; returns (events, rest) where an event is
+    ("data", payload) | ("ping", payload) | ("close", b"")."""
+    events = []
+    i = 0
+    while True:
+        if len(buf) - i < 2:
+            break
+        b0, b1 = buf[i], buf[i + 1]
+        opcode = b0 & 0x0F
+        masked = b1 & 0x80
+        n = b1 & 0x7F
+        j = i + 2
+        if n == 126:
+            if len(buf) - j < 2:
+                break
+            n = struct.unpack(">H", buf[j:j + 2])[0]
+            j += 2
+        elif n == 127:
+            if len(buf) - j < 8:
+                break
+            n = struct.unpack(">Q", buf[j:j + 8])[0]
+            j += 8
+        key = b""
+        if masked:
+            if len(buf) - j < 4:
+                break
+            key = buf[j:j + 4]
+            j += 4
+        if len(buf) - j < n:
+            break
+        payload = bytes(buf[j + k] ^ key[k % 4] for k in range(n)) if masked else bytes(buf[j:j + n])
+        j += n
+        i = j
+        if opcode == 0x8:
+            events.append(("close", b""))
+        elif opcode == 0x9:
+            events.append(("ping", payload))
+        elif opcode == 0xA:
+            pass  # pong
+        else:  # text / binary / continuation: all payload
+            events.append(("data", payload))
+    return events, buf[i:]
+
+
 def _decode_iq(data, fmt):
     """raw bytes -> complex64 (IQ formats) or logic words (u8/u16/u32 samples,
     bits = packed MSB first); returns (samples, leftover bytes)"""
@@ -1482,13 +1592,15 @@ def _encode_iq(x, fmt):
 
 
 class _NetEndpoint:
-    """tcp-server (one client at a time), tcp-client or udp; all non-blocking."""
+    """tcp-server (one client at a time), tcp-client, udp, or websocket
+    (ws-server / ws-client, RFC 6455 binary messages); all non-blocking."""
 
     def __init__(self, p, receiving):
         self.mode, self.host, self.port = p["mode"], p["host"], int(p["port"])
         self.conn = None
         self.peer = None
-        if self.mode == "tcp-server":
+        self.wsbuf = b""  # undecoded websocket frames (and handshake leftovers)
+        if self.mode in ("tcp-server", "ws-server"):
             self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.listener.bind((self.host, self.port))
@@ -1501,8 +1613,11 @@ class _NetEndpoint:
                 self.conn.bind((self.host, self.port))
             else:
                 self.peer = (self.host, self.port)
-        elif self.mode != "tcp-client":
-            raise ValueError("mode must be tcp-server, tcp-client or udp")
+        elif self.mode not in ("tcp-client", "ws-client"):
+            raise ValueError("mode must be tcp-server, tcp-client, udp, ws-server or ws-client")
+
+    def _is_ws(self):
+        return self.mode in ("ws-server", "ws-client")
 
     def ready(self):
         if self.conn is not None:
@@ -1511,19 +1626,30 @@ class _NetEndpoint:
             if self.mode == "tcp-server":
                 self.conn, addr = self.listener.accept()
                 lab.log("net: client %s:%d connected" % addr)
+            elif self.mode == "ws-server":
+                self.conn, addr = self.listener.accept()
+                self.wsbuf += _ws_handshake_server(self.conn)
+                lab.log("net: ws client %s:%d connected" % addr)
+            elif self.mode == "ws-client":
+                self.conn = socket.create_connection((self.host, self.port), timeout=2.0)
+                self.wsbuf += _ws_handshake_client(self.conn, self.host, self.port)
+                lab.log("net: ws connected to %s:%d" % (self.host, self.port))
             else:
                 self.conn = socket.create_connection((self.host, self.port), timeout=0.2)
                 lab.log("net: connected to %s:%d" % (self.host, self.port))
             self.conn.setblocking(False)
             return True
-        except (BlockingIOError, OSError):
-            self.conn = None
+        except (BlockingIOError, OSError, ConnectionError):
+            if self.conn is not None:
+                self.conn.close()
+                self.conn = None
             return False
 
     def dropped(self):
         if self.mode != "udp" and self.conn is not None:
             self.conn.close()
             self.conn = None
+            self.wsbuf = b""
             lab.log("net: peer disconnected", "warn")
 
     def recv(self):
@@ -1543,13 +1669,31 @@ class _NetEndpoint:
                     self.dropped()
                 break
             chunks.append(data)
-        return b"".join(chunks)
+        raw = b"".join(chunks)
+        if not self._is_ws():
+            return raw
+        self.wsbuf += raw
+        events, self.wsbuf = _ws_parse(self.wsbuf)
+        out = []
+        for kind, payload in events:
+            if kind == "data":
+                out.append(payload)
+            elif kind == "ping":  # keepalive: answer with a pong
+                try:
+                    self.conn.sendall(_ws_frame(payload, masked=self.mode == "ws-client", opcode=0xA))
+                except OSError:
+                    self.dropped()
+            elif kind == "close":
+                self.dropped()
+        return b"".join(out)
 
     def send(self, data):
         if not self.ready():
             return
         try:
-            if self.mode == "udp":
+            if self._is_ws():
+                self.conn.sendall(_ws_frame(data, masked=self.mode == "ws-client"))
+            elif self.mode == "udp":
                 # keep datagrams under a typical MTU-friendly size
                 for i in range(0, len(data), 8192):
                     self.conn.sendto(data[i:i + 8192], self.peer)
@@ -1564,7 +1708,7 @@ class _NetEndpoint:
                 s.close()
 
 
-NET_PARAMS = {"mode": ("tcp-server", "tcp-server|tcp-client|udp"), "host": ("127.0.0.1", "bind (server/udp in) or remote host"),
+NET_PARAMS = {"mode": ("tcp-server", "tcp-server|tcp-client|udp|ws-server|ws-client"), "host": ("127.0.0.1", "bind (server/udp in) or remote host"),
               "port": (5600, "TCP/UDP port (listen port for tcp-server / udp in, remote port otherwise)"),
               "format": ("cf32", "cf32|cs16|cu8 interleaved I/Q, or logic: u8|u16|u32 words per sample, bits (packed, MSB first)")}
 
@@ -1573,7 +1717,7 @@ class NetSource(Block):
     inputs = ""
     outputs = "complex IQ (cf32/cs16/cu8) or logic words (u8/u16/u32/bits) at `rate`"
     kind = "source"
-    doc = ("IQ in over TCP/UDP (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams; "
+    doc = ("IQ in over TCP/UDP/WebSocket (raw interleaved cf32/cs16/cu8), e.g. from GNU Radio, SDR++ or rtl_tcp-like streams; "
            "or logic samples (u8/u16/u32/bits) for decode")
     params = dict(NET_PARAMS, rate=(1e6, "sample rate of the incoming stream"))
 
@@ -1595,9 +1739,9 @@ class NetSource(Block):
 
 class NetSink(Block):
     inputs = "complex IQ, or logic words for the u8/u16/u32/bits formats"
-    outputs = "raw bytes over TCP/UDP"
+    outputs = "raw bytes over TCP/UDP/WebSocket"
     kind = "sink"
-    doc = "IQ out over TCP/UDP (raw interleaved cf32/cs16/cu8)"
+    doc = "IQ out over TCP/UDP/WebSocket (raw interleaved cf32/cs16/cu8, one binary message per chunk)"
     params = dict(NET_PARAMS)
 
     def __init__(self, bid, params):
