@@ -52,6 +52,10 @@ module.exports = scpiDriver.preset({
 
 		meter.on("change", () => {
 			io.value("settings", meter.get());
+			// the legacy `value` poll channel carries no unit: stamp it from
+			// the active function so panes show V/A/ohm/...
+			io.meta("value", { unit: settings.unitOf(meter.get().measure.func) });
+			io.meta("reading", { unit: settings.unitOf(meter.get().measure.func) });
 		});
 		sync.on("error", () => null);
 
