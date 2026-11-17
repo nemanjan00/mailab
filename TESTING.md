@@ -14,7 +14,72 @@ physical device. How to run the suite and the fake-injection seams:
 python bridges, socat PTY pairs, `options.exe` stubs. The repeatable
 real-hardware verification procedure is the checklist at the bottom.
 
-## Instruments (drivers)
+## ✅ Verified on real hardware (the short list)
+
+Everything below was driven against the physical instrument and the result
+confirmed on the device itself (display, measurement, or RF). Details per
+instrument; quirks live here because future-you will need them.
+
+### Rigol MHO98 scope (bench, 10.69.1.89) — `mho900` + `rigol`
+- Full settings model synced from the unit: ch1-4 (scale/offset/probe/
+  coupling/impedance/on), timebase, trigger, acquire, AWG1+AWG2; set
+  round-trips read back over the wire.
+- AWG loopback: 1 MHz / 1 Vpp set on G1 → **1.000 MHz / 1.05 Vpp measured
+  on CH1** (1:1 probe corrected mid-session).
+- Watch: trace + screen image pushed to the UI on every triggered
+  acquisition, surviving restarts (`watchOnStart`).
+- UI verified by pixel probes: wheel zoom both axes around the cursor;
+  ctrl-wheel stepped the real timebase (1e-4 → 5e-5 s/div, 1-2-5 ladder);
+  shift-wheel stepped real V/div (0.5 → 0.2); trigger flags dragged to the
+  0 V gridline commit ~0.0005 V; V/div window (±4 divs) follows the scope.
+- Live video pane: H.264 screen + touch injection (tap visibly selected a
+  measurement row).
+
+### Rigol DM858 DMM (lab, 10.69.2.52) — `dm858` + `rigol`
+- 4-layer settings model live: function switches via the pane read back from
+  the unit (DCI/DCV/freq/diode/cap), NPLC/range/auto set + confirm,
+  per-function sync — including the quirk found from live timeouts:
+  freq/period NULL lives at SENSe:<f>:NULL, NOT under the VOLTage subnode.
+- Monitor readings with units over the serialized chain; screenshots over
+  BOTH transports.
+- **The key finding**: a raw TCP SCPI session (5025) locks the front panel
+  ("remote mode"); the WebSocket channel (9004) speaks identical SCPI
+  WITHOUT locking. The driver now runs entirely over 9004 — panel stays
+  live; 34 readings / 20 s stable; single-seat + idle-timeout + self-heal
+  mapped.
+- Live video pane with touch injection (tap visibly hit the AUTO key).
+
+### Othernet Morfeus (bench, USB) — `morfeus`
+- Transport = plain /dev/hidraw: discovered `10c4:eac9 "EFM8UB1 Bootloader"`
+  IS the app mode (LCD alive), not a stuck bootloader.
+- Freq set 433.9 MHz → **LCD confirmed** (was 1234567890); readback exact
+  incl. MAX2871's 433900001 Hz rounding; mode mixer↔generator both ways on
+  command; mixer current swept 0→7 live; bias on/off.
+- Frequency override = **undocumented param 0x87**, found by scanning
+  0x80–0x90, confirmed on the LCD ("Yep, you set freq override to on").
+- Reply framing: echoes cmd+param; stale-reply retry added from live
+  observations; LCD page-jumps to the last-touched param (info reads freq
+  last so it stays on page 1).
+
+### ISDT MP305B PSU (lab host, USB-HID) — `mp305`
+- Bridge (pinned pymp305 0.6.3) installs + starts on the lab host;
+  full telemetry: v/i/p/set_v/set_i/on/mode/temp channels, identity,
+  limits enforced. TODO next: output-on under load, PD, charge, programs.
+
+### nRF52840 ESB bridge (lab host, Feather) — `esb`
+- The mdp-p906 bridge firmware runs on a real Feather: binary-mode entry,
+  config query (ch/addr/ack), all driver commands answered per protocol.
+
+### SCPI-over-WebSocket service — `scpiws`
+- Live against the DM858's 9004: greeting, hex frames, binary-safe
+  screenshots, serialized queries, reconnect-after-drop.
+
+### Also verified
+- `rigol` pane/driver on BOTH instruments (above); `vnc` against QEMU;
+  sysmon/capture/usb on this PC; flashrom/minipro against dummy targets;
+  mp305/morfeus/chipwhisperer bridges against in-file simulations.
+
+## Instruments (drivers) — full matrix
 
 | Driver | Fake tests | Live | TODO |
 |---|---|---|---|
@@ -22,14 +87,14 @@ real-hardware verification procedure is the checklist at the bottom.
 | serial / uart | x (3) | this PC's adapters | — |
 | process / python bridges | x (lab core) | x (mp305, morfeus, chipwhisperer e2e w/ fakes) | — |
 | scpi (generic) | x (2) | via dm858/mho900 presets | — |
-| scpiws (SCPI over WS 9004) | x (5) | x (DM858 — no panel lock) | — |
-| dm858 (DM858E DMM) | x (6) | x (FULL: 4-layer settings model live — function switches via pane read back from the unit (DCI/DCV/freq/diode/cap), NPLC/range/auto set + confirm, per-function sync incl. the SENSe:<f>:NULL vs VOLTage-subnode quirk fixed from live timeouts, monitor readings w/ unit over the chain, screenshots over BOTH 5025 (blocks the panel) and 9004 (panel stays unlocked — the key finding), 34 readings/20 s stable over 9004, settings pane editor, unit stamping, single-session + remote-lockout behavior mapped) | x (UI) | TODO: on-screen confirm of every function's range/NULL (ohm2w/ohm4w/temp/diode/cont), NPLC per function, calculate (limits/stats) on hardware |
-| mho900 (MHO98 scope) | x (17) | x (FULL: settings sync of ch1-4/timebase/trigger/acquire/AWG1+2, set round-trips read back from the unit, AWG loopback 1 MHz/1 Vpp set -> 1.000 MHz/1.05 Vpp measured, watch trace+screen push, ctrl/shift-wheel drove real t/div + V/div, trigger flags dragged w/ pixel probes, V/div window follow, screenshots, live video pane) | x (UI) | TODO: XY/ROLL timebase, ch3/4 capture, AWG2 output on-air, mask testing |
-| mp305 (ISDT PSU) | x (4 + e2e) | x (lab unit MP305B over USB-HID via pymp305: bridge installs + starts, full state telemetry — v/i/p/set_v/set_i/on/mode/temp channels flowing, identity, limits enforced) | panes created | TODO (all on the connected lab unit): setpoints write + output on (approval-gated), CV/CC observation under load, PD profiles/select/output, charge config + a real battery charge, program write/run/stop, energy reset, remote hold, BLE transport |
+| scpiws (SCPI over WS 9004) | x (5) | ✅ **see top** | — |
+| dm858 (DM858E DMM) | x (6) | ✅ **see top** | x (UI) | on-screen per-function range/NULL sweep (ohm2w/ohm4w/temp/diode/cont), NPLC per function, calculate on hardware |
+| mho900 (MHO98 scope) | x (17) | ✅ **see top** | x (UI) | XY/ROLL timebase, ch3/4 capture, AWG2 output, mask testing |
+| mp305 (ISDT PSU) | x (4 + e2e) | ✅ **see top** (telemetry) | panes created | output-on under load, CV/CC, PD profiles/select/output, charge config + a real charge, program write/run/stop, energy reset, remote hold, BLE |
 | mdp (MDP-P906) | x (10) | fake bridge | full UI pane, radio reconnection |
-| morfeus (RF siggen) | x (2 + e2e) | x (FULL on the bench unit: transport = plain /dev/hidraw after discovering 10c4:eac9 'EFM8UB1 Bootloader' IS the app mode, not a stuck bootloader; freq set 433.9 MHz -> LCD confirmed (was showing 1234567890), readback exact incl. the MAX2871 433900001 rounding; mode mixer<->generator both ways on your command; current swept 0..7 live; bias on/off; freq override = undocumented param 0x87 found by scanning 0x80-0x90 and confirmed on the LCD; reply framing verified cmd+param echo with stale-reply retry; 'Invalid param.' discovery for 0x86; LCD page-jump-on-touch mapped (info reads freq last so it stays on page 1); settings pane schema/set/sync live) | x (settings pane) | TODO: sweep on hardware (watch the RF), LCD backlight 0x85 confirm, 5-6 GHz band |
-| esb (nRF52840) | x (11) | x (bridge firmware on Feather) | RX/ACK on-air with a second node |
-| rigol (Web Control screen+input) | x (7) | x (DM858 + MHO98 video & touch) | swipe gestures on hardware, keys (back/home) meaning per device |
+| morfeus (RF siggen) | x (2 + e2e) | ✅ **see top** | x (settings pane) | sweep on hardware, LCD backlight 0x85, 5-6 GHz band |
+| esb (nRF52840) | x (11) | ✅ **see top** (bridge firmware) | — | RX/ACK on-air with a second node |
+| rigol (Web Control screen+input) | x (7) | ✅ **see top** (both instruments) | — | swipe gestures, back/home keys per device |
 | kc9531b (power meter) | x | fake | everything on hardware |
 | kc901 (DeepAce analyzer) | x (6) | no device | everything on hardware |
 | tinysa / litevna / nanovna | x (4 + litevna) | no device | sweeps, markers, calibration on hardware |
