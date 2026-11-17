@@ -25,6 +25,8 @@ module.exports = processDriver.pythonPreset({
 		mode: "{value?: mixer|generator} read or set the function mode (generator = RF output, needs approval)",
 		current: "{level?} read or set the mixer current 0..7 (level 7 needs approval)",
 		bias: "{on?} read or set the bias-T (5V on the mixer input)",
+		override: "{on?} read or set the frequency override (undocumented device param 0x87)",
+		lcd: "{timeout?} LCD backlight: 0 always on, 1 = 10 s, 2 = 60 s (unverified)",
 		sweep: "{start_hz, stop_hz, step_hz, dwell_ms?} step the frequency (needs approval), sweep_freq channel (MHz)"
 	},
 	args: (options) => {

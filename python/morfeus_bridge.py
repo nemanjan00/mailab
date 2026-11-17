@@ -30,6 +30,11 @@ CMD_GET = 0x72
 CMD_SET = 0x77
 
 PARAMS = {"freq": 0x81, "mode": 0x82, "current": 0x83, "bias": 0x84}
+# 0x85: LCD backlight (0 always on, 1 = 10 s, 2 = 60 s — moRFeusQt, unverified)
+# 0x87: frequency override on/off (undocumented; found by scanning 0x80-0x90
+# live, settable, survives reads)
+PARAM_BACKLIGHT = 0x85
+PARAM_OVERRIDE = 0x87
 PARAM_NAMES = {v: k for k, v in PARAMS.items()}
 
 
@@ -63,6 +68,11 @@ class HidTransport:
 
     def close(self):
         if self.fd is not None:
+            # leave the LCD on page 1: a final freq read, best-effort
+            try:
+                self.write_read(pack(">BBB14x", 0x00, CMD_GET, PARAMS["freq"]))
+            except Exception:
+                pass
             os.close(self.fd)
             self.fd = None
 
@@ -71,7 +81,7 @@ class FakeTransport:
     """test seam: scripted values + a mutation log."""
 
     def __init__(self):
-        self.values = {0x81: 100_000_000, 0x82: 0, 0x83: 1, 0x84: 0}
+        self.values = {0x81: 100_000_000, 0x82: 0, 0x83: 1, 0x84: 0, 0x85: 0, 0x87: 0}
         self.log = []
 
     def write_read(self, msg, read_len=16, timeout_ms=2000):
@@ -86,15 +96,23 @@ class FakeTransport:
             self.values[param] = value
         else:
             raise Exception("unknown cmd 0x%02x" % cmd)
-        return bytes([0x00, 0x00]) + value.to_bytes(8, byteorder="big") + bytes(6)
+        # real replies echo cmd + param: [0x72|0x77, param, value(8B), ...]
+        return bytes([cmd, param]) + value.to_bytes(8, byteorder="big") + bytes(6)
 
     def close(self):
         pass
 
 
 def get(transport, param):
-    ret = transport.write_read(pack(">BBB14x", 0x00, CMD_GET, param))
-    return int.from_bytes(bytes(ret[2:10]), byteorder="big")
+    # the device can hand back a stale reply (one exchange behind); the
+    # reply echoes the param byte (ret[1]), so mismatch = retry
+    last = None
+    for _attempt in range(3):
+        ret = bytes(transport.write_read(pack(">BBB14x", 0x00, CMD_GET, param)))
+        last = ret
+        if len(ret) >= 10 and ret[1] == param and ret[0] == CMD_GET:
+            return int.from_bytes(ret[2:10], byteorder="big")
+    raise Exception("no clean reply for param 0x%02x (last: %s)" % (param, last.hex() if last else "none"))
 
 
 def set_(transport, param, value):
@@ -116,12 +134,15 @@ def main():
 
     @bridge.command("info", "current state: frequency, mode, current, bias")
     def info(_a):
-        return {
-            "freq_hz": get(transport, PARAMS["freq"]),
-            "mode": Mode(get(transport, PARAMS["mode"])).name.lower(),
-            "current": get(transport, PARAMS["current"]),
-            "bias": bool(get(transport, PARAMS["bias"])),
-        }
+        # the LCD jumps to the page of the last parameter touched; read
+        # bias/current/mode first and FREQ last so the display stays on
+        # page 1 (the official tool behaves the same way)
+        bias = bool(get(transport, PARAMS["bias"]))
+        current = get(transport, PARAMS["current"])
+        raw_mode = get(transport, PARAMS["mode"])
+        mode = Mode(raw_mode).name.lower() if raw_mode in [m.value for m in Mode] else "unknown(%d)" % raw_mode
+        freq_hz = get(transport, PARAMS["freq"])
+        return {"freq_hz": freq_hz, "mode": mode, "current": current, "bias": bias}
 
     @bridge.command("freq", "{hz?} read or set the LO/output frequency in Hz (30M..6G)")
     def freq(a):
@@ -141,7 +162,7 @@ def main():
                 raise Exception("mode must be mixer or generator")
             set_(transport, PARAMS["mode"], Mode[name].value)
         value = get(transport, PARAMS["mode"])
-        return {"mode": Mode(value).name.lower()}
+        return {"mode": Mode(value).name.lower() if value in [m.value for m in Mode] else "unknown(%d)" % value}
 
     @bridge.command("current", "{level?} read or set the mixer current level 0..7")
     def current(a):
@@ -159,6 +180,20 @@ def main():
         on = bool(get(transport, PARAMS["bias"]))
         lab.sample("bias", 1 if on else 0)
         return {"bias": on}
+
+    @bridge.command("override", "{on?} read or set the frequency override (undocumented param 0x87)")
+    def override(a):
+        if a.get("on") is not None:
+            set_(transport, PARAM_OVERRIDE, 1 if a["on"] else 0)
+        on = bool(get(transport, PARAM_OVERRIDE))
+        lab.sample("override", 1 if on else 0)
+        return {"override": on}
+
+    @bridge.command("lcd", "{timeout?} LCD backlight: 0 always on, 1 = 10 s, 2 = 60 s (unverified)")
+    def lcd(a):
+        if a.get("timeout") is not None:
+            set_(transport, PARAM_BACKLIGHT, lab.parse_number(a["timeout"], "timeout", 0, 2))
+        return {"timeout": get(transport, PARAM_BACKLIGHT)}
 
     @bridge.command("sweep", "{start_hz, stop_hz, step_hz, dwell_ms?} step the frequency, sampling each step")
     def sweep(a):

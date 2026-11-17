@@ -66,6 +66,11 @@ def test_state_roundtrip_and_sweep():
         sweep = b.ok("sweep", {"start_hz": 100e6, "stop_hz": 103e6, "step_hz": 1e6, "dwell_ms": 10})
         assert sweep == {"steps": 4, "from_hz": 100e6, "to_hz": 103e6}
 
+        assert b.ok("override", {"on": True}) == {"override": True}
+        assert b.ok("override") == {"override": True}
+        assert b.ok("override", {"on": False}) == {"override": False}
+        assert b.ok("lcd", {"timeout": 2}) == {"timeout": 2}
+
         # the transport saw the writes
         fake = b.ok("_fake")
         sets = [e for e in fake["log"] if e[0] == "set"]
