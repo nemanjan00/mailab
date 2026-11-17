@@ -49,11 +49,11 @@ const DEFAULT_POLICY = [
 	{ driver: "cynthion", command: "flash", reason: "overwrites the Cynthion's configuration flash" },
 	{ driver: "nanokvm", command: "power", reason: "presses the target machine's ATX power / reset button (NanoKVM)" },
 	{ driver: "nanokvm", command: "iso_mount", reason: "attaches a disk image to the target machine (NanoKVM virtual media)" },
-	// Morfeus RF signal generator transmits on the air. output-on is already
-	// gated by the generic `output`/on entry at the top; sweep and max-level are
-	// Morfeus-specific and added here.
+	// Morfeus RF signal generator transmits on the air. Generator mode,
+	// sweeps and max mixer current need a person; bias-T powers an antenna.
+	{ driver: "morfeus", command: "mode", when: "value == generator", reason: "switches the Morfeus to RF generator mode (transmits on the air)" },
 	{ driver: "morfeus", command: "sweep", reason: "runs an RF sweep on the Morfeus (transmits across a frequency range)" },
-	{ driver: "morfeus", command: "set_level", when: "level >= 7", reason: "sets the Morfeus to maximum output level" }
+	{ driver: "morfeus", command: "current", when: "level >= 7", reason: "sets the Morfeus to maximum mixer current" }
 ];
 
 const policyKey = (p) => [p.driver || "", p.device || "", p.command, p.when || ""].join("|");
