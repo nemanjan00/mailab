@@ -800,17 +800,54 @@ const openProfiles = () => {
 	profilesDialog(document.getElementById("lab-dialog"), document.getElementById("lab-dialog-body"), ctx);
 };
 
-// "how do I connect my AI" help, filled with this lab's real address
+// "how do I connect my AI" help, filled with this lab's real address,
+// hostname-based server name, and (for rw identities) the usable tokens
 const openMcpHelp = () => {
+	const host = location.hostname || "lab";
+	const name = "mailab-" + host.replace(/[^a-z0-9]+/gi, "-");
 	const url = location.origin + "/mcp";
-	document.getElementById("mcp-claude").textContent = "claude mcp add --transport http mailab " + url;
-	document.getElementById("mcp-json").textContent = JSON.stringify({ mcpServers: { mailab: { type: "http", url: url } } }, null, 2);
-	document.getElementById("mcp-channel").textContent = JSON.stringify({ mcpServers: { "mailab-chat": {
+	document.getElementById("mcp-claude").textContent = "claude mcp add --transport http " + name + " " + url;
+	document.getElementById("mcp-json").textContent = JSON.stringify({ mcpServers: { [name]: { type: "http", url: url } } }, null, 2);
+	document.getElementById("mcp-channel").textContent = JSON.stringify({ mcpServers: { [name + "-chat"]: {
 		command: "node", args: ["/path/to/mailab/bin/channel.js"],
 		env: { MAILAB_URL: location.origin, MAILAB_NAME: "claude" }
 	} } }, null, 2);
+	const authBox = document.getElementById("mcp-auth");
 	api("GET", "/whoami").then((who) => {
-		document.getElementById("mcp-auth").hidden = who.name === "local";
+		authBox.hidden = who.name === "local";
+	}, () => null);
+	// tokens for MCP clients: rw identities see them inline; ro viewers keep
+	// the "ask the owner" note
+	const tokenBox = document.getElementById("mcp-tokens");
+	tokenBox.innerHTML = "";
+	api("GET", "/mcp/info").then((info) => {
+		info.tokens.forEach((t) => {
+			const row = document.createElement("div");
+			row.className = "mcp-row";
+			const label = document.createElement("span");
+			label.className = "k";
+			label.textContent = t.name + " (" + t.role + ")";
+			const input = document.createElement("input");
+			input.type = "text";
+			input.readOnly = true;
+			input.value = t.token;
+			input.className = "mono";
+			const btn = document.createElement("button");
+			btn.textContent = "⧉";
+			btn.onclick = () => {
+				navigator.clipboard.writeText(t.token).then(() => {
+					btn.textContent = "✓";
+					setTimeout(() => {
+						btn.textContent = "⧉";
+					}, 1200);
+				});
+			};
+			const wrap = document.createElement("div");
+			wrap.className = "c";
+			wrap.append(input, btn);
+			row.append(label, wrap);
+			tokenBox.append(row);
+		});
 	}, () => null);
 	document.getElementById("mcp-dialog").showModal();
 };

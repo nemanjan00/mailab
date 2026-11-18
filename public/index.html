@@ -40,7 +40,9 @@
 		<div class="copy"><pre id="mcp-json"></pre><button data-copy="mcp-json">copy</button></div>
 		<div id="mcp-auth" hidden>
 			<h4>This lab requires a token</h4>
-			<p>Add <code>--header "Authorization: Bearer &lt;token&gt;"</code> to the command above (or a <code>headers</code> entry in the JSON). Ask the lab owner for a token (<code>MAILAB_TOKENS</code>).</p>
+			<p>Add <code>--header "Authorization: Bearer &lt;token&gt;"</code> to the command above (or a <code>headers</code> entry in the JSON).</p>
+			<div id="mcp-tokens"></div>
+			<p class="muted">Tokens usable right now (rw only — ro viewers ask the lab owner, <code>MAILAB_TOKENS</code>).</p>
 		</div>
 		<h4>Lab chat pushed into Claude Code (optional)</h4>
 		<p>Claude Code channels are stdio-only, so a small bridge forwards the lab chat:</p>
