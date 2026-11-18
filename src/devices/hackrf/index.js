@@ -13,7 +13,6 @@ const path = require("path");
 const DEFAULTS = { startMhz: 1, stopMhz: 6000, binWidth: 1000000, lna: 16, vga: 20 };
 
 const create = (options, io) => {
-	const settings = Object.assign({}, DEFAULTS, options);
 	let proc = null;
 	let bins = [];
 	const seenLows = new Set();
@@ -81,7 +80,7 @@ const create = (options, io) => {
 		delete s.binWidthMhz;
 		delete s.binWidthKhz;
 		if (s.binWidth !== undefined) {
-			s.binWidth = Math.max(20e3, Math.min(5e6, Number(s.binWidth) || settings.binWidth));
+			s.binWidth = Math.max(5e3, Math.min(5e6, Number(s.binWidth) || settings.binWidth));
 		}
 		["startMhz", "stopMhz", "lna", "vga"].forEach((key) => {
 			if (s[key] !== undefined) {
@@ -90,6 +89,7 @@ const create = (options, io) => {
 		});
 		return s;
 	};
+	const settings = Object.assign({}, DEFAULTS, normalize(options || {}));
 
 	const launch = () => {
 		let select = [];
@@ -276,7 +276,7 @@ module.exports = {
 		serial: "board serial (hackrf_info) when several HackRFs are connected",
 		startMhz: "default 1",
 		stopMhz: "default 6000",
-		binWidth: "FFT bin width Hz (default 1e6)",
+		binWidth: "FFT bin width Hz (default 1e6; aliases binWidthKhz/binWidthMhz; hackrf_sweep quantizes, ~5 kHz-5 MHz)",
 		lna: "LNA gain 0-40 step 8 (default 16)",
 		vga: "VGA gain 0-62 step 2 (default 20)"
 	},
