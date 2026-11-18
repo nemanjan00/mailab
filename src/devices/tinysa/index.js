@@ -7,6 +7,7 @@ const parseSwitch = require("../../utils/args").parseSwitch;
 
 const PROMPT = "ch> ";
 const SCAN_TIMEOUT_MS = 30000;
+const RETRY_MS = 2000;
 const DEFAULTS = { start: 1e6, stop: 800e6, points: 450 };
 
 const create = (options, io) => {
@@ -76,17 +77,51 @@ const create = (options, io) => {
 			});
 	};
 
+	let stopped = false;
+	let retry = null;
+
+	// connect with retry: the MCU can take seconds to boot after a reset
+	// (or answer nothing while a previous slow scan drains), and a failed
+	// handshake must not leave the device permanently error-ed
+	const connect = () => {
+		retry = null;
+		if (stopped) {
+			return;
+		}
+		try {
+			port = tty.acquire(options.path, { baud: options.baud || 115200, owner: io.id });
+		} catch (err) {
+			io.status("waiting", err.message);
+			retry = setTimeout(connect, RETRY_MS);
+			return;
+		}
+		shell("version", 8000).then((lines) => {
+			io.log("connected: " + lines.join(" "));
+			io.status("running", options.path);
+			running = options.continuous !== false;
+			loop();
+		}, (err) => {
+			io.log("handshake failed: " + err.message + " — retrying", "warn");
+			port = null;
+			tty.release(options.path, io.id).catch(() => {}).then(() => {
+				if (!stopped && !retry) {
+					retry = setTimeout(connect, RETRY_MS);
+				}
+			});
+			return null;
+		});
+	};
+
 	return {
 		start: () => {
-			port = tty.acquire(options.path, { baud: options.baud || 115200, owner: io.id });
-			return shell("version").then((lines) => {
-				io.log("connected: " + lines.join(" "));
-				running = options.continuous !== false;
-				loop();
-			});
+			stopped = false;
+			connect();
+			return Promise.resolve();
 		},
 
 		stop: () => {
+			stopped = true;
+			clearTimeout(retry);
 			running = false;
 			if (!port) {
 				return Promise.resolve();
