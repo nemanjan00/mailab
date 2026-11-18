@@ -16,7 +16,7 @@ const create = (options, io) => {
 	const settings = Object.assign({}, DEFAULTS, options);
 	let proc = null;
 	let bins = [];
-	let maxLow = -1;
+	const seenLows = new Set();
 
 	const flush = (keep) => {
 		if (!bins.length) {
@@ -51,15 +51,13 @@ const create = (options, io) => {
 		}
 		const low = Number(cells[2]);
 		const width = Number(cells[4]);
-		// a new sweep pass wraps back below the highest band seen so far
-		// (a single-band span repeats the same low, so low < maxLow is the
-		// only reliable wrap signal)
-		if (low < maxLow) {
+		// hackrf_sweep rotates the first band of each pass, so lows are not
+		// monotonic — a pass boundary is a band we already saw this pass
+		if (seenLows.has(low)) {
 			flush(false);
+			seenLows.clear();
 		}
-		if (low > maxLow) {
-			maxLow = low;
-		}
+		seenLows.add(low);
 		cells.slice(6).forEach((cell, i) => {
 			bins.push([low + (i + 0.5) * width, Number(cell)]);
 		});
@@ -67,7 +65,8 @@ const create = (options, io) => {
 		// mid-pass rather than never; normal spans wait for the wrap so every
 		// row is a complete, stitched spectrum
 		if (bins.length > 4000) {
-			flush(true);
+			flush(false);
+			seenLows.clear();
 		}
 	};
 
@@ -105,7 +104,7 @@ const create = (options, io) => {
 		]);
 		io.log("hackrf_sweep " + args.join(" "), "tx");
 		bins = [];
-		maxLow = -1;
+		seenLows.clear();
 		proc = spawn("hackrf_sweep", args);
 		const mine = proc;
 		readline.createInterface({ input: proc.stdout }).on("line", onLine);
