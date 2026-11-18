@@ -289,7 +289,13 @@ const syncApprovalBanner = () => {
 		const deny = document.createElement("button");
 		deny.textContent = "Deny";
 		const decide = (ok) => {
-			api("POST", "/approvals/" + a.id, { approve: ok }).catch(() => null);
+			api("POST", "/approvals/" + a.id, { approve: ok }).then(() => {
+				row.classList.add(ok ? "approved" : "denied");
+			}, (err) => {
+				// an expired/missing approval must not fail silently
+				label.textContent = "⚠ " + (err.message || "decision failed") + " — refresh and request again";
+				label.classList.add("approval-error");
+			});
 		};
 		approve.addEventListener("click", () => decide(true));
 		deny.addEventListener("click", () => decide(false));
