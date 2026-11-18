@@ -149,9 +149,10 @@ API and MCP clients use `Authorization: Bearer`.
 
 The image includes sigrok-cli, liquid-dsp, SoapySDR (HackRF/bladeRF/RTL-SDR),
 hackrf tools, ffmpeg/v4l-utils, uhubctl, pymp305 and findus. It doesn't
-include the SLogic libsigrok fork, vendor SDKs (Harogic), the Proxmark3
-client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
-`CIV_PATH`.
+include the SLogic libsigrok fork, vendor SDKs (Harogic), or the Proxmark3
+client; mount those. The MDP P906/PD-60x host (npm `mdp-host`) and the Icom
+CI-V bridge (npm `icom-ci-v`) install from npm like any other dependency —
+`MDP_HOST_PATH` / `CIV_PATH` only override them with a local checkout.
 
 ### Configuration (env)
 
@@ -163,7 +164,7 @@ client, or the mdp-p906/ci-v checkouts; mount those and set `MDP_HOST_PATH` /
 | `MAILAB_ALLOWED_HOSTS` | – | extra Host names accepted without tokens |
 | `DATA_DIR` | `./data` | `lab.json`: devices, derived channels, panes, chat |
 | `CHANNEL_CAPACITY` | `200000` | samples kept per channel |
-| `MDP_HOST_PATH` / `CIV_PATH` | `~/mdp-p906/host` / `~/ci-v` | libraries loaded from checkouts |
+| `MDP_HOST_PATH` / `CIV_PATH` | – | use a local mdp-host / icom-ci-v checkout instead of npm |
 | `SIGROK_CLI` / `PM3_CLIENT` / `PYTHON` | `sigrok-cli` / `~/pm5-og/client/proxmark3` if built, else `proxmark3` / `python3` | external tools |
 | `MAILAB_MANAGE_PYTHON` | `1` | `0` = don't manage a venv |
 | `MAILAB_MEDIA_DIRS` | – | extra dirs media tools and flowgraph file blocks may read/write (`DATA_DIR/media` always) |

@@ -330,3 +330,20 @@ What "live-verified" means in HW.md/SPEC.md. Run against a scratch server
 - [ ] Edges: replug mid-session, power-cycle, command flood, two clients on
       a single-seat channel
 - [ ] Document: flip the HW.md/SPEC rows, note quirks for future-you
+
+## Live-test session 3 (2026-11-19, lab host hardware)
+
+Real devices on the lab host's mailab (10.69.1.91:3000, tmux "mailab"):
+- **HackRF One** (`hackrf` driver, USB 1d50:6089): `hackrf_sweep` 88–108 MHz
+  live → `hackrf_spectrum` trace + `hackrf_peak_freq`/`hackrf_peak_db`
+  channels (107.5 MHz, −44.9 dB).
+- **tinySA Ultra** (`tinysa` driver, /dev/serial/by-id/usb-tinysa.org_tinySA4):
+  `sweep 100–300 MHz` → 201 pts, peak +2.3 dBm; note the continuous loop is
+  on by default and re-sweeps the configured range, overwriting one-shot
+  sweep traces.
+- Panes added for both: spectrum trace + peak value each.
+- Also live earlier this session on the same host: DM858 (settings model +
+  readings), nRF52840 ESB bridge (config query), MP305 PSU, lavfi camera.
+
+Docs: SPEC rows tinySA/HackRF marked ✅ live-verified; README env table
+reworded (mdp-host/icom-ci-v are npm-first; MDP_HOST_PATH/CIV_PATH override).

@@ -20,7 +20,7 @@ Legend: ✅ done · 🧪 implemented, untested on hardware · 📝 planned · �
 | Sipeed SLogic / DSLogic | `sigrok` | sigrok-cli | `nemanjan00/libsigrok` (slogic-dev) | 🧪 (demo ✅) |
 | DeepAce KC9531B RF power meter | `kc9531b` | USB serial | `kc9531b` (npm) | 🧪 |
 | Icom radios (IC-705…) | `civ` | CI-V over USB serial | `~/ci-v` | 🧪 |
-| tinySA Ultra | `tinysa` | USB serial shell | tinySA shell docs | 🧪 *protocol from docs* |
+| tinySA Ultra | `tinysa` | USB serial shell | LIVE 2026-11-19 (sweep 100–300 MHz, 201 pts, by-id tty) | ✅ live |
 | LiteVNA 64 | `litevna` | NanoVNA-V2 binary protocol | V2 protocol docs | 🧪 *protocol from docs* |
 | HackRF One | `hackrf` | `hackrf_sweep` | – | 🧪 |
 | bladeRF / HackRF / RTL-SDR | `soapy` | SoapySDR + liquid-dsp | `python/soapy_bridge.py` | 🧪 (DSP ✅ on synthetic IQ) |
