@@ -203,6 +203,48 @@ surfaces as ffmpeg "Filter not found". And on a server started with
 `MAILAB_MANAGE_PYTHON=0` the vision venv never gets created (cv2 missing);
 let the server manage python (default) for vision tests.
 
+### Live-test session 2 — REST + MCP + UI end-to-end
+
+Scratch lab (`PORT=3962 DATA_DIR=/tmp/mailab-live`): sigrok demo, shell,
+sysmon, lavfi camera, replay loop, flowgraph `video_decode`, QEMU VNC.
+
+- **Device layer, via REST and a raw Streamable-HTTP MCP session**:
+  sigrok capture → trace + `capture_blob` → logic blob; shell pty; sysmon
+  snapshot; camera frame; VNC screenshot; replay loop; flowgraph graph
+  query. MCP note: tool names use **underscores** (`device_command`, not
+  `device.command`); ~100 tools listed; blob ops via MCP too.
+- **Analysis services**: vision `run` (gray+Otsu, annotated image) and a
+  live **vision watch** on the camera stream; blob peek/diff (1 changed
+  byte at 64)/checksum/slice/poke+undo/search; kaitai parse; board
+  create; trends (patterns → min/max/mean); batch loop, sweep table and
+  hill-climb optimize — all through the MCP tools.
+- **Auth & safety** (second server with `MAILAB_TOKENS`): ro token gets
+  reads but 403 on writes and "viewer is read-only" on MCP gating; rw
+  `cyn.emulate` parked in **pending approval** until a human-role token
+  approved it via `POST /api/approvals/:id`, then proceeded; `tx kill`
+  same pattern.
+- **UI**: 35/35 pane types on the populated lab, screenshots + an
+  all-panes-mounted error pass with **0 exceptions**. Interactive:
+  **VNC input** — `key F12` on the QEMU guest changed the framebuffer
+  (12388→12400 bytes); **terminal typing** — trusted `keyDown` events
+  (with `text`) through the xterm helper textarea landed in the shell
+  PTY scrollback. CDP traps: unique `--user-data-dir` per headless
+  chrome; `rawKeyDown`+`char` does NOT reach xterm, `keyDown`+`text`
+  does.
+- **Network services**: `/api/fccid/<id>` live (fccid.io matches with
+  applicants/dates); `/api/datasheets/search?q=LM317` manufacturer URL
+  probes verified TI + onsemi PDFs.
+- **Fixes from this session**: vision watches never started outside
+  tests (`vision.start()` now armed lazily on first watch; commit
+  d466ebe).
+
+Session traps worth keeping: vision watches need a **continuously
+streaming** image source (`infray stream {on: true, name: "frame"}`) —
+a snapshot-only camera leaves watches at 0 frames. Terminal panes pin to
+a **running** shell session — `session_start {cmd: "bash"}` first, and
+read scrollback via `?session=<name>`. QEMU for VNC tests must run
+**without `-S`** (frozen at reset: static screen, input invisible).
+
 ## Tomorrow's hardware session — ordered checklist
 
 Devices expected on the bench/lab, in run order, each with what to prove
@@ -247,8 +289,10 @@ as each passes.
    entry needs the terminal menu in HiZ; "BBIO1" is 5 bytes; bulk max
    128 bytes/transfer.
 10. **InfiRay P2 Pro** — `infray`: real UVC frames + vendor radiometric
-    controls via v4l2. Quirks: needs the camera itself; check
-    `/dev/video*` enumeration on the lab host first.
+    controls via v4l2. Quirks: check `/dev/video*` enumeration on the lab
+    host first; **start `stream {on: true}` before expecting anything from
+    vision watches**; server needs the managed python venv for vision
+    (don't use MAILAB_MANAGE_PYTHON=0).
 11. **Sigrok SLogic / Glasgow / CatSniffer / ThunderScope / ChipWhisperer
     Husky** if they appear: each driver is fake-tested; run its `SPEC.md`
     row. Quirks: sigrok-cli decode crash (see above) — capture path only
