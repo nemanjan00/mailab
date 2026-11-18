@@ -1,14 +1,98 @@
 // tinySA / tinySA Ultra spectrum analyzer over its USB serial shell.
 // "scan <start> <stop> <points> 3" prints "<freq> <dBm>" lines, then "ch> ".
-// TODO: verify on hardware (written from the tinySA shell docs)
+//
+// The port uses a plain non-blocking fd + a read poll, not tty.ReadStream:
+// on the lab host a ReadStream on the USB CDC device wedged the whole node
+// event loop (listener alive but never accepting) within a minute.
 
-const tty = require("../../services/tty");
+const fs = require("fs");
+const { EventEmitter } = require("events");
+const execFileSync = require("child_process").execFileSync;
 const parseSwitch = require("../../utils/args").parseSwitch;
 
 const PROMPT = "ch> ";
 const SCAN_TIMEOUT_MS = 30000;
 const RETRY_MS = 2000;
 const DEFAULTS = { start: 1e6, stop: 800e6, points: 450 };
+
+// raw serial port: O_NONBLOCK fd, explicit poll-read, no tty streams
+const openPort = (path, baud) => {
+	const fd = fs.openSync(path, fs.constants.O_RDWR | fs.constants.O_NOCTTY | fs.constants.O_NONBLOCK);
+	execFileSync("stty", ["-F", path, "raw", "-echo", "-hupcl", String(baud)]);
+	const port = new EventEmitter();
+	port.path = path;
+	port.fd = fd;
+	port.isOpen = true;
+	port.write = (data) => {
+		if (!port.isOpen) {
+			return false;
+		}
+		try {
+			fs.writeSync(fd, data);
+			return true;
+		} catch (_err) {
+			return false;
+		}
+	};
+	const chunk = Buffer.alloc(4096);
+	port.poll = setInterval(() => {
+		if (!port.isOpen) {
+			return;
+		}
+		let n;
+		try {
+			n = fs.readSync(fd, chunk, 0, chunk.length, null);
+		} catch (err) {
+			if (err.code === "EAGAIN") {
+				return;
+			}
+			port.isOpen = false;
+			port.emit("error", err);
+			return;
+		}
+		if (n > 0) {
+			port.emit("data", chunk.slice(0, n));
+		}
+	}, 10);
+	port.close = () => {
+		port.isOpen = false;
+		clearInterval(port.poll);
+		try {
+			fs.closeSync(fd);
+		} catch (_err) {
+			// already gone
+		}
+		return Promise.resolve();
+	};
+	return port;
+};
+
+// collect until `done(buffer)` or timeout (same contract as services/tty)
+const collect = (port, done, timeoutMs) => {
+	return new Promise((resolve, reject) => {
+		let acc = Buffer.alloc(0);
+		const finish = (err) => {
+			clearTimeout(timer);
+			port.off("data", onData);
+			if (err) {
+				err.partial = acc;
+				reject(err);
+			} else {
+				resolve(acc);
+			}
+		};
+		const onData = (data) => {
+			acc = Buffer.concat([acc, data]);
+			if (done(acc)) {
+				finish();
+			}
+		};
+		const timer = setTimeout(() => {
+			finish(new Error("serial timeout on " + port.path));
+		}, timeoutMs);
+		port.on("data", onData);
+	});
+};
 
 const create = (options, io) => {
 	const settings = Object.assign({}, DEFAULTS, options);
@@ -21,7 +105,7 @@ const create = (options, io) => {
 	// reply isn't polluted by trailing output
 	const shell = (text, timeoutMs) => {
 		const run = busy.then(() => {
-			const reply = tty.collect(port, (buf) => {
+			const reply = collect(port, (buf) => {
 				return buf.toString("latin1").endsWith(PROMPT);
 			}, timeoutMs || 2000);
 			port.write(text + "\r");
@@ -32,7 +116,7 @@ const create = (options, io) => {
 				return line && line !== PROMPT.trim() && !line.startsWith(PROMPT);
 			});
 		}, (err) => {
-			const drain = tty.collect(port, (buf) => {
+			const drain = collect(port, (buf) => {
 				return buf.toString("latin1").endsWith(PROMPT);
 			}, 1500).catch(() => Buffer.alloc(0));
 			return drain.then(() => {
@@ -98,7 +182,7 @@ const create = (options, io) => {
 			return;
 		}
 		try {
-			port = tty.acquire(options.path, { baud: options.baud || 115200, owner: io.id });
+			port = openPort(options.path, options.baud || 115200);
 		} catch (err) {
 			io.status("waiting", err.message);
 			retry = setTimeout(connect, RETRY_MS);
@@ -112,7 +196,7 @@ const create = (options, io) => {
 		}, (err) => {
 			io.log("handshake failed: " + err.message + " — retrying", "warn");
 			port = null;
-			tty.release(options.path, io.id).catch(() => {}).then(() => {
+			port.close().then(() => {
 				if (!stopped && !retry) {
 					retry = setTimeout(connect, RETRY_MS);
 				}
@@ -135,7 +219,7 @@ const create = (options, io) => {
 			if (!port) {
 				return Promise.resolve();
 			}
-			return tty.release(options.path, io.id);
+			return port.close();
 		},
 
 		command: (name, args) => {
