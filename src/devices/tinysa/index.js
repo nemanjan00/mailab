@@ -9,6 +9,7 @@ const fs = require("fs");
 const { EventEmitter } = require("events");
 const execFileSync = require("child_process").execFileSync;
 const parseSwitch = require("../../utils/args").parseSwitch;
+const closeFd = require("../../utils/asyncclose");
 
 const PROMPT = "ch> ";
 const SCAN_TIMEOUT_MS = 30000;
@@ -51,18 +52,18 @@ const openPort = (path, baud) => {
 			return;
 		}
 		if (n > 0) {
-			port.emit("data", chunk.slice(0, n));
+			// copy, not a view: chunk is reused next poll tick (Buffer.slice
+			// would alias the same memory and corrupt held data)
+			port.emit("data", Buffer.from(chunk.subarray(0, n))); /* subarray=view, Buffer.from(typedArray)=COPY */
 		}
 	}, 10);
 	port.close = () => {
 		port.isOpen = false;
 		clearInterval(port.poll);
-		try {
-			fs.closeSync(fd);
-		} catch (_err) {
-			// already gone
-		}
-		return Promise.resolve();
+		// close on a worker thread: a dead device can sleep in the kernel
+		// (tty_wait_until_sent) for tens of seconds, which must not wedge
+		// the main loop
+		return closeFd(fd).catch(() => {});
 	};
 	return port;
 };

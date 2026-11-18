@@ -5,10 +5,10 @@
 // incoming data was only delivered on the next write (see mdp-p906 host).
 
 const fs = require("fs");
-const tty = require("tty");
 const EventEmitter = require("events");
 const execFileSync = require("child_process").execFileSync;
 const serialize = require("../../utils/mutex").serialize;
+const closeFd = require("../../utils/asyncclose");
 
 const DEFAULT_BAUD = 115200;
 const FLOW = { none: ["-crtscts", "-ixon", "-ixoff"], rtscts: ["crtscts", "-ixon", "-ixoff"], xonxoff: ["-crtscts", "ixon", "ixoff"] };
@@ -55,8 +55,11 @@ const open = (path, options) => {
 	execFileSync("stty", ["-F", path, "raw", "-echo", "-hupcl"].concat(opts.format || opts.flow ? sttyArgs(opts) : [String(baud)]));
 	const flags = fs.constants.O_RDWR | fs.constants.O_NOCTTY | fs.constants.O_NONBLOCK;
 	const fd = fs.openSync(path, flags);
-	const input = new tty.ReadStream(fd);
-	input.setRawMode(true);
+	// poll-read instead of tty.ReadStream: same prompt delivery, and closing
+	// never runs on the main thread (a dead device can sleep in the kernel
+	// for tens of seconds in tty_wait_until_sent — see utils/asyncclose)
+	const chunk = Buffer.alloc(4096);
+	const POLL_MS = 10;
 
 	const port = new EventEmitter();
 	port.path = path;
@@ -64,26 +67,47 @@ const open = (path, options) => {
 	// node-serialport compatibility (ci-v waits for "open" unless this is false)
 	port.opening = false;
 
-	input.on("data", (data) => {
-		port.emit("data", data);
-	});
-	input.on("error", (err) => {
-		port.emit("error", err);
-	});
+	port.poll = setInterval(() => {
+		if (!port.isOpen) {
+			return;
+		}
+		let n;
+		try {
+			n = fs.readSync(fd, chunk, 0, chunk.length, null);
+		} catch (err) {
+			if (err.code === "EAGAIN") {
+				return;
+			}
+			port.isOpen = false;
+			port.emit("error", err);
+			return;
+		}
+		if (n > 0) {
+			// copy: Buffer.slice is a VIEW into the reusable chunk buffer —
+			// emitting it would let the next poll tick corrupt data consumers
+			// are still holding (capture blobs, terminals)
+			port.emit("data", Buffer.from(chunk.subarray(0, n))); /* subarray=view, Buffer.from(typedArray)=COPY */
+		}
+	}, POLL_MS);
 
 	port.write = (data) => {
 		if (!port.isOpen) {
 			return false;
 		}
-		fs.writeSync(fd, data);
-		return true;
+		try {
+			fs.writeSync(fd, data);
+			return true;
+		} catch (err) {
+			port.emit("error", err);
+			return false;
+		}
 	};
 
 	port.close = () => {
 		port.isOpen = false;
-		input.destroy();
+		clearInterval(port.poll);
 		port.emit("close");
-		return Promise.resolve();
+		return closeFd(fd).catch(() => {});
 	};
 
 	return port;
