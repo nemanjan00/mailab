@@ -648,6 +648,17 @@ const create = (lab, options) => {
 		res.json({ enabled: auth.enabled, host: req.headers.host || "" });
 	});
 
+	// MCP connection info + the usable tokens; anyone holding an rw token may
+	// see them (they already control the lab) — never for ro viewers
+	app.get("/api/mcp/info", (req, res) => {
+		const who = auth.identify(req);
+		if (!who || who.role !== "rw") {
+			res.status(403).json({ error: { code: "forbidden", message: "rw token required" } });
+			return;
+		}
+		res.json({ url: "http://" + (req.headers.host || "localhost") + "/mcp", tokens: auth.listTokens(), sse: true, streaming: true });
+	});
+
 	// sign out: drop the HttpOnly cookie and land back on the login page
 	app.get("/api/auth/logout", (req, res) => {
 		res.clearCookie("mailab_token", { path: "/" });

@@ -160,6 +160,10 @@ const TYPES = {
 		description: "device settings: live state + options, plus a status command result (e.g. command \"siggen\" shows the AWG setpoints as the AI changes them); pairs with a log pane of the same device",
 		config: { device: "device id", command: "status command to query (e.g. siggen); empty = options only", interval: "auto-refresh seconds (0 = manual refresh button)" }
 	},
+	mcp: {
+		description: "MCP connection card: endpoint URL + usable tokens with copy buttons (rw only)",
+		config: {}
+	},
 	channels: {
 		description: "table of all channels with latest values",
 		config: {}

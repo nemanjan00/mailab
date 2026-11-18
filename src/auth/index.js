@@ -104,6 +104,16 @@ const create = (tokens, options) => {
 		enabled: enabled,
 
 		/**
+		 * The configured tokens for display to an rw identity (MCP pane):
+		 * [{name, role, token}] — never exposed to ro viewers.
+		 */
+		listTokens: () => {
+			return Array.from(table.entries()).map((entry) => {
+				return { name: entry[1].name, role: entry[1].role, token: entry[0] };
+			});
+		},
+
+		/**
 		 * Express handler for login links (`/?token=…`): valid token -> HttpOnly
 		 * cookie + redirect to the clean URL; anything else falls through.
 		 */

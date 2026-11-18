@@ -16,6 +16,15 @@ const SCAN_TIMEOUT_MS = 30000;
 const RETRY_MS = 2000;
 const DEFAULTS = { start: 1e6, stop: 800e6, points: 450 };
 
+// the settings-model contract (settings pane): schema + set + a published
+// <id>_settings value. UI model is in MHz/kHz; the shell takes Hz/kHz.
+const SCHEMA = [{ key: "sweep", title: "Sweep", fields: [
+	{ key: "startMhz", label: "start", type: "number", unit: "MHz" },
+	{ key: "stopMhz", label: "stop", type: "number", unit: "MHz" },
+	{ key: "points", label: "points", type: "number", unit: "pts" },
+	{ key: "rbwKhz", label: "RBW", type: "number", unit: "kHz" }
+] }];
+
 // raw serial port: O_NONBLOCK fd, explicit poll-read, no tty streams
 const openPort = (path, baud) => {
 	const fd = fs.openSync(path, fs.constants.O_RDWR | fs.constants.O_NOCTTY | fs.constants.O_NONBLOCK);
@@ -158,6 +167,18 @@ const create = (options, io) => {
 		});
 	};
 
+	const model = () => {
+		return { sweep: {
+			startMhz: settings.start / 1e6,
+			stopMhz: settings.stop / 1e6,
+			points: settings.points,
+			rbwKhz: settings.rbwKhz || 850
+		} };
+	};
+	const publish = () => {
+		io.value("settings", model());
+	};
+
 	const loop = () => {
 		if (!running) {
 			return;
@@ -193,6 +214,7 @@ const create = (options, io) => {
 			io.log("connected: " + lines.join(" "));
 			io.status("running", options.path);
 			running = options.continuous !== false;
+			publish();
 			loop();
 		}, (err) => {
 			io.log("handshake failed: " + err.message + " — retrying", "warn");
@@ -233,7 +255,36 @@ const create = (options, io) => {
 			}
 			if (name === "configure") {
 				Object.assign(settings, args);
+				publish();
 				return Promise.resolve(settings);
+			}
+			if (name === "settings_schema") {
+				return Promise.resolve(SCHEMA);
+			}
+			if (name === "set") {
+				const sw = (args && args.sweep) || {};
+				const applied = {};
+				if (sw.rbwKhz !== undefined) {
+					const n = Number(sw.rbwKhz);
+					if (!Number.isFinite(n) || n < 0.2 || n > 850) {
+						return Promise.reject(new Error("rbwKhz must be 0.2..850"));
+					}
+					settings.rbwKhz = n;
+					applied.rbw = shell("rbw " + n, 15000);
+				}
+				if (sw.startMhz !== undefined) {
+					settings.start = Number(sw.startMhz) * 1e6;
+				}
+				if (sw.stopMhz !== undefined) {
+					settings.stop = Number(sw.stopMhz) * 1e6;
+				}
+				if (sw.points !== undefined) {
+					settings.points = Math.max(2, Math.min(2000, Math.round(Number(sw.points))));
+				}
+				return Promise.resolve(applied.rbw || null).then(() => {
+					publish();
+					return model();
+				});
 			}
 			if (name === "rbw") {
 				// resolution bandwidth in kHz (the tinySA shell unit), 0.2..850 or auto
@@ -277,6 +328,8 @@ module.exports = {
 	commands: {
 		sweep: "{start, stop, points, rbwKhz?} single sweep; the shell timeout scales with the RBW budget",
 		rbw: "{khz: 0.2..850 | auto} resolution bandwidth in kHz (the tinySA shell unit) — narrow RBW is what reveals the true noise floor",
+		set: "{sweep: {startMhz?, stopMhz?, points?, rbwKhz?}} settings-pane write; applies RBW on the device and republishes the model",
+		settings_schema: "the settings-pane form schema",
 		configure: "{start, stop, points} for continuous sweeps",
 		continuous: "{on: bool}",
 		shell: "{text, timeoutMs} raw shell command (see tinySA shell docs)"

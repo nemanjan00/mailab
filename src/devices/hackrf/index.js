@@ -91,6 +91,28 @@ const create = (options, io) => {
 	};
 	const settings = Object.assign({}, DEFAULTS, normalize(options || {}));
 
+	// the settings-model contract (settings pane): schema + set + a
+	// published <id>_settings value
+	const SCHEMA = [{ key: "sweep", title: "Sweep", fields: [
+		{ key: "startMhz", label: "start", type: "number", unit: "MHz" },
+		{ key: "stopMhz", label: "stop", type: "number", unit: "MHz" },
+		{ key: "binWidthKhz", label: "bin width", type: "number", unit: "kHz" },
+		{ key: "lna", label: "LNA gain", type: "enum", options: ["0", "8", "16", "24", "32", "40"] },
+		{ key: "vga", label: "VGA gain", type: "number", unit: "dB" }
+	] }];
+	const model = () => {
+		return { sweep: {
+			startMhz: settings.startMhz,
+			stopMhz: settings.stopMhz,
+			binWidthKhz: settings.binWidth / 1e3,
+			lna: String(settings.lna),
+			vga: settings.vga
+		} };
+	};
+	const publish = () => {
+		io.value("settings", model());
+	};
+
 	const launch = () => {
 		let select = [];
 		if (settings.serial) {
@@ -241,6 +263,7 @@ const create = (options, io) => {
 	return {
 		start: () => {
 			launch();
+			publish();
 			return Promise.resolve();
 		},
 
@@ -251,12 +274,16 @@ const create = (options, io) => {
 		},
 
 		command: (name, args) => {
-			if (name === "configure") {
-				Object.assign(settings, normalize(args || {}));
+			if (name === "configure" || name === "set") {
+				Object.assign(settings, normalize((name === "set" && args && args.sweep) ? args.sweep : args || {}));
 				return kill().then(() => {
 					launch();
+					publish();
 					return settings;
 				});
+			}
+			if (name === "settings_schema") {
+				return Promise.resolve(SCHEMA);
 			}
 			if (name === "transmit") {
 				return transmit(args || {});
