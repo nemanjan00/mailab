@@ -38,7 +38,12 @@ const create = (options, io) => {
 	const sweep = (args) => {
 		const s = Object.assign({}, settings, args);
 		const command = "scan " + Math.round(s.start) + " " + Math.round(s.stop) + " " + s.points + " 3";
-		return shell(command, SCAN_TIMEOUT_MS).then((lines) => {
+		// scan time scales with 1/RBW: at the narrowest RBW a wide sweep can
+		// run for minutes — give the shell a budget derived from it
+		const rbwKhz = Number(s.rbwKhz) || Number(s.rbw) || 850;
+		const spanRatio = Math.max(1, (s.stop - s.start) / 1e6);
+		const timeoutMs = Math.max(SCAN_TIMEOUT_MS, Math.min(600000, s.points * Math.min(rbwKhz, 850) * 4 * spanRatio));
+		return shell(command, timeoutMs).then((lines) => {
 			const rows = lines.map((line) => {
 				return line.trim().split(/\s+/).map(Number);
 			}).filter((row) => {
@@ -97,6 +102,19 @@ const create = (options, io) => {
 				Object.assign(settings, args);
 				return Promise.resolve(settings);
 			}
+			if (name === "rbw") {
+				// resolution bandwidth in kHz (the tinySA shell unit), 0.2..850 or auto
+				const v = args.khz !== undefined ? String(args.khz) : "auto";
+				if (v !== "auto") {
+					const n = Number(v);
+					if (!Number.isFinite(n) || n < 0.2 || n > 850) {
+						return Promise.reject(new Error("rbw khz must be 0.2..850 or auto"));
+					}
+				}
+				return shell("rbw " + v, 15000).then((lines) => {
+					return { lines: lines };
+				});
+			}
 			if (name === "continuous") {
 				running = parseSwitch(args.on, "on");
 				loop();
@@ -124,7 +142,8 @@ module.exports = {
 		intervalMs: "pause between sweeps"
 	},
 	commands: {
-		sweep: "{start, stop, points} single sweep",
+		sweep: "{start, stop, points, rbwKhz?} single sweep; the shell timeout scales with the RBW budget",
+		rbw: "{khz: 0.2..850 | auto} resolution bandwidth in kHz (the tinySA shell unit) — narrow RBW is what reveals the true noise floor",
 		configure: "{start, stop, points} for continuous sweeps",
 		continuous: "{on: bool}",
 		shell: "{text, timeoutMs} raw shell command (see tinySA shell docs)"
