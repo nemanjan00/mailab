@@ -131,6 +131,11 @@ const create = (options, io) => {
 		const mine = proc;
 		readline.createInterface({ input: proc.stdout }).on("line", onLine);
 		readline.createInterface({ input: proc.stderr }).on("line", (line) => {
+			// progress spam ("N total sweeps completed, R sweeps/second") would
+			// fill the console pane — one summary per launch, real errors always
+			if (/total sweeps completed/.test(line)) {
+				return;
+			}
 			io.log(line, "stderr");
 		});
 		proc.on("exit", (code) => {
