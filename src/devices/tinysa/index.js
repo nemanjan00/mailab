@@ -195,8 +195,9 @@ const create = (options, io) => {
 			loop();
 		}, (err) => {
 			io.log("handshake failed: " + err.message + " — retrying", "warn");
+			const dead = port;
 			port = null;
-			port.close().then(() => {
+			dead.close().then(() => {
 				if (!stopped && !retry) {
 					retry = setTimeout(connect, RETRY_MS);
 				}
