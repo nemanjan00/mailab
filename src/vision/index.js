@@ -211,6 +211,7 @@ const create = (deps, saved) => {
 	// name -> {busy, queued, timer, lastRun, seen, frames, dropped, errors, ms, lastError, last: {roi: {state, value, text}}, pending: {roi: {state, count}}, notified: {roi: t}}
 	const runtime = {};
 	let unsubscribe = null;
+	const anyEnabled = () => Object.keys(watches).some((name) => watches[name].enabled);
 
 	const rt = (name) => {
 		if (!runtime[name]) {
@@ -451,7 +452,10 @@ const create = (deps, saved) => {
 			resetRuntime(watch.name);
 			watches = Object.assign({}, watches, { [watch.name]: watch });
 			deps.onChange();
-			if (unsubscribe && watch.enabled) {
+			if (watch.enabled) {
+				// lazily arm the image subscription: watches only evaluate while
+				// at least one is enabled (start is idempotent)
+				vision.start();
 				let exists = true;
 				try {
 					deps.getImage(watch.image);
@@ -461,6 +465,8 @@ const create = (deps, saved) => {
 				if (exists) {
 					schedule(watch);
 				}
+			} else if (!anyEnabled()) {
+				vision.stop();
 			}
 			return vision.describe(watch.name);
 		},
@@ -478,6 +484,9 @@ const create = (deps, saved) => {
 				deps.bridge.request("forget", { key: name }).catch(() => null);
 			}
 			deps.onChange();
+			if (!anyEnabled()) {
+				vision.stop();
+			}
 			return vision.list();
 		},
 
@@ -495,6 +504,15 @@ const create = (deps, saved) => {
 					log("vision watch skipped: " + err.message, "error");
 				}
 			});
+			// restored watches only evaluate once the image subscription is armed
+			if (anyEnabled()) {
+				vision.start();
+				Object.keys(watches).forEach((name) => {
+					if (watches[name].enabled) {
+						schedule(watches[name]);
+					}
+				});
+			}
 		},
 
 		snapshot: () => Object.keys(watches).sort().map((name) => watches[name]),
