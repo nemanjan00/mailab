@@ -16,7 +16,7 @@ const create = (options, io) => {
 	const settings = Object.assign({}, DEFAULTS, options);
 	let proc = null;
 	let bins = [];
-	let lastLow = -1;
+	let maxLow = -1;
 
 	const flush = () => {
 		if (!bins.length) {
@@ -47,16 +47,42 @@ const create = (options, io) => {
 		}
 		const low = Number(cells[2]);
 		const width = Number(cells[4]);
-		// a new sweep starts when the band wraps back around
-		if (low < lastLow) {
+		// a new sweep pass wraps back below the highest band seen so far
+		// (a single-band span repeats the same low, so low < maxLow is the
+		// only reliable wrap signal)
+		if (low < maxLow) {
 			flush();
 		}
-		lastLow = low;
+		if (low > maxLow) {
+			maxLow = low;
+		}
 		cells.slice(6).forEach((cell, i) => {
 			bins.push([low + (i + 0.5) * width, Number(cell)]);
 		});
 	};
 
+	const normalize = (args) => {
+		const s = Object.assign({}, args);
+		if (s.binWidth === undefined && s.binWidthMhz !== undefined) {
+			s.binWidth = Number(s.binWidthMhz) * 1e6;
+		}
+		if (s.binWidth === undefined && s.binWidthKhz !== undefined) {
+			s.binWidth = Number(s.binWidthKhz) * 1e3;
+		}
+		delete s.binWidthMhz;
+		delete s.binWidthKhz;
+		if (s.binWidth !== undefined) {
+			s.binWidth = Math.max(20e3, Math.min(5e6, Number(s.binWidth) || settings.binWidth));
+		}
+		["startMhz", "stopMhz", "lna", "vga"].forEach((key) => {
+			if (s[key] !== undefined) {
+				s[key] = Number(s[key]);
+			}
+		});
+		return s;
+	};
+
+	let flushTimer = null;
 	const launch = () => {
 		let select = [];
 		if (settings.serial) {
@@ -70,18 +96,34 @@ const create = (options, io) => {
 		]);
 		io.log("hackrf_sweep " + args.join(" "), "tx");
 		bins = [];
-		lastLow = -1;
+		maxLow = -1;
 		proc = spawn("hackrf_sweep", args);
+		const mine = proc;
 		readline.createInterface({ input: proc.stdout }).on("line", onLine);
 		readline.createInterface({ input: proc.stderr }).on("line", (line) => {
 			io.log(line, "stderr");
 		});
 		proc.on("exit", (code) => {
-			io.status("stopped", "hackrf_sweep exited " + code);
+			// only the live process may change the status: a configure()
+			// relaunch kills the old one, whose exit must not mark us stopped
+			if (proc === mine) {
+				proc = null;
+				io.status("stopped", "hackrf_sweep exited " + code);
+			}
 		});
+		io.status("running", "sweep " + settings.startMhz + "–" + settings.stopMhz + " MHz, "
+			+ Math.round(settings.binWidth / 1e3) + " kHz bins");
+		// also flush on a timer so partial passes (and single-band spans)
+		// reach the UI without waiting for a full wrap — each flush is one
+		// waterfall row
+		flushTimer = setInterval(flush, 1000);
 	};
 
 	const kill = () => {
+		if (flushTimer) {
+			clearInterval(flushTimer);
+			flushTimer = null;
+		}
 		if (!proc) {
 			return Promise.resolve();
 		}
@@ -204,7 +246,7 @@ const create = (options, io) => {
 
 		command: (name, args) => {
 			if (name === "configure") {
-				Object.assign(settings, args);
+				Object.assign(settings, normalize(args || {}));
 				return kill().then(() => {
 					launch();
 					return settings;
