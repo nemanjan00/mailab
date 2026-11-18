@@ -259,7 +259,44 @@ api("GET", "/safety").then((safety) => {
 	safety.pending.forEach((entry) => {
 		ctx.store.approvals[entry.id] = entry;
 	});
+	syncApprovalBanner();
 }, () => null);
+
+// pending safety approvals: a loud top-of-page banner with Approve/Deny, so
+// the decision never hides inside a chat pane
+const approvalBanner = document.createElement("div");
+approvalBanner.className = "approval-banner";
+approvalBanner.hidden = true;
+document.body.prepend(approvalBanner);
+const syncApprovalBanner = () => {
+	const pending = Object.keys(ctx.store.approvals).map((id) => {
+		return ctx.store.approvals[id];
+	}).filter((a) => {
+		return a.status === "pending";
+	});
+	approvalBanner.hidden = pending.length === 0;
+	document.body.classList.toggle("has-approval-banner", pending.length > 0);
+	approvalBanner.replaceChildren();
+	pending.forEach((a) => {
+		const row = document.createElement("div");
+		row.className = "approval-row";
+		const label = document.createElement("span");
+		label.className = "approval-label";
+		label.textContent = "🔐 " + a.who + " wants " + a.device + "." + a.command + " — " + a.reason;
+		const approve = document.createElement("button");
+		approve.className = "primary";
+		approve.textContent = "Approve";
+		const deny = document.createElement("button");
+		deny.textContent = "Deny";
+		const decide = (ok) => {
+			api("POST", "/approvals/" + a.id, { approve: ok }).catch(() => null);
+		};
+		approve.addEventListener("click", () => decide(true));
+		deny.addEventListener("click", () => decide(false));
+		row.append(label, approve, deny);
+		approvalBanner.append(row);
+	});
+};
 
 setInterval(() => {
 	batch(() => {
@@ -318,6 +355,7 @@ const connect = () => {
 			emit("activity", msg);
 		} else if (msg.type === "approval") {
 			ctx.store.approvals[msg.approval.id] = msg.approval;
+			syncApprovalBanner();
 		} else if (msg.type === "chat") {
 			pushFeed(ctx.store.chat, msg.message);
 			emit("chat", msg);
@@ -801,26 +839,35 @@ const openProfiles = () => {
 };
 
 // "how do I connect my AI" help, filled with this lab's real address,
-// hostname-based server name, and (for rw identities) the usable tokens
+// hostname-based server name, and (for rw identities) a ready-to-paste token
 const openMcpHelp = () => {
 	const host = location.hostname || "lab";
 	const name = "mailab-" + host.replace(/[^a-z0-9]+/gi, "-");
 	const url = location.origin + "/mcp";
-	document.getElementById("mcp-claude").textContent = "claude mcp add --transport http " + name + " " + url;
-	document.getElementById("mcp-json").textContent = JSON.stringify({ mcpServers: { [name]: { type: "http", url: url } } }, null, 2);
-	document.getElementById("mcp-channel").textContent = JSON.stringify({ mcpServers: { [name + "-chat"]: {
-		command: "node", args: ["/path/to/mailab/bin/channel.js"],
-		env: { MAILAB_URL: location.origin, MAILAB_NAME: "claude" }
-	} } }, null, 2);
+	const fill = (token) => {
+		const auth = token ? " --header \"Authorization: Bearer " + token + "\"" : "";
+		document.getElementById("mcp-claude").textContent = "claude mcp add --transport http " + name + " " + url + auth;
+		document.getElementById("mcp-json").textContent = JSON.stringify({ mcpServers: { [name]: Object.assign({ type: "http", url: url },
+			token ? { headers: { Authorization: "Bearer " + token } } : {}) } }, null, 2);
+		document.getElementById("mcp-channel").textContent = JSON.stringify({ mcpServers: { [name + "-chat"]: {
+			command: "node", args: ["/path/to/mailab/bin/channel.js"],
+			env: { MAILAB_URL: location.origin, MAILAB_NAME: "claude" }
+		} } }, null, 2);
+	};
+	fill("");
 	const authBox = document.getElementById("mcp-auth");
 	api("GET", "/whoami").then((who) => {
 		authBox.hidden = who.name === "local";
 	}, () => null);
-	// tokens for MCP clients: rw identities see them inline; ro viewers keep
-	// the "ask the owner" note
+	// tokens: rw identities get them baked into the commands above AND listed
+	// below with copy buttons; ro viewers keep the placeholder
 	const tokenBox = document.getElementById("mcp-tokens");
 	tokenBox.innerHTML = "";
 	api("GET", "/mcp/info").then((info) => {
+		const rw = info.tokens.find((t) => t.role === "rw") || info.tokens[0];
+		if (rw) {
+			fill(rw.token);
+		}
 		info.tokens.forEach((t) => {
 			const row = document.createElement("div");
 			row.className = "mcp-row";

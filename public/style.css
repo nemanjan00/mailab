@@ -776,3 +776,18 @@ dialog form.toolbar,
 .mcp-row .c { display: flex; gap: 4px; flex: 1; }
 .mcp-row input { flex: 1; font-size: 12px; }
 .mcp-tokens { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border, #3a3f47); }
+
+/* pending safety approvals banner */
+.approval-banner {
+	position: sticky;
+	top: 0;
+	z-index: 900;
+	background: #4a3b10;
+	border-bottom: 2px solid #e0a34f;
+	padding: 8px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.approval-row { display: flex; align-items: center; gap: 10px; }
+.approval-label { flex: 1; font-size: 13px; color: #ffd98a; }
