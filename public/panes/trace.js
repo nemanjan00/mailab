@@ -186,6 +186,59 @@ export default {
 			});
 		};
 
+		// live peak marker (config.peak): a vertical line + dot + label at the
+		// maximum of the first series — for spectrum-style traces
+		const drawPeak = (u) => {
+			if (!pane.config.peak || !u.data || u.data.length < 2) {
+				return;
+			}
+			const xs = u.data[0];
+			const ys = u.data[1];
+			if (!xs || !ys || xs.length < 2) {
+				return;
+			}
+			const trs0 = loaded()[0] || {};
+			let bi = 0;
+			for (let i = 1; i < ys.length; i++) {
+				if (ys[i] > ys[bi]) {
+					bi = i;
+				}
+			}
+			const x = xs[bi];
+			const y = ys[bi];
+			if (!Number.isFinite(x) || !Number.isFinite(y)) {
+				return;
+			}
+			const px = u.valToPos(x, "x", true);
+			const py = u.valToPos(y, "y", true);
+			if (px < u.bbox.left || px > u.bbox.left + u.bbox.width) {
+				return;
+			}
+			const c = u.ctx;
+			c.save();
+			c.strokeStyle = "#4fc3f7";
+			c.setLineDash([3, 4]);
+			c.beginPath();
+			c.moveTo(px, u.bbox.top);
+			c.lineTo(px, u.bbox.top + u.bbox.height);
+			c.stroke();
+			c.setLineDash([]);
+			c.fillStyle = "#4fc3f7";
+			c.beginPath();
+			c.arc(px, py, 3.5, 0, Math.PI * 2);
+			c.fill();
+			const label = eng(x, 4) + (u.scales.x && trs0.xUnit ? trs0.xUnit : "")
+				+ "  " + eng(y, 3) + (trs0.yUnit || "");
+			c.font = "10px sans-serif";
+			const tw = c.measureText(label).width;
+			const lx = Math.min(Math.max(px + 6, u.bbox.left + 2), u.bbox.left + u.bbox.width - tw - 8);
+			c.fillStyle = "rgba(20, 24, 30, 0.85)";
+			c.fillRect(lx - 3, u.bbox.top + 4, tw + 6, 14);
+			c.fillStyle = "#4fc3f7";
+			c.fillText(label, lx, u.bbox.top + 14);
+			c.restore();
+		};
+
 		const loaded = () => names().map((n) => ctx.traces[n]).filter(Boolean);
 
 		// trigger markers (scope model): a draggable horizontal trigger-level
@@ -367,6 +420,7 @@ export default {
 					draw: [(u) => {
 						drawMarkers(u, readings);
 						drawTriggers(u);
+						drawPeak(u);
 					}]
 				}
 			}, size()), tables.length === 1 ? tables[0] : uPlot.join(tables), plotEl);
