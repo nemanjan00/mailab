@@ -18,7 +18,7 @@ const create = (options, io) => {
 	let bins = [];
 	let maxLow = -1;
 
-	const flush = () => {
+	const flush = (keep) => {
 		if (!bins.length) {
 			return;
 		}
@@ -35,7 +35,11 @@ const create = (options, io) => {
 		const peak = y.indexOf(Math.max.apply(null, y));
 		io.sample("peak_freq", x[peak], { unit: "Hz" });
 		io.sample("peak_db", y[peak], { unit: "dB" });
-		bins = [];
+		if (!keep) {
+			// a wrap starts a fresh pass; a timer flush only publishes the
+			// pass accumulated so far (waterfall rows show it filling in)
+			bins = [];
+		}
 	};
 
 	const onLine = (line) => {
@@ -51,7 +55,7 @@ const create = (options, io) => {
 		// (a single-band span repeats the same low, so low < maxLow is the
 		// only reliable wrap signal)
 		if (low < maxLow) {
-			flush();
+			flush(false);
 		}
 		if (low > maxLow) {
 			maxLow = low;
@@ -116,7 +120,12 @@ const create = (options, io) => {
 		// also flush on a timer so partial passes (and single-band spans)
 		// reach the UI without waiting for a full wrap — each flush is one
 		// waterfall row
-		flushTimer = setInterval(flush, 1000);
+		// publish at most once per second while a pass is still building, and
+		// the complete spectrum on every pass wrap — each publish is one
+		// waterfall row
+		flushTimer = setInterval(() => {
+			flush(true);
+		}, 1000);
 	};
 
 	const kill = () => {
