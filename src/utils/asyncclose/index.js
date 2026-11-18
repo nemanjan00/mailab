@@ -1,44 +1,22 @@
-// Close an fd without ever blocking the main thread.
+// Close an fd without blocking the event loop.
 //
-// Closing a serial tty can sleep in the kernel (tty_wait_until_sent, up to
-// closing_wait ≈ 30 s) when the device is present but not draining its USB
-// endpoint — a dead CDC device must not freeze the whole lab. The close
-// runs on a worker thread: if it hangs, only that worker leaks.
+// Closing a serial tty can sleep in the kernel for tens of seconds
+// (tty_wait_until_sent, up to closing_wait ≈ 30 s) when the device is
+// present but not draining its USB endpoint. libuv runs fs.close on its
+// threadpool, so the sleep ties up one pool worker at worst — never the
+// main loop, never timers or sockets.
 //
-// Usage: closeFd(fd).then(...) — resolve/reject is best-effort; the fd is
-// owned by the worker afterwards regardless.
+// Do NOT close fds from worker_threads for this: fds are process-global and
+// the worker's bookkeeping corrupts the parent's fd table (observed on the
+// lab host as "File descriptor N closed but not opened in unmanaged mode"
+// followed by a uv__io_poll assertion crash and a wedged HTTP listener).
 
-const { Worker, isMainThread, workerData } = require("worker_threads");
+const fs = require("fs");
 
-if (!isMainThread) {
-	const fs = require("fs");
-	try {
-		fs.closeSync(workerData.fd);
-	} catch (_err) {
-		// already gone — fine
-	}
-} else {
-	module.exports = (fd) => {
-		return new Promise((resolve) => {
-			let worker;
-			try {
-				worker = new Worker(__filename, { workerData: { fd: fd } });
-			} catch (_err) {
-				resolve();
-				return;
-			}
-			let settled = false;
-			const done = () => {
-				if (!settled) {
-					settled = true;
-					resolve();
-				}
-			};
-			// resolve only when the fd is REALLY closed: a hung worker keeps
-			// owning the fd, and resolving early could let the fd number be
-			// reused and closed by mistake
-			worker.once("exit", done);
-			worker.once("error", done);
+module.exports = (fd) => {
+	return new Promise((resolve) => {
+		fs.close(fd, () => {
+			resolve();
 		});
-	};
-}
+	});
+};
