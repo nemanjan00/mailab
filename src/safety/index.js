@@ -321,10 +321,14 @@ const create = (lab, saved) => {
 			}
 			const entry = Object.assign({ id: id, t: Date.now(), status: "pending" }, request);
 			return new Promise((resolve, reject) => {
-				const timer = setTimeout(() => {
+				// 0 = no timeout: the approval waits until someone decides
+				const timeoutMs = request.timeoutMs !== undefined ? request.timeoutMs : APPROVAL_TIMEOUT_MS;
+				const timer = timeoutMs > 0 ? setTimeout(() => {
 					safety.decide(id, "timeout", "nobody");
-				}, request.timeoutMs || APPROVAL_TIMEOUT_MS);
-				timer.unref();
+				}, timeoutMs) : null;
+				if (timer) {
+					timer.unref();
+				}
 				pending[id] = { entry: entry, resolve: resolve, reject: reject, timer: timer };
 				lab.postChat({
 					from: "approval", kind: "approval", approval: entry,
