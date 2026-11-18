@@ -15,12 +15,15 @@ const DEFAULTS = { startMhz: 1, stopMhz: 6000, binWidth: 1000000, lna: 16, vga: 
 const create = (options, io) => {
 	let proc = null;
 	let bins = [];
+	let passes = 0;
 	const seenLows = new Set();
 
 	const flush = (keep) => {
 		if (!bins.length) {
 			return;
 		}
+		passes++;
+		io.sample("sweeps", passes, { unit: "pass" });
 		const sorted = bins.sort((a, b) => {
 			return a[0] - b[0];
 		});
@@ -313,7 +316,7 @@ module.exports = {
 		vga: "VGA gain 0-62 step 2 (default 20)"
 	},
 	commands: {
-		configure: "{startMhz, stopMhz, binWidth, lna, vga} restarts the sweep",
+		configure: "{startMhz, stopMhz, binWidth, lna (0-40 dB, step 8), vga (0-62 dB, step 2)} restarts the sweep; sweeps channel counts passes — read it twice to know a fresh sweep landed",
 		transmit: "{blob (IQ blob) | path (file on the server), freqHz, rate (default 2e6), gain (0-47 dB, default 20), seconds (0 = until transmit_stop), format cf32|cs8 (default cf32)} TX: streams the IQ through hackrf_transfer -R; gated by the shared TX policy (band / gain cap / approval / auto-stop)",
 		transmit_stop: "stop the running transmit"
 	},

@@ -68,4 +68,13 @@ describe("beamforming", () => {
 		// d sin(30°) = 0.25 wavelength -> pi/2 per element
 		expect(Math.atan2(v[1].im, v[1].re)).toBeCloseTo(Math.PI / 2);
 	});
+
+	test("peaks returns top-N local maxima sorted by value", () => {
+		expect(math.evaluate("peaks([1, 5, 2, 6, 1, 7, 0], 2)", {}).value.valueOf()).toEqual([[5, 7], [3, 6]]);
+	});
+
+	test("histogram counts values into bins", () => {
+		expect(math.evaluate("histogram([1, 2, 3, 11, 12], 10)", {}).value.valueOf()).toEqual([[6, 3], [16, 2]]);
+		expect(() => math.evaluate("histogram([1], 0)", {})).toThrow("bin width");
+	});
 });

@@ -17,7 +17,11 @@ const math = require("../math");
 const bypass = require("../utils/bypass");
 
 const TICK_MS = 250;
-const APPROVAL_TIMEOUT_MS = 120000;
+// how long an approver has to decide; 0 = no timeout (decide at your
+// leisure — a pending intent just waits). Env: MAILAB_APPROVAL_TIMEOUT_MS.
+const config = require("../config");
+const rawTimeout = config.get("APPROVAL_TIMEOUT_MS");
+const APPROVAL_TIMEOUT_MS = rawTimeout === undefined || rawTimeout === "" ? 120000 : Number(rawTimeout);
 const MAX_FIRED_LOG = 200;
 
 const DEFAULT_POLICY = [

@@ -108,6 +108,7 @@ const create = (options, io) => {
 	const settings = Object.assign({}, DEFAULTS, options);
 	let port = null;
 	let running = false;
+	let sweeps = 0;
 	let busy = Promise.resolve();
 
 	// serialize shell commands; a timed-out command leaves the device
@@ -160,6 +161,8 @@ const create = (options, io) => {
 				return row[1];
 			});
 			io.trace("spectrum", { x: x, xUnit: "Hz", yUnit: "dBm", series: [{ label: "dBm", y: y }] });
+			sweeps++;
+			io.sample("sweeps", sweeps, { unit: "sweep" });
 			const peak = y.indexOf(Math.max.apply(null, y));
 			io.sample("peak_freq", x[peak], { unit: "Hz" });
 			io.sample("peak_dbm", y[peak], { unit: "dBm" });

@@ -46,6 +46,47 @@ math.import({
 		const v = flat(values);
 		return Math.max.apply(null, v) - Math.min.apply(null, v);
 	},
+	// top-N local maxima of a series (spectrum peaks): returns a matrix of
+	// [index, value] rows sorted by value desc — e.g. peaks(hackrf_spectrum, 5)
+	peaks: (values, n) => {
+		const v = flat(values);
+		const count = Math.max(1, Math.min(100, Number(n) || 1));
+		const found = [];
+		for (let i = 1; i < v.length - 1; i++) {
+			if (v[i] > v[i - 1] && v[i] >= v[i + 1]) {
+				found.push([i, v[i]]);
+			}
+		}
+		found.sort((a, b) => {
+			return b[1] - a[1];
+		});
+		return math.matrix(found.slice(0, count));
+	},
+	// histogram of flat values: returns [[binCenter, count], ...] —
+	// histogram(hackrf_peak_freq, 100e3) counts peaks per 100 kHz bin
+	histogram: (values, binWidth) => {
+		const v = flat(values);
+		const w = Number(binWidth);
+		if (!Number.isFinite(w) || w <= 0) {
+			throw new Error("histogram bin width must be > 0");
+		}
+		if (!v.length) {
+			return math.matrix([]);
+		}
+		const min = Math.min.apply(null, v);
+		const bins = new Map();
+		v.forEach((x) => {
+			const b = Math.floor((x - min) / w);
+			bins.set(b, (bins.get(b) || 0) + 1);
+		});
+		const rows = Array.from(bins.entries()).sort((a, b) => {
+			return a[0] - b[0];
+		}).map((entry) => {
+			return [min + (entry[0] + 0.5) * w, entry[1]];
+		});
+		// always cover the range start..end, even empty bins at the edges
+		return math.matrix(rows);
+	},
 	db: elementwise((x) => {
 		return 10 * Math.log10(x);
 	}),
