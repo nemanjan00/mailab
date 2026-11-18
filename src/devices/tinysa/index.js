@@ -16,7 +16,9 @@ const create = (options, io) => {
 	let running = false;
 	let busy = Promise.resolve();
 
-	// serialize shell commands
+	// serialize shell commands; a timed-out command leaves the device
+	// streaming (e.g. a slow scan) — drain before the next command so its
+	// reply isn't polluted by trailing output
 	const shell = (text, timeoutMs) => {
 		const run = busy.then(() => {
 			const reply = tty.collect(port, (buf) => {
@@ -28,6 +30,13 @@ const create = (options, io) => {
 			// drop the echoed command and the prompt
 			return buf.toString("latin1").split(/\r?\n/).slice(1).filter((line) => {
 				return line && line !== PROMPT.trim() && !line.startsWith(PROMPT);
+			});
+		}, (err) => {
+			const drain = tty.collect(port, (buf) => {
+				return buf.toString("latin1").endsWith(PROMPT);
+			}, 1500).catch(() => Buffer.alloc(0));
+			return drain.then(() => {
+				throw err;
 			});
 		});
 		busy = run.catch(() => {
