@@ -17,7 +17,7 @@
 const tty = require("../../services/tty");
 const usb = require("../../services/usb");
 
-const RETRY_MS = 1000;
+const RETRY_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
 const MAX_PAYLOAD = 32;
 

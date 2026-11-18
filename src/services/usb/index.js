@@ -311,8 +311,26 @@ const run = (cmd, args) => new Promise((resolve, reject) => {
 	});
 });
 
+// inventory() walks /sys and reads many sysfs files synchronously — 100 ms+
+// on a big tree. Device connect-retry loops call it every second, which
+// stalls the whole event loop (HTTP included). Cache briefly; explicit
+// roots (tests with fake sysfs) always compute fresh.
+const INVENTORY_TTL_MS = 1000;
+let invCache = { key: null, t: 0, value: null };
+const inventoryCached = (roots) => {
+	const key = roots ? JSON.stringify(roots) : "real";
+	const now = Date.now();
+	if (invCache.key === key && now - invCache.t < INVENTORY_TTL_MS) {
+		return invCache.value;
+	}
+	const value = inventory(roots);
+	invCache = { key: key, t: now, value: value };
+	return value;
+};
+
 const usb = {
-	inventory: inventory,
+	inventory: inventoryCached,
+	inventoryNow: inventory,
 	parseUevent: parseUevent,
 	parseIdsData: parseIdsData,
 	parseUhubctl: parseUhubctl,
