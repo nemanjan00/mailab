@@ -224,6 +224,9 @@ const create = (options, io) => {
 		},
 
 		command: (name, args) => {
+			if (!port) {
+				return Promise.reject(new Error("not connected (device is " + "waiting/error)"));
+			}
 			if (name === "sweep") {
 				return sweep(args || {});
 			}
