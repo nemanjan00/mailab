@@ -63,6 +63,12 @@ const create = (options, io) => {
 		cells.slice(6).forEach((cell, i) => {
 			bins.push([low + (i + 0.5) * width, Number(cell)]);
 		});
+		// safety valve for very wide spans (a pass can take minutes): publish
+		// mid-pass rather than never; normal spans wait for the wrap so every
+		// row is a complete, stitched spectrum
+		if (bins.length > 4000) {
+			flush(true);
+		}
 	};
 
 	const normalize = (args) => {
@@ -86,7 +92,6 @@ const create = (options, io) => {
 		return s;
 	};
 
-	let flushTimer = null;
 	const launch = () => {
 		let select = [];
 		if (settings.serial) {
@@ -120,19 +125,12 @@ const create = (options, io) => {
 		// also flush on a timer so partial passes (and single-band spans)
 		// reach the UI without waiting for a full wrap — each flush is one
 		// waterfall row
-		// publish at most once per second while a pass is still building, and
-		// the complete spectrum on every pass wrap — each publish is one
-		// waterfall row
-		flushTimer = setInterval(() => {
-			flush(true);
-		}, 1000);
+		// one row per complete sweep pass (see the 4000-bin valve in onLine
+		// for very wide spans); no timer flush — partial passes made the
+		// spectrum appear to slide in frequency
 	};
 
 	const kill = () => {
-		if (flushTimer) {
-			clearInterval(flushTimer);
-			flushTimer = null;
-		}
 		if (!proc) {
 			return Promise.resolve();
 		}
