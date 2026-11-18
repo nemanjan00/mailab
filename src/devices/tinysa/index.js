@@ -212,8 +212,8 @@ const create = (options, io) => {
 		}
 		shell("version", 8000).then((lines) => {
 			io.log("connected: " + lines.join(" "));
-			io.status("running", options.path);
 			running = options.continuous !== false;
+			io.status("running", options.path + (running ? "" : " (idle — continuous off)"));
 			publish();
 			loop();
 		}, (err) => {
