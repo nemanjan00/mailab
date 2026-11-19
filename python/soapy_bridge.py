@@ -5,6 +5,7 @@ frequency / power channels. Uncalibrated: levels are dBFS, not dBm.
 """
 
 import argparse
+import threading
 import time
 
 import numpy as np
@@ -41,14 +42,32 @@ bridge = lab.Bridge()
 lab.status("running")
 
 
+# one reader at a time: the spectrum tick, capture and demod share the
+# single RX stream
+streamLock = threading.Lock()
+
+
 def read(n):
     buf = np.empty(n, np.complex64)
     got = 0
-    while got < n:
-        sr = sdr.readStream(stream, [buf[got:]], n - got, timeoutUs=500000)
-        if sr.ret <= 0:
-            raise RuntimeError("readStream: %d" % sr.ret)
-        got += sr.ret
+    with streamLock:
+        while got < n:
+            sr = sdr.readStream(stream, [buf[got:]], n - got, timeoutUs=1000000)
+            if sr.ret == -4 or sr.ret == -1:
+                # TIMEOUT / STREAM_ERROR: a retune on the live stream (or a
+                # stall) can wedge the flow -- bounce the stream once
+                try:
+                    sdr.deactivateStream(stream)
+                except Exception:
+                    pass
+                try:
+                    sdr.activateStream(stream)
+                except Exception:
+                    pass
+                raise RuntimeError("readStream: %d" % sr.ret)
+            if sr.ret <= 0:
+                raise RuntimeError("readStream: %d" % sr.ret)
+            got += sr.ret
     return buf
 
 
@@ -78,7 +97,17 @@ def tune(args):
     for key in ("fft", "average"):
         if key in args:
             cfg[key] = int(args[key])
-    apply()
+    # retuning a live stream wedges some backends (HackRF): bounce it
+    with streamLock:
+        try:
+            sdr.deactivateStream(stream)
+        except Exception:
+            pass
+        apply()
+        try:
+            sdr.activateStream(stream)
+        except Exception:
+            pass
     return cfg
 
 
@@ -127,7 +156,21 @@ def demod(args):
     return {"path": path, "samples": len(audio), "audio_rate": audio_rate, "peak_audio_hz": float(freqs[peak])}
 
 
-bridge.every(1 / opts.fps, tick)
+tick_errors = 0
+
+
+def safe_tick():
+    global tick_errors
+    try:
+        tick()
+        tick_errors = 0
+    except Exception as err:
+        tick_errors += 1
+        if tick_errors <= 3 or tick_errors % 60 == 0:
+            lab.log("spectrum tick: %s" % err, "warn")
+
+
+bridge.every(1 / opts.fps, safe_tick)
 try:
     bridge.run()
 finally:
