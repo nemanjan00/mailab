@@ -291,6 +291,10 @@ const syncApprovalBanner = () => {
 		deny.textContent = "Deny";
 		const decide = (ok) => {
 			api("POST", "/approvals/" + a.id, { approve: ok }).then(() => {
+				// clear now: even if the ws event went missing (disconnect,
+				// restart), the decision already happened server-side
+				ctx.store.approvals[a.id].status = ok ? "approved" : "denied";
+				syncApprovalBanner();
 				row.classList.add(ok ? "approved" : "denied");
 			}, (err) => {
 				// an expired/missing approval must not fail silently
@@ -327,6 +331,17 @@ const connect = () => {
 	ws.onopen = () => {
 		dot.classList.add("on");
 		emit("ws_open", {});
+		// re-seed approvals after (re)connect: decisions made while the
+		// socket was down are never broadcast to us — without this the
+		// banner sticks at stale "pending" forever
+		api("GET", "/safety").then((safety) => {
+			const fresh = {};
+			safety.pending.forEach((entry) => {
+				fresh[entry.id] = entry;
+			});
+			ctx.store.approvals = fresh;
+			syncApprovalBanner();
+		}, () => null);
 	};
 	ws.onclose = () => {
 		dot.classList.remove("on");
