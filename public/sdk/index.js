@@ -9,6 +9,7 @@
 //   }));
 
 import { el, list, mount, onDispose, state, when } from "@nemanjan00/qrp";
+import { stickToBottom } from "@nemanjan00/qrp/behaviors/stick-to-bottom";
 import tableUtil from "../../src/utils/table/index.js";
 
 /**
@@ -198,10 +199,9 @@ export const feed = (spec) => {
 	const box = el("div", { class: "feed " + (spec.className || "") },
 		when(() => spec.items().length === 0, () => el("div", { class: "muted" }, spec.empty || "")),
 		list(spec.items, spec.key, spec.render));
-	// stick to the bottom while new items arrive
-	new MutationObserver(() => {
-		box.scrollTop = box.scrollHeight;
-	}).observe(box, { childList: true });
+	// follow new content only while the user is at the bottom; scrolling up
+	// to read history unpins (disposes with the pane's scope)
+	stickToBottom(box);
 	return box;
 };
 

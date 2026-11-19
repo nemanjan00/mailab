@@ -2,6 +2,7 @@
 // commands:  name {"json": "args"}
 
 import { escapeHtml, time } from "./util.js";
+import { stickToBottom } from "@nemanjan00/qrp/behaviors/stick-to-bottom";
 
 const MAX_LINES = 1000;
 
@@ -16,19 +17,17 @@ export default {
 		body.innerHTML = "<div class=\"console\"><div class=\"feed\"></div>"
 			+ "<form><input placeholder=\"command {&quot;args&quot;: 1}\"><button>run</button></form></div>";
 		const feed = body.querySelector(".feed");
+		// follow output only while pinned at the bottom; reading history unpins
+		stickToBottom(feed);
 		const form = body.querySelector("form");
 		const input = form.querySelector("input");
 
 		const matches = (entry) => !pane.config.device || entry.device === pane.config.device;
 
 		const append = (html) => {
-			const stick = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 20;
 			feed.insertAdjacentHTML("beforeend", html);
 			while (feed.childElementCount > MAX_LINES) {
 				feed.firstElementChild.remove();
-			}
-			if (stick) {
-				feed.scrollTop = feed.scrollHeight;
 			}
 		};
 
@@ -37,7 +36,6 @@ export default {
 			const query = pane.config.device ? "?device=" + encodeURIComponent(pane.config.device) : "";
 			ctx.api("GET", "/logs" + query).then((entries) => {
 				feed.innerHTML = entries.map(line).join("");
-				feed.scrollTop = feed.scrollHeight;
 			});
 		};
 
