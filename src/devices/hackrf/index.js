@@ -166,8 +166,28 @@ const create = (options, io) => {
 		const old = proc;
 		proc = null;
 		return new Promise((resolve) => {
-			old.once("exit", resolve);
+			let settled = false;
+			const done = () => {
+				if (!settled) {
+					settled = true;
+					clearTimeout(force);
+					resolve();
+				}
+			};
+			old.once("exit", done);
 			old.kill();
+			// escalate if the sweep ignores SIGTERM (seen on children of this
+			// hackrf build): a stuck kill blocks every later command
+			const force = setTimeout(() => {
+				if (!settled) {
+					io.log("sweep ignored SIGTERM — SIGKILL", "warn");
+					try {
+						old.kill("SIGKILL");
+					} catch (_err) {
+						done();
+					}
+				}
+			}, 2000);
 		});
 	};
 
@@ -202,12 +222,31 @@ const create = (options, io) => {
 		const old = txProc;
 		txProc = null;
 		return new Promise((resolve) => {
-			old.once("exit", (code) => {
-				resolve({ stopped: true, reason: reason, exit: code });
-			});
+			let settled = false;
+			const done = () => {
+				if (!settled) {
+					settled = true;
+					clearTimeout(force);
+					resolve({ stopped: true, reason: reason });
+				}
+			};
+			old.once("exit", done);
 			old.kill();
+			// hackrf_transfer in repeat mode has been seen to ignore SIGTERM:
+			// never let a kill wait strand the TX (and the next command) —
+			// escalate to SIGKILL after a short grace
+			const force = setTimeout(() => {
+				if (!settled) {
+					io.log("TX ignored SIGTERM — SIGKILL", "warn");
+					try {
+						old.kill("SIGKILL");
+					} catch (_err) {
+						done();
+					}
+				}
+			}, 2000);
 		}).then((result) => {
-			io.log("TX ended: " + (reason || "stopped") + " (exit " + result.exit + ")", "tx");
+			io.log("TX ended: " + (reason || "stopped"), "tx");
 			return result;
 		});
 	};
