@@ -66,6 +66,50 @@ export default {
 		// vertical scroll zooms V; ctrl+scroll drives the scope's timebase,
 		// shift+scroll its V/div (drivers with a settings model, e.g. mho900)
 		const zoomState = { x: null, y: null };
+		// sticky y-window for fast-updating spectra (sweeps, SDR FFT):
+		// established from the first rows, grown only when data exceeds it —
+		// a fresh auto-fit per row makes the plot swim
+		const stickyY = { set: false, min: 0, max: 0, margin: 0 };
+		const feedStickyY = (trs) => {
+			if (pane.config.yMin !== undefined || zoomState.y || pane.config.device) {
+				return;
+			}
+			let lo = Infinity;
+			let hi = -Infinity;
+			trs.forEach((tr) => {
+				tr.series.forEach((s) => {
+					s.y.forEach((v) => {
+						if (v === null || v === undefined) {
+							return;
+						}
+						if (v < lo) {
+							lo = v;
+						}
+						if (v > hi) {
+							hi = v;
+						}
+					});
+				});
+			});
+			if (lo === Infinity) {
+				return;
+			}
+			if (!stickyY.set) {
+				const span = Math.max(1e-9, hi - lo);
+				stickyY.margin = span * 0.08;
+				stickyY.min = lo - stickyY.margin;
+				stickyY.max = hi + stickyY.margin;
+				stickyY.set = true;
+				return;
+			}
+			// grow-only: a burst 3 dB over the window extends it, noise doesn't
+			if (lo < stickyY.min + stickyY.margin) {
+				stickyY.min = lo - stickyY.margin;
+			}
+			if (hi > stickyY.max - stickyY.margin) {
+				stickyY.max = hi + stickyY.margin;
+			}
+		};
 		let wheelBurst = { t: 0, ax: null }; // trackpad diagonal/split-gesture suppression
 		let scopeCache = { t: 0, model: null };
 		const scopeModel = () => {
@@ -572,12 +616,17 @@ export default {
 				});
 			});
 			refreshReadings(trs);
+			feedStickyY(trs);
 			plot.setData(tables.length === 1 ? tables[0] : uPlot.join(tables), !(zoomState.x || zoomState.y));
 			if (zoomState.x) {
 				plot.setScale("x", zoomState.x);
 			}
 			if (zoomState.y) {
 				plot.setScale("y", zoomState.y);
+			} else if (stickyY.set && !pane.config.device) {
+				// fast-updating spectrum: keep the established window instead of
+				// re-fitting every row
+				plot.setScale("y", { min: stickyY.min, max: stickyY.max });
 			} else {
 				// no manual zoom: keep following the scope's V/div window
 				applyScopeRanges(scopeCache.model);
