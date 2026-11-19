@@ -194,6 +194,8 @@ const create = (options, io) => {
 	let txProc = null;
 	let txTimer = null;
 	let txFile = null;
+	let rxProc = null;
+	let rxTimer = null;
 	// the sweep and TX share one radio: TX pauses the sweep, and the sweep
 	// resumes when the transmission ends (unless the device is stopping)
 	let wantSweep = true;
@@ -251,6 +253,104 @@ const create = (options, io) => {
 		});
 	};
 
+	const killRx = (reason) => {
+		if (rxTimer) {
+			clearTimeout(rxTimer);
+			rxTimer = null;
+		}
+		if (!rxProc) {
+			return Promise.resolve({ stopped: false });
+		}
+		const old = rxProc;
+		rxProc = null;
+		return new Promise((resolve) => {
+			let settled = false;
+			const done = (code) => {
+				if (!settled) {
+					settled = true;
+					resolve({ stopped: true, reason: reason, exit: code });
+				}
+			};
+			old.once("exit", done);
+			old.kill();
+			// hackrf_transfer in stream mode ignores SIGTERM sometimes: force
+			setTimeout(() => {
+				if (!settled) {
+					try {
+						old.kill("SIGKILL");
+					} catch (_err) {
+						done(-1);
+					}
+				}
+			}, 2000).unref();
+		}).then((result) => {
+			io.log("RX capture ended: " + (reason || "done") + " (exit " + result.exit + ")", "rx");
+			return result;
+		});
+	};
+
+	const record = (args) => {
+		const freqHz = Number(args.freqHz);
+		if (!Number.isFinite(freqHz) || freqHz <= 0) {
+			return Promise.reject(new Error("freqHz is required (Hz)"));
+		}
+		const seconds = Math.max(0.2, Math.min(60, Number(args.seconds) || 2));
+		const rate = Number(args.rate) || 2000000;
+		const lna = Number(args.lna !== undefined ? args.lna : settings.lna);
+		const vga = Number(args.vga !== undefined ? args.vga : settings.vga);
+		const name = String(args.name || "iq").replace(/[^A-Za-z0-9_-]/g, "") || "iq";
+		return killRx("new record").then(() => {
+			return killTx("record");
+		}).then(() => {
+			const file = path.join(os.tmpdir(), "mailab-hackrf-rx-" + Date.now() + ".cs8");
+			const rxArgs = [
+				"-r", file,
+				"-f", String(Math.round(freqHz)),
+				"-s", String(Math.round(rate)),
+				"-l", String(Math.round(lna)),
+				"-g", String(Math.round(vga))
+			];
+			if (settings.serial) {
+				rxArgs.push("-d", String(settings.serial));
+			}
+			io.log("hackrf_transfer " + rxArgs.join(" "), "rx");
+			rxProc = spawn("hackrf_transfer", rxArgs);
+			readline.createInterface({ input: rxProc.stdout }).on("line", (line) => {
+				io.log(line, "rx");
+			});
+			readline.createInterface({ input: rxProc.stderr }).on("line", (line) => {
+				io.log(line, "stderr");
+			});
+			const finished = new Promise((resolve) => {
+				rxProc.once("exit", (code) => {
+					rxProc = null;
+					resolve(code);
+				});
+			});
+			rxTimer = setTimeout(() => {
+				killRx("capture window " + seconds + " s").catch(() => {});
+			}, seconds * 1000);
+			return finished.then(() => {
+				return fs.promises.readFile(file).then((data) => {
+					fs.promises.unlink(file).catch(() => {});
+					if (!data.length) {
+						throw new Error("no IQ samples captured");
+					}
+					io.blob(name, data);
+					return {
+						freqHz: freqHz,
+						rate: rate,
+						seconds: seconds,
+						bytes: data.length,
+						samples: Math.floor(data.length / 2),
+						format: "cs8 (interleaved int8 I/Q)",
+						blob: io.id + "_" + name
+					};
+				});
+			});
+		});
+	};
+
 	const transmit = (args) => {
 		const freqHz = Number(args.freqHz);
 		if (!Number.isFinite(freqHz) || freqHz <= 0) {
@@ -261,6 +361,8 @@ const create = (options, io) => {
 		const format = args.format || "cf32";
 		const seconds = Number(args.seconds || 0);
 		return killTx("new transmit").then(() => {
+			return killRx("transmit");
+		}).then(() => {
 			return args.blob ? Promise.resolve(io.getBlob(String(args.blob))) : fs.promises.readFile(String(args.path));
 		}).then((raw) => {
 			const iq = toCs8(raw, format);
@@ -331,6 +433,8 @@ const create = (options, io) => {
 		stop: () => {
 			wantSweep = false;
 			return killTx("device stop").then(() => {
+				return killRx("device stop");
+			}).then(() => {
 				return kill();
 			});
 		},
@@ -349,6 +453,12 @@ const create = (options, io) => {
 			}
 			if (name === "transmit") {
 				return transmit(args || {});
+			}
+			if (name === "record") {
+				return record(args || {});
+			}
+			if (name === "record_stop") {
+				return killRx("record_stop");
 			}
 			if (name === "transmit_stop") {
 				return killTx("transmit_stop");
@@ -372,7 +482,9 @@ module.exports = {
 	commands: {
 		configure: "{startMhz, stopMhz, binWidth, lna (0-40 dB, step 8), vga (0-62 dB, step 2)} restarts the sweep; sweeps channel counts passes — read it twice to know a fresh sweep landed",
 		transmit: "{blob (IQ blob) | path (file on the server), freqHz, rate (default 2e6), gain (0-47 dB, default 20), seconds (0 = until transmit_stop), format cf32|cs8 (default cf32)} TX: streams the IQ through hackrf_transfer -R; gated by the shared TX policy (band / gain cap / approval / auto-stop)",
-		transmit_stop: "stop the running transmit"
+		transmit_stop: "stop the running transmit",
+		record: "{freqHz, rate (default 2e6), seconds (0.2..60, default 2), lna?, vga?, name?} RX: capture raw IQ (cs8) via hackrf_transfer -r into a lab blob <id>_<name>",
+		record_stop: "stop the running capture early"
 	},
 	create: create
 };
