@@ -231,50 +231,54 @@ const create = (options, io) => {
 			txFile = path.join(os.tmpdir(), "mailab-hackrf-tx-" + Date.now() + ".cs8");
 			return fs.promises.writeFile(txFile, iq);
 		}).then(() => {
-			// hand the radio over: the sweep must release the device first
+			// hand the radio over: the sweep must release the device first.
+			// Killing the sweep can make a flaky USB tree re-enumerate the
+			// board, so settle briefly before opening it again.
 			return kill().then(() => {
-				const txArgs = [
-					"-t", txFile,
-					"-f", String(Math.round(freqHz)),
-					"-x", String(Math.round(gain)),
-					"-s", String(Math.round(rate)),
-					"-R"
-				];
-				if (settings.serial) {
-					txArgs.push("-d", String(settings.serial));
-				}
-				io.log("hackrf_transfer " + txArgs.join(" "), "tx");
-				txProc = spawn("hackrf_transfer", txArgs);
-				readline.createInterface({ input: txProc.stdout }).on("line", (line) => {
-					io.log(line, "tx");
-				});
-				readline.createInterface({ input: txProc.stderr }).on("line", (line) => {
-					io.log(line, "stderr");
-				});
-				txProc.on("exit", (code) => {
-					if (txTimer) {
-						clearTimeout(txTimer);
-						txTimer = null;
-					}
-					txProc = null;
-					if (txFile) {
-						fs.promises.unlink(txFile).catch(() => {});
-						txFile = null;
-					}
-					io.log("hackrf_transfer exited " + code, "tx");
-					if (wantSweep && !proc) {
-					// hand the radio back to the sweep
-						launch();
-					}
-				});
-				if (seconds > 0) {
-					txTimer = setTimeout(() => {
-						killTx("time cap " + seconds + " s").catch(() => {});
-					}, seconds * 1000);
-					txTimer.unref();
-				}
-				return { started: true, freqHz: freqHz, gain: gain, rate: rate, seconds: seconds, format: format };
+				return new Promise((resolve) => setTimeout(resolve, 500));
 			});
+		}).then(() => {
+			const txArgs = [
+				"-t", txFile,
+				"-f", String(Math.round(freqHz)),
+				"-x", String(Math.round(gain)),
+				"-s", String(Math.round(rate)),
+				"-R"
+			];
+			if (settings.serial) {
+				txArgs.push("-d", String(settings.serial));
+			}
+			io.log("hackrf_transfer " + txArgs.join(" "), "tx");
+			txProc = spawn("hackrf_transfer", txArgs);
+			readline.createInterface({ input: txProc.stdout }).on("line", (line) => {
+				io.log(line, "tx");
+			});
+			readline.createInterface({ input: txProc.stderr }).on("line", (line) => {
+				io.log(line, "stderr");
+			});
+			txProc.on("exit", (code) => {
+				if (txTimer) {
+					clearTimeout(txTimer);
+					txTimer = null;
+				}
+				txProc = null;
+				if (txFile) {
+					fs.promises.unlink(txFile).catch(() => {});
+					txFile = null;
+				}
+				io.log("hackrf_transfer exited " + code, "tx");
+				if (wantSweep && !proc) {
+					// hand the radio back to the sweep
+					launch();
+				}
+			});
+			if (seconds > 0) {
+				txTimer = setTimeout(() => {
+					killTx("time cap " + seconds + " s").catch(() => {});
+				}, seconds * 1000);
+				txTimer.unref();
+			}
+			return { started: true, freqHz: freqHz, gain: gain, rate: rate, seconds: seconds, format: format };
 		});
 	};
 
