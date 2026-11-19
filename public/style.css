@@ -778,6 +778,9 @@ dialog form.toolbar,
 .mcp-tokens { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border, #3a3f47); }
 
 /* pending safety approvals banner */
+.approval-banner[hidden] {
+	display: none;
+}
 .approval-banner {
 	position: sticky;
 	top: 0;

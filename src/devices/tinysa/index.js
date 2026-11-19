@@ -191,7 +191,9 @@ const create = (options, io) => {
 				io.log("sweep failed: " + err.message, "warn");
 			})
 			.then(() => {
-				setTimeout(loop, settings.intervalMs || 0);
+				// failed sweeps must not tight-loop: a dead serial port would
+				// otherwise spin the event loop and stall the whole server
+				setTimeout(loop, settings.intervalMs || 500);
 			});
 	};
 
