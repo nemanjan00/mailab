@@ -347,3 +347,25 @@ Real devices on the lab host's mailab (10.69.1.91:3000, tmux "mailab"):
 
 Docs: SPEC rows tinySA/HackRF marked ✅ live-verified; README env table
 reworded (mdp-host/icom-ci-v are npm-first; MDP_HOST_PATH/CIV_PATH override).
+
+## Live-test session 4 (2026-11-19, lab host HackRF One + tinySA Ultra)
+
+HackRF (hackrf driver, libhackrf 2026.01.3, PortaPack in HackRF USB mode):
+- hackrf_sweep RX: 88–108 MHz @ 100 kHz bins — stable stitched 204-pt
+  rows (pass-wrap = repeated band; hackrf_sweep rotates pass starts),
+  waterfall rows, live status, binWidthKhz aliases (20k–5M clamp)
+- TX IQ: CF32 tone at 2450 MHz via hackrf_transfer -R — full approval gate
+  (pending → human approve → TX → 6 s auto-stop cap)
+- RX IQ: record {freqHz: 2437M, seconds: 2, rate: 2M} → 3.8M cs8 samples,
+  blob hackrf_rx_test
+- sweep/TX/RX radio arbitration: each grabs the radio from the others and
+  hands it back (wantSweep relaunch); SIGKILL escalation on -R (ignores
+  SIGTERM) — bugs found live, fixed e479251 + follow-ups
+Soapy bridge (soapy driver → python/soapy_bridge.py, HackRF via libHackRFSupport):
+- tune/capture/demod(FM) all live at 107.5 MHz: 2048-pt FFT stream,
+  2M-sample cf32 capture, 3 s FM demod → WAV + audio/audio_spectrum traces
+- fixed live: tune-on-active-stream wedged HackRF flow (readStream -4),
+  killing the tick thread silently — now stream lock + deactivate/activate
+  around retune + tick survives errors
+tinySA Ultra: NF measured RBW-dependent (850k: −49.8 floor; 10k: −63.2 —
+tracks 10log(RBW)); rbw command + RBW-scaled timeouts (3170d62).
