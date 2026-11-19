@@ -1009,10 +1009,10 @@
     zod "^3.25 || ^4.0"
     zod-to-json-schema "^3.25.1"
 
-"@nemanjan00/qrp@^0.13.1":
-  version "0.13.1"
-  resolved "https://registry.yarnpkg.com/@nemanjan00/qrp/-/qrp-0.13.1.tgz#d9d732b64de3e0d5fb605b3128b91a1d08f004fe"
-  integrity sha512-qVXbfJSdMcLyxUiFp2tFstbTXg8fnCh/yDcgtxqtyeB1hnJAZYKd55W37M8RLEYPqOH816ttc7qqI/Duv2BiVA==
+"@nemanjan00/qrp@^0.14.0":
+  version "0.14.0"
+  resolved "https://registry.yarnpkg.com/@nemanjan00/qrp/-/qrp-0.14.0.tgz#f19068aaff40d09c49a934e4468f6dbe5cab0d99"
+  integrity sha512-MyyeIxwXt2Nh+wfeJgEboseKNPRqYgRhABvRca1IwFkz+rpOkGUX42ZFlQsoYWTPGeJV/iswK7QgBrofjYWXKg==
 
 "@noble/hashes@^1.1.5":
   version "1.8.0"

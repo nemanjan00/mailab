@@ -46,6 +46,8 @@ SPEC.md lists every request with its status; update it as soon as a request come
 
 ## Conventions
 
+- Before writing a UI helper, check qrp's docs/RECIPES.md; if qrp lacks it, propose a qrp change instead of a local copy.
+
 - Channel names are `<deviceId>_<field>` and must match `[A-Za-z_][A-Za-z0-9_]*` (mathjs symbols)
 - New pane type: add it to `TYPES` in `src/panes`, write `public/panes/<type>.js` with the GUI SDK (`public/sdk`: `export default pane((ctx, p) => table({...}))`), register it in `public/app.js`. Read qrp's SHARP-EDGES (thunk vs value, `list()` for arrays) before writing views
 - ESLint 10 flat config (`eslint.config.js`): same rules as the usual `.eslintrc.json`
