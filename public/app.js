@@ -4,6 +4,7 @@
 
 import { GridStack } from "gridstack";
 import { batch, el, mount, state, when } from "@nemanjan00/qrp";
+import { copy } from "@nemanjan00/qrp/export";
 import profilesDialog from "./profiles.js";
 import "gridstack/dist/gridstack.min.css";
 import "uplot/dist/uPlot.min.css";
@@ -808,33 +809,6 @@ grid.on("change", (_event, items) => {
 
 // ---- header actions (qrp) ---------------------------------------------------
 
-// copy that also works on non-secure origins (http://<ip>) where
-// navigator.clipboard does not exist: hidden textarea + execCommand
-const copyText = (text) => {
-	if (navigator.clipboard && navigator.clipboard.writeText) {
-		return navigator.clipboard.writeText(text);
-	}
-	return new Promise((resolve, reject) => {
-		const ta = document.createElement("textarea");
-		ta.value = text;
-		ta.style.position = "fixed";
-		ta.style.opacity = "0";
-		document.body.appendChild(ta);
-		ta.select();
-		try {
-			if (document.execCommand("copy")) {
-				resolve();
-			} else {
-				reject(new Error("copy refused"));
-			}
-		} catch (err) {
-			reject(err);
-		} finally {
-			ta.remove();
-		}
-	});
-};
-
 const identity = state({ name: "local" });
 api("GET", "/whoami").then((who) => {
 	identity.name = who.name || "local";
@@ -982,7 +956,7 @@ document.getElementById("mcp-dialog").addEventListener("click", (event) => {
 	if (!button) {
 		return;
 	}
-	copyText(document.getElementById(button.dataset.copy).textContent).then(() => {
+	copy(document.getElementById(button.dataset.copy).textContent).then(() => {
 		button.textContent = "copied";
 		setTimeout(() => {
 			button.textContent = "copy";
