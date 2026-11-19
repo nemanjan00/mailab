@@ -302,6 +302,9 @@ const create = (options, io) => {
 		return killRx("new record").then(() => {
 			return killTx("record");
 		}).then(() => {
+			// grab the radio from the sweep (relaunched after the capture)
+			return kill();
+		}).then(() => {
 			const file = path.join(os.tmpdir(), "mailab-hackrf-rx-" + Date.now() + ".cs8");
 			const rxArgs = [
 				"-r", file,
@@ -337,6 +340,10 @@ const create = (options, io) => {
 						throw new Error("no IQ samples captured");
 					}
 					io.blob(name, data);
+					if (wantSweep && !proc) {
+						// hand the radio back to the sweep
+						launch();
+					}
 					return {
 						freqHz: freqHz,
 						rate: rate,
@@ -362,6 +369,9 @@ const create = (options, io) => {
 		const seconds = Number(args.seconds || 0);
 		return killTx("new transmit").then(() => {
 			return killRx("transmit");
+		}).then(() => {
+			// grab the radio from the sweep (its exit relaunches after TX)
+			return kill();
 		}).then(() => {
 			return args.blob ? Promise.resolve(io.getBlob(String(args.blob))) : fs.promises.readFile(String(args.path));
 		}).then((raw) => {
