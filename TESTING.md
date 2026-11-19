@@ -369,3 +369,14 @@ Soapy bridge (soapy driver → python/soapy_bridge.py, HackRF via libHackRFSuppo
   around retune + tick survives errors
 tinySA Ultra: NF measured RBW-dependent (850k: −49.8 floor; 10k: −63.2 —
 tracks 10log(RBW)); rbw command + RBW-scaled timeouts (3170d62).
+
+### tinySA wedge pattern (twice burned, documented)
+
+The tinySA4 Ultra MCU hangs its USB CDC entirely (no serial answers, even
+raw) when a narrow-RBW scan over a wide span is interrupted or the host
+floods it with commands — recoverable only by physical unplug/replug.
+Never set rbw < ~100 kHz while the continuous loop sweeps ≥ 1 GHz.
+Fixes from this: sweep timeouts scale with the RBW budget, failed sweeps
+back off 500 ms (a dead port + 0 ms retry interval tight-looped the whole
+server's event loop — HTTP hung, all traces froze), and the driver
+reconnects with handshake retries.
